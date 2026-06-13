@@ -1,18 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Permissions -->
-    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <!-- Core telephony permissions -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.WRITE_CALL_LOG" />
+
+    <!-- Notifications and UI -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Contacts -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Foreground service (Layer 1 — platform boundary) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
-	<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:name=".MainApplication"
@@ -22,12 +31,13 @@
         android:roundIcon="@drawable/shield_logo"
         android:supportsRtl="true"
         android:theme="@style/Theme.SignalGate">
-		
-        <!-- Main Activity -->
+
+        <!-- Single Activity — contract requirement -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTask">
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -36,7 +46,8 @@
 
         </activity>
 
-        <!-- Call Screening Service -->
+        <!-- Call Screening Service (Layer 1 — system-level call decisions) -->
+        <!-- BIND_SCREENING_SERVICE ensures only the system can bind to this service -->
         <service
             android:name=".SignalGateCallScreeningService"
             android:permission="android.permission.BIND_SCREENING_SERVICE"
@@ -48,8 +59,14 @@
 
         </service>
 
-        <!-- Detect call state changes -->
-        <!-- READ_PHONE_STATE permission guard prevents third-party apps from triggering this receiver -->
+        <!-- Call Overlay Service (Layer 1 — foreground UI during active call) -->
+        <service
+            android:name=".CallOverlayService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall" />
+
+        <!-- Phone state receiver — guards against third-party triggers -->
         <receiver
             android:name=".PhoneStateReceiver"
             android:permission="android.permission.READ_PHONE_STATE"
@@ -61,16 +78,10 @@
 
         </receiver>
 
-        <!-- Notification action buttons -->
-        <receiver            
+        <!-- Notification action buttons — internal only -->
+        <receiver
             android:name=".CallActionReceiver"
             android:exported="false" />
-	
-      <service
-            android:name=".CallOverlayService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="phoneCall" />
 
     </application>
 
