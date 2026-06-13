@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.work.Configuration
 import com.signalgate.multipoint.di.KoinWorkerFactory
 import com.signalgate.multipoint.di.appModule
+import com.signalgate.multipoint.security.SecurityUtils
+import com.signalgate.multipoint.database.SecureDatabase
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
@@ -17,6 +19,9 @@ class MainApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         
+        // Security baseline
+        SecurityUtils.enableStrictMode()
+
         startKoin {
             androidLogger()
             androidContext(this@MainApplication)

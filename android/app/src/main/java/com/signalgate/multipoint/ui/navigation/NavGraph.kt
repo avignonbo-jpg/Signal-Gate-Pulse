@@ -11,6 +11,8 @@ import com.signalgate.multipoint.ui.screens.OperationalDashboard
 import com.signalgate.multipoint.ui.screens.CallLogScreen
 import com.signalgate.multipoint.ui.screens.SettingsScreen
 import com.signalgate.multipoint.ui.screens.SourcesScreen
+import com.signalgate.multipoint.ui.screens.LogcatViewerScreen
+import com.signalgate.multipoint.ui.onboarding.OnboardingWizardScreen
 
 @Composable
 fun SignalGateNavGraph(
@@ -25,7 +27,8 @@ fun SignalGateNavGraph(
     ) {
         composable(Screen.Dashboard.route) {
             OperationalDashboard(
-                onOpenDrawer = onOpenDrawer
+                onOpenDrawer = onOpenDrawer,
+                onLaunchOnboarding = { navController.navigate(Screen.Onboarding.route) }
             )
         }
         composable(Screen.Sources.route) {
@@ -41,7 +44,13 @@ fun SignalGateNavGraph(
             )
         }
         composable(Screen.Settings.route) {
-            SettingsScreen()
+            SettingsScreen(onNavigateToLogcat = { navController.navigate(Screen.Logcat.route) })
+        }
+        composable(Screen.Logcat.route) {
+            LogcatViewerScreen()
+        }
+        composable(Screen.Onboarding.route) {
+            OnboardingWizardScreen(navController)
         }
     }
 }

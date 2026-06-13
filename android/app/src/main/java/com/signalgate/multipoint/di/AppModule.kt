@@ -1,6 +1,6 @@
 package com.signalgate.multipoint.di
 
-import androidx.room.Room
+import com.signalgate.multipoint.database.SecureDatabase
 import com.signalgate.multipoint.database.SignalGateDatabase
 import com.signalgate.multipoint.database.repositories.CallLogRepository
 import com.signalgate.multipoint.database.repositories.DataSourceRepository
@@ -12,6 +12,7 @@ import com.signalgate.multipoint.ui.RecentCallsViewModel
 import com.signalgate.multipoint.ui.dashboard.DashboardViewModel
 import com.signalgate.multipoint.ui.overlay.CallOverlayViewModel
 import com.signalgate.multipoint.ui.viewmodels.TelemetryViewModel
+import com.signalgate.multipoint.ui.viewmodels.LogcatViewModel
 import com.signalgate.multipoint.data.security.BloomFilterEngine
 import com.signalgate.multipoint.data.security.PrecedenceEngine
 import com.signalgate.multipoint.data.security.SecureCsvParser
@@ -20,12 +21,9 @@ import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
 val databaseModule = module {
-    single {
-        Room.databaseBuilder(
-            androidContext(),
-            SignalGateDatabase::class.java,
-            "signalgate_multiport.db"
-        ).build()
+    // Database is built via SecureDatabase to ensure SQLCipher encryption (Layer 2)
+    single<SignalGateDatabase> {
+        SecureDatabase.getDatabase(androidContext())
     }
     single { get<SignalGateDatabase>().sourceDao() }
     single { get<SignalGateDatabase>().unifiedEntryDao() }
@@ -70,6 +68,7 @@ val viewModelModule = module {
     viewModel { DashboardViewModel(get()) }
     viewModel { BlockedNumbersViewModel(get()) }
     viewModel { RecentCallsViewModel(get(), get()) }
+    viewModel { LogcatViewModel() }
 }
 
 val appModule = listOf(databaseModule, repositoryModule, logicModule, viewModelModule)

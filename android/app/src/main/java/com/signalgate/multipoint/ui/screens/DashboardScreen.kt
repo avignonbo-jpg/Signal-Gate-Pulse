@@ -27,6 +27,8 @@ import com.signalgate.multipoint.ui.components.ShieldStatusGlow
 import com.signalgate.multipoint.ui.dashboard.DashboardViewModel
 import com.signalgate.multipoint.ui.theme.*
 import org.koin.androidx.compose.koinViewModel
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -35,8 +37,22 @@ fun OperationalDashboard(
     viewModel: DashboardViewModel = koinViewModel(),
     onOpenDrawer: () -> Unit = {},
     onAddSource: () -> Unit = {},
-    onSettingsClick: () -> Unit = {}
+    onSettingsClick: () -> Unit = {},
+    onLaunchOnboarding: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val sharedPreferences = remember {
+        context.getSharedPreferences("${context.packageName}_preferences", Context.MODE_PRIVATE)
+    }
+    
+    LaunchedEffect(Unit) {
+        val isFirstLaunch = sharedPreferences.getBoolean("is_first_launch", true)
+        if (isFirstLaunch) {
+            onLaunchOnboarding()
+            sharedPreferences.edit().putBoolean("is_first_launch", false).apply()
+        }
+    }
+
     val totalSources by viewModel.totalSources.collectAsState(initial = 0)
     val totalEntries by viewModel.totalEntries.collectAsState(initial = 0)
     val blockedToday by viewModel.blockedToday.collectAsState()

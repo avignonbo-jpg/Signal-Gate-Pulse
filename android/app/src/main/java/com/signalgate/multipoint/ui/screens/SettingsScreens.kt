@@ -20,10 +20,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.signalgate.multipoint.PostCallNotifier
 import androidx.compose.material3.ExperimentalMaterial3Api
+import com.signalgate.multipoint.ui.navigation.Screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onNavigateToLogcat: () -> Unit = {}) {
     val context = LocalContext.current
     val sharedPreferences = remember {
         context.getSharedPreferences("${context.packageName}_preferences", Context.MODE_PRIVATE)
@@ -105,14 +106,10 @@ fun SettingsScreen() {
             }
 
             OutlinedButton(
-                onClick = {
-                    dialogTitle = "System Logs"
-                    dialogMessage = "SignalGate logs events to the Android System Log (Logcat).\n\nFilter by tag: 'SignalGateScreening' or 'PhoneStateReceiver' to see call events."
-                    showDialog = true
-                },
+                onClick = onNavigateToLogcat,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("View Logs Information")
+                Text("Open In-App Logcat Viewer")
             }
 
             Button(

@@ -95,6 +95,7 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --release) VARIANT="Release"; shift ;;
         --debug)   VARIANT="Debug"; shift ;;
+        --pulse)   VARIANT="PulseDebug"; shift ;;
         --clean)   CLEAN=true; shift ;;
         --open)    OPEN_DIR=true; shift ;;
         --help)    echo "See help in script"; exit 0 ;;

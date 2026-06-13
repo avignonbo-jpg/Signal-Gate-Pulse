@@ -1,0 +1,104 @@
+name: Gemini Review + Error Corrections + Compose Metrics
+
+on:
+  push:
+    branches: [ consumer-v1 ]
+  pull_request:
+    branches: [ consumer-v1 ]
+  workflow_run:
+    workflows: ["Pulse Consumer CI"]
+    types: [completed]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write      # Required to commit error_corrections.md
+  pull-requests: write
+  issues: write
+  actions: read
+
+jobs:
+  gemini-review-and-metrics:
+    runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'push' || github.event_name == 'pull_request') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@gemini-cli'))
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # === STEP 1: Gemini Full Error & Architecture Review ===
+      - name: Run Gemini Error & Architecture Review
+        uses: google-github-actions/run-gemini-cli@v1
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          prompt: |
+            Perform a full repository review for errors, inconsistencies, security issues, architectural violations, and build problems.
+            
+            Follow .gemini/config.yaml exactly (Purpose, Review priorities, Android-specific rules, etc.).
+            
+            For every new/changed file and key files across the project:
+            - Check syntax, resources, naming, layer boundaries, security boundaries, one-ViewModel-per-screen, etc.
+            - Apply minimal safe fixes only.
+            - Append ALL findings and corrections to error_corrections.md (never overwrite).
+            
+            At the end, output a summary of issues found and files modified.
+
+      - name: Commit Gemini Error Corrections
+        if: always()
+        run: |
+          if [ -f error_corrections.md ]; then
+            git config user.name "Gemini AI Reviewer"
+            git config user.email "gemini@automated.review"
+            git add error_corrections.md
+            git commit -m "chore(gemini): update error corrections log [skip ci]" || echo "No new corrections"
+            git push
+          fi
+
+      # === STEP 2: Generate Compose Metrics (AFTER Gemini fixes) ===
+      - name: Generate Compose Compiler Metrics
+        working-directory: ./android
+        run: |
+          ./gradlew :app:assemblePulseDebug \
+            -PenableComposeCompilerMetrics=true \
+            -PenableComposeCompilerReports=true \
+            --stacktrace
+
+      - name: Upload Compose Metrics Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-metrics
+          path: |
+            android/app/build/compose-metrics/**
+            android/app/build/compose-reports/**
+          retention-days: 14
+
+      # === STEP 3: Gemini Review of Compose Metrics ===
+      - name: Run Gemini Compose Metrics Analysis
+        uses: google-github-actions/run-gemini-cli@v1
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          prompt: |
+            Review the generated Compose compiler metrics and reports:
+            1. Regressions compared to previous baseline (if any).
+            2. Unstable or newly unstable composables.
+            3. Likely causes of instability or recomposition growth.
+            4. Files or patterns needing refactoring (respect one-ViewModel-per-screen and architecture contract).
+            5. Short prioritized list of fixes.
+            
+            Metrics location: android/app/build/compose-metrics/
+            Focus on actionable Android/Jetpack Compose performance feedback aligned with SignalGate Pulse architecture.
+
+      - name: Append Metrics Summary to error_corrections.md
+        if: always()
+        run: |
+          echo -e "\n## Compose Metrics Review - $(date -u +'%Y-%m-%d %H:%M UTC')" >> error_corrections.md
+          echo "See attached artifact for full reports." >> error_corrections.md
+          git add error_corrections.md
+          git commit -m "chore(gemini): append compose metrics summary [skip ci]" || true
+          git push || true

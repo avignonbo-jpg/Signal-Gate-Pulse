@@ -30,8 +30,8 @@ jobs:
       - name: Grant Execute Permission for Gradle
         run: chmod +x android/gradlew
 
-      - name: Build Debug APK
-        run: cd android && ./gradlew assembleDebug --no-daemon
+      - name: Build Pulse Debug APK
+        run: cd android && ./gradlew assemblePulseDebug --no-daemon
 
       - name: Run Emulator and Capture Crash Log
         uses: reactivecircus/android-emulator-runner@v2
@@ -46,7 +46,7 @@ jobs:
             echo "=== Emulator ready ==="
             adb logcat -c
             echo "=== Installing APK ==="
-            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb install -r android/app/build/outputs/apk/pulse/debug/app-pulse-debug.apk
             adb logcat -v threadtime > /tmp/full_logcat.txt &
             LOGCAT_PID=$!
             echo "=== Launching app ==="

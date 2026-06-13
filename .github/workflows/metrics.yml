@@ -45,7 +45,8 @@ jobs:
           mkdir -p compose-metrics-output
           
           echo "Starting Compose metrics analysis script..."
-          if ! ./scripts/analyze-compose-metrics.sh > compose-metrics-output/script.log 2>&1; then
+          # Using PulseDebug variant for consumer-v1 branch
+          if ! ./scripts/analyze-compose-metrics.sh --pulse > compose-metrics-output/script.log 2>&1; then
             echo "❌ Build script failed. Printing logs:"
             cat compose-metrics-output/script.log
             exit 1
