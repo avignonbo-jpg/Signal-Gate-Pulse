@@ -31,8 +31,14 @@ data class DetailedPermission(
     val isRequired: Boolean
 )
 
+import org.koin.androidx.compose.koinViewModel
+import com.signalgate.multipoint.ui.onboarding.OnboardingViewModel
+
 @Composable
-fun PermissionSettingsScreen(modifier: Modifier = Modifier) {
+fun PermissionSettingsScreen(
+    modifier: Modifier = Modifier,
+    viewModel: OnboardingViewModel = koinViewModel()
+) {
     val context = LocalContext.current
     
     val allPermissions = remember {
@@ -94,9 +100,7 @@ fun PermissionSettingsScreen(modifier: Modifier = Modifier) {
         }.toList()
     }
 
-    var permissionsState by remember { 
-        mutableStateOf(allPermissions.associate { it.manifestString to false }) 
-    }
+    val permissionsState by viewModel.permissionStates.collectAsState()
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -105,7 +109,7 @@ fun PermissionSettingsScreen(modifier: Modifier = Modifier) {
         val newState = allPermissions.associate { it.manifestString to (
             ContextCompat.checkSelfPermission(context, it.manifestString) == PackageManager.PERMISSION_GRANTED
         )}
-        permissionsState = newState
+        viewModel.updateAllPermissions(newState)
     }
 
     // Initial audit
@@ -113,7 +117,7 @@ fun PermissionSettingsScreen(modifier: Modifier = Modifier) {
         val initialState = allPermissions.associate { it.manifestString to (
             ContextCompat.checkSelfPermission(context, it.manifestString) == PackageManager.PERMISSION_GRANTED
         )}
-        permissionsState = initialState
+        viewModel.updateAllPermissions(initialState)
     }
 
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
