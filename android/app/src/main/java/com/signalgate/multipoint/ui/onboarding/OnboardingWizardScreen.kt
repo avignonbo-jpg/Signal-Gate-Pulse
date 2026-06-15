@@ -19,7 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -28,7 +28,7 @@ import com.signalgate.multipoint.ui.theme.*
 @Composable
 fun OnboardingWizardScreen(
     navController: NavHostController,
-    viewModel: OnboardingViewModel = viewModel()
+    viewModel: OnboardingViewModel = koinViewModel()
 ) {
     NavHost(navController = navController, startDestination = "permissions") {
         composable("permissions") { PermissionsStep(navController, viewModel) }
