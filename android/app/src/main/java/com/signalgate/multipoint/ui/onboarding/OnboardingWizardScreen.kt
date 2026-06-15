@@ -171,17 +171,156 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
     }
 }
 
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.clickable
+import com.signalgate.multipoint.ui.viewmodels.ContactsViewModel
+import com.signalgate.multipoint.ui.viewmodels.ContactItem
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ContactsImportStep(navController: NavHostController) {
+fun ContactsImportStep(
+    navController: NavHostController,
+    viewModel: ContactsViewModel = koinViewModel()
+) {
+    val context = LocalContext.current
+    val contacts by viewModel.contacts.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val isSaved by viewModel.isSaved.collectAsState()
+    val filteredContacts = viewModel.filteredContacts
+
+    LaunchedEffect(Unit) {
+        viewModel.loadContacts(context)
+    }
+
+    LaunchedEffect(isSaved) {
+        if (isSaved) {
+            navController.navigate("sources")
+        }
+    }
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
     ) {
-        Text("Contacts Synced", color = TextPrimary, style = MaterialTheme.typography.headlineSmall)
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = { navController.navigate("sources") }) {
-            Text("Continue")
+        Text(
+            text = "Contacts Auto-Allow",
+            style = MaterialTheme.typography.headlineMedium,
+            color = TextPrimary,
+            fontWeight = FontWeight.Bold
+        )
+        
+        Text(
+            text = "Select contacts to automatically allow. These calls will bypass all security filters.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextSecondary,
+            modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
+        )
+
+        TextField(
+            value = searchQuery,
+            onValueChange = { viewModel.onSearchQueryChanged(it) },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Search contacts...", color = TextSecondary) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) },
+            colors = TextFieldDefaults.textFieldColors(
+                containerColor = SurfaceGlass,
+                focusedIndicatorColor = NeonCyan,
+                unfocusedIndicatorColor = Color.Transparent,
+                textColor = TextPrimary
+            ),
+            shape = MaterialTheme.shapes.medium,
+            singleLine = true
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${viewModel.selectedCount} selected",
+                color = NeonCyan,
+                fontSize = 14.sp
+            )
+            Row {
+                TextButton(onClick = { viewModel.selectAll() }) {
+                    Text("Select All", color = NeonCyan)
+                }
+                TextButton(onClick = { viewModel.clearSelection() }) {
+                    Text("Clear", color = TextSecondary)
+                }
+            }
+        }
+
+        if (isLoading) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = NeonCyan)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(filteredContacts) { contact ->
+                    ContactRow(contact = contact, onToggle = { viewModel.toggleContact(contact.normalizedNumber) })
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = { viewModel.saveSelectedToAllowList() },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = NeonCyan,
+                contentColor = Color.Black
+            ),
+            enabled = !isLoading
+        ) {
+            Text("Import & Continue")
+        }
+    }
+}
+
+@Composable
+fun ContactRow(contact: ContactItem, onToggle: () -> Unit) {
+    Surface(
+        onClick = onToggle,
+        shape = MaterialTheme.shapes.medium,
+        color = SurfaceGlass,
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = contact.displayName,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = contact.phoneNumber,
+                    color = TextSecondary,
+                    fontSize = 12.sp
+                )
+            }
+            
+            Checkbox(
+                checked = contact.isSelected,
+                onCheckedChange = { onToggle() },
+                colors = CheckboxDefaults.colors(
+                    checkedColor = NeonCyan,
+                    uncheckedColor = TextSecondary,
+                    checkmarkColor = Color.Black
+                )
+            )
         }
     }
 }
