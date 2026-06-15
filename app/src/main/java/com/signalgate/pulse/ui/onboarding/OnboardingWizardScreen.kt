@@ -33,6 +33,13 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import org.koin.androidx.compose.koinViewModel
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.platform.LocalContext
+import com.signalgate.multipoint.ui.viewmodels.ContactsViewModel
 
 @Composable
 fun OnboardingWizardScreen(navController: NavHostController) {
@@ -164,11 +171,28 @@ private fun PermissionRow(
 }
 
 @Composable
-fun ContactsImportStep(navController: NavHostController) {
+fun ContactsImportStep(
+    navController: NavHostController,
+    viewModel: ContactsViewModel = koinViewModel()
+) {
+    val context = LocalContext.current
+    val contacts by viewModel.contacts.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val isSaved by viewModel.isSaved.collectAsState()
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) {
-        navController.navigate("sources")
+    ) { granted ->
+        if (granted) viewModel.loadContacts(context)
+    }
+
+    LaunchedEffect(Unit) {
+        launcher.launch(Manifest.permission.READ_CONTACTS)
+    }
+
+    LaunchedEffect(isSaved) {
+        if (isSaved) navController.navigate("sources")
     }
 
     Column(
@@ -177,27 +201,105 @@ fun ContactsImportStep(navController: NavHostController) {
             .padding(24.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Contacts",
+                text = "Allow Contacts",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "SignalGate can automatically allow calls from people in your contacts. This is optional — you can change it later in Settings.",
+                text = "Select contacts whose calls should always be allowed through.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Search bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { viewModel.onSearchQueryChanged(it) },
+                placeholder = { Text("Search contacts...") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Select all / clear row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${viewModel.selectedCount} selected",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row {
+                    TextButton(onClick = { viewModel.selectAll() }) {
+                        Text("All")
+                    }
+                    TextButton(onClick = { viewModel.clearSelection() }) {
+                        Text("None")
+                    }
+                }
+            }
+
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(
+                        items = viewModel.filteredContacts,
+                        key = { it.normalizedNumber }
+                    ) { contact ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.toggleContact(contact.normalizedNumber)
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = contact.isSelected,
+                                onCheckedChange = {
+                                    viewModel.toggleContact(contact.normalizedNumber)
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = contact.displayName,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Text(
+                                    text = contact.phoneNumber,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        HorizontalDivider()
+                    }
+                }
+            }
         }
+
         Column {
             Button(
-                onClick = {
-                    launcher.launch(Manifest.permission.READ_CONTACTS)
-                },
-                modifier = Modifier.fillMaxWidth()
+                onClick = { viewModel.saveSelectedToAllowList() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = viewModel.selectedCount > 0
             ) {
-                Text("Allow Contacts Access")
+                Text("Allow ${viewModel.selectedCount} Contact${if (viewModel.selectedCount != 1) "s" else ""}")
             }
             Spacer(modifier = Modifier.height(8.dp))
             TextButton(
@@ -269,4 +371,3 @@ fun RiskThresholdStep(navController: NavHostController) {
         }
     }
 }
-l
