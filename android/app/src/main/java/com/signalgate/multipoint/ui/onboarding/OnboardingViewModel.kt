@@ -91,6 +91,8 @@ class OnboardingViewModel : ViewModel() {
         _permissionStates.value = states
     }
 
+    val permissions: List<PermissionItem> = permissionsList
+
     fun allRequiredGranted(): Boolean {
         return permissionsList
             .filter { it.isRequired }
