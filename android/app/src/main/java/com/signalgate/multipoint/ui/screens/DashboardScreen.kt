@@ -112,7 +112,7 @@ fun OperationalDashboard(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "MULTI-PORT",
+                    text = "PULSE",
                     color = NeonCyan,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium
