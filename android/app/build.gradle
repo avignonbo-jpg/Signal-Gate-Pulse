@@ -91,6 +91,9 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'com.google.android.material:material:1.12.0'
 
+    // HTTP Client for Reliable Sources
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
     // Room
     def room_version = "2.6.1"
     implementation "androidx.room:room-runtime:$room_version"
