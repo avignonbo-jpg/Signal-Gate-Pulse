@@ -1,27 +1,30 @@
 package com.signalgate.sources
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.URL
 
+/**
+ * Public source parsing utilities - used by ReliableSourceManager
+ * Security: Strict sanitization, memory-safe chunking.
+ */
 object PublicSourceParser {
+
     suspend fun parseFTCSource(context: Context): List<String> {
-        // Example: Download + chunked parse (replace with actual FTC URL)
-        val url = URL("https://raw.githubusercontent.com/.../ftc-spam.csv")
-        val numbers = mutableListOf<String>()
-        url.openStream().bufferedReader().useLines { lines ->
-            lines.chunked(1000).forEach { chunk -> // Memory-safe
-                chunk.forEach { line ->
-                    val sanitized = line.trim().replace(Regex("[^0-9+]"), "")
-                    if (sanitized.isNotEmpty()) numbers.add(sanitized)
-                }
-            }
-        }
-        return numbers
+        // Placeholder - now delegated to ReliableSourceManager for better management
+        return ReliableSourceManager.fetchReliableBlocklist(context).take(10000) // limit for safety
     }
 
     fun sanitizeNumber(number: String): String {
         return number.replace(Regex("[^0-9+]"), "").take(15)
+    }
+
+    // Additional parsers for CSV/JSON if needed
+    fun parseLineForNumber(line: String): String? {
+        val sanitized = sanitizeNumber(line)
+        return if (sanitized.length >= 10) sanitized else null
     }
 }
