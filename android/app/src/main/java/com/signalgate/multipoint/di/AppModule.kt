@@ -14,6 +14,7 @@ import com.signalgate.multipoint.ui.overlay.CallOverlayViewModel
 import com.signalgate.multipoint.ui.viewmodels.ContactsViewModel
 import com.signalgate.multipoint.ui.viewmodels.TelemetryViewModel
 import com.signalgate.multipoint.ui.viewmodels.LogcatViewModel
+import com.signalgate.multipoint.ui.onboarding.OnboardingViewModel
 import com.signalgate.multipoint.data.security.BloomFilterEngine
 import com.signalgate.multipoint.data.security.PrecedenceEngine
 import com.signalgate.multipoint.data.security.SecureCsvParser
@@ -71,6 +72,7 @@ val viewModelModule = module {
     viewModel { BlockedNumbersViewModel(get()) }
     viewModel { RecentCallsViewModel(get(), get()) }
     viewModel { LogcatViewModel() }
+    viewModel { OnboardingViewModel() }
 }
 
 val appModule = listOf(databaseModule, repositoryModule, logicModule, viewModelModule)
