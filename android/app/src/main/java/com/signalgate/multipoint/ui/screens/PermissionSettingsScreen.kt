@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.signalgate.multipoint.ui.components.AdvancedGlassCard
 import com.signalgate.multipoint.ui.theme.*
+import org.koin.androidx.compose.koinViewModel
+import com.signalgate.multipoint.ui.onboarding.OnboardingViewModel
 
 data class DetailedPermission(
     val name: String,
@@ -30,9 +32,6 @@ data class DetailedPermission(
     val rationale: String,
     val isRequired: Boolean
 )
-
-import org.koin.androidx.compose.koinViewModel
-import com.signalgate.multipoint.ui.onboarding.OnboardingViewModel
 
 @Composable
 fun PermissionSettingsScreen(
@@ -115,7 +114,7 @@ fun PermissionSettingsScreen(
     // Initial audit
     LaunchedEffect(Unit) {
         val initialState = allPermissions.associate { it.manifestString to (
-            ContextCompat.checkSelfPermission(context, it.manifestString) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(context, it.permission) == PackageManager.PERMISSION_GRANTED
         )}
         viewModel.updateAllPermissions(initialState)
     }
