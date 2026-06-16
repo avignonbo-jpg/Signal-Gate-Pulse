@@ -17,7 +17,7 @@ data class PermissionItem(
 
 class OnboardingViewModel : ViewModel() {
 
-    val permissionsList = mutableListOf(
+    val permissions = mutableListOf(
         PermissionItem(
             permission = Manifest.permission.READ_PHONE_STATE,
             title = "Phone Connection",
@@ -75,7 +75,7 @@ class OnboardingViewModel : ViewModel() {
     }.toList()
 
     private val _permissionStates = MutableStateFlow(
-        permissionsList.associate { it.permission to false }
+        permissions.associate { it.permission to false }
     )
     val permissionStates = _permissionStates.asStateFlow()
 
@@ -91,10 +91,9 @@ class OnboardingViewModel : ViewModel() {
         _permissionStates.value = states
     }
 
-    val permissions: List<PermissionItem> = permissionsList
 
     fun allRequiredGranted(): Boolean {
-        return permissionsList
+        return permissions
             .filter { it.isRequired }
             .all { _permissionStates.value[it.permission] == true }
     }
