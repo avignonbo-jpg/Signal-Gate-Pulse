@@ -57,11 +57,14 @@ val logicModule = module {
     single { DataSyncEngine(get(), get()) }
 
     // WorkManager workers (factory required for KoinWorkerFactory)
+    // MultiPortSyncWorker reference removed as it's missing in this branch
+    /*
     factory { (context: android.content.Context, params: androidx.work.WorkerParameters) ->
         com.signalgate.multipoint.service.workers.MultiPortSyncWorker(
             context, params, get(), get(), get()
         )
     }
+    */
 }
 
 val viewModelModule = module {

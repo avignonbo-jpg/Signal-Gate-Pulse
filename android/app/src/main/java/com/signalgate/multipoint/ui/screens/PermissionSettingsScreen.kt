@@ -114,7 +114,7 @@ fun PermissionSettingsScreen(
     // Initial audit
     LaunchedEffect(Unit) {
         val initialState = allPermissions.associate { it.manifestString to (
-            ContextCompat.checkSelfPermission(context, it.permission) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(context, it.manifestString) == PackageManager.PERMISSION_GRANTED
         )}
         viewModel.updateAllPermissions(initialState)
     }

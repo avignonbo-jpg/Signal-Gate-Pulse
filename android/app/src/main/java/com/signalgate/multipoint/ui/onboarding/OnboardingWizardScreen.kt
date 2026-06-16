@@ -226,11 +226,13 @@ fun ContactsImportStep(
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("Search contacts...", color = TextSecondary) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) },
-            colors = TextFieldDefaults.textFieldColors(
-                containerColor = SurfaceGlass,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = SurfaceGlass,
+                unfocusedContainerColor = SurfaceGlass,
                 focusedIndicatorColor = NeonCyan,
                 unfocusedIndicatorColor = Color.Transparent,
-                textColor = TextPrimary
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary
             ),
             shape = MaterialTheme.shapes.medium,
             singleLine = true
