@@ -54,7 +54,7 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
 
     // Initial check
     LaunchedEffect(Unit) {
-        val currentStates = viewModel.permissionsList.associate { 
+        val currentStates = viewModel.permissions.associate { 
             it.permission to (ContextCompat.checkSelfPermission(context, it.permission) == PackageManager.PERMISSION_GRANTED)
         }
         viewModel.updateAllPermissions(currentStates)
@@ -84,7 +84,7 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(viewModel.permissionsList) { permission ->
+            items(viewModel.permissions) { permission ->
                 val isGranted = permissionStates[permission.permission] ?: false
                 
                 Surface(
@@ -128,7 +128,7 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
 
         Button(
             onClick = {
-                val ungranted = viewModel.permissionsList.filter { 
+                val ungranted = viewModel.permissions.filter { 
                     (permissionStates[it.permission] == false)
                 }.map { it.permission }
                 
