@@ -3,11 +3,13 @@ package com.signalgate.multipoint.ui.onboarding
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,11 +21,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import org.koin.androidx.compose.koinViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.signalgate.multipoint.ui.theme.*
+import com.signalgate.multipoint.ui.viewmodels.ContactItem
+import com.signalgate.multipoint.ui.viewmodels.ContactsViewModel
+import org.koin.androidx.compose.koinViewModel
+
+
 
 @Composable
 fun OnboardingWizardScreen(
@@ -171,10 +177,6 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
     }
 }
 
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.foundation.clickable
-import com.signalgate.multipoint.ui.viewmodels.ContactsViewModel
-import com.signalgate.multipoint.ui.viewmodels.ContactItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
