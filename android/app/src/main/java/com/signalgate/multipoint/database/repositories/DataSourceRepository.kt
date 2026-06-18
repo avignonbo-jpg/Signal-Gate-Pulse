@@ -6,6 +6,8 @@ import com.signalgate.multipoint.database.entities.SourceEntity
 import com.signalgate.multipoint.database.entities.UnifiedEntryEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first 
+import com.signalgate.multipoint.data.sources.TrustedSourceCatalog
 
 /**
  * DataSourceRepository handles all data source operations and state management.
@@ -130,6 +132,25 @@ class DataSourceRepository(
     suspend fun deleteEntry(entry: UnifiedEntryEntity) {
         entryDao.deleteEntry(entry)
     }
+    
+        suspend fun seedTrustedSources() {
+            // Fetch existing sources once outside the loop to avoid N+1 queries
+            val existingNames = sourceDao.getAllSources().first().map { it.name }.toSet()
+
+            TrustedSourceCatalog.sources.forEach { trusted ->
+                if (trusted.name !in existingNames) {
+                    insertSource(
+                        SourceEntity(
+                            name = trusted.name,
+                            type = trusted.type,
+                            pathOrUrl = trusted.url,
+                            isEnabled = trusted.defaultEnabled,
+                            priority = trusted.defaultPriority
+                        )
+                    )
+                }
+            }
+        }
 
     data class CallDecision(
         val action: String,
