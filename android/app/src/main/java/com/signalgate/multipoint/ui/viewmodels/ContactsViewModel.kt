@@ -4,7 +4,7 @@ import android.content.Context
 import android.provider.ContactsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.signalgate.multipoint.database.entities.SourceEntity
+import com.signalgate.multipoint.database.daos.SettingDao
 import com.signalgate.multipoint.database.entities.UnifiedEntryEntity
 import com.signalgate.multipoint.database.repositories.BlocklistRepository
 import com.signalgate.multipoint.database.repositories.DataSourceRepository
@@ -21,7 +21,8 @@ data class ContactItem(
 
 class ContactsViewModel(
     private val repository: DataSourceRepository,
-    private val blocklistRepository: BlocklistRepository? = null   // Injected later
+    private val blocklistRepository: BlocklistRepository,
+    private val settingDao: SettingDao
 ) : ViewModel() {
 
     private val _contacts = MutableStateFlow<List<ContactItem>>(emptyList())
@@ -77,7 +78,6 @@ class ContactsViewModel(
                 }
             }
 
-            // Deduplicate by normalized number
             _contacts.value = loaded
                 .distinctBy { it.normalizedNumber }
                 .sortedBy { it.displayName }
@@ -106,12 +106,17 @@ class ContactsViewModel(
     }
 
     /**
-     * Fixed version: Uses pre-seeded Contacts Allow List sourceId instead of creating duplicates.
+     * Reads the Contacts Allow List sourceId from SettingEntry (seeded by DatabaseInitializer)
+     * and inserts selected contacts as ALLOW entries. Screen calls this with no arguments —
+     * the sourceId lookup stays in the ViewModel where it belongs.
      */
-    fun saveSelectedToAllowList(contactsSourceId: Int) {
+    fun saveSelectedToAllowList() {
         viewModelScope.launch {
             val selected = _contacts.value.filter { it.isSelected }
             if (selected.isEmpty()) return@launch
+
+            val contactsSourceId = settingDao.getSettingValue("contacts_source_id")?.toIntOrNull()
+                ?: return@launch // Source not seeded yet — silently bail; seeding happens at app start
 
             selected.forEach { contact ->
                 repository.insertEntry(
@@ -131,12 +136,11 @@ class ContactsViewModel(
     }
 
     /**
-     * New: Block a single contact via BlocklistRepository (Step 1.3 requirement)
+     * Block a single contact via BlocklistRepository (Step 1.3).
      */
     fun blockContact(phoneNumber: String, reason: String = "Manual block from contacts") {
         viewModelScope.launch {
-            blocklistRepository?.addBlockRule(phoneNumber, reason)
-            // Optional: refresh contacts list or show feedback
+            blocklistRepository.addBlockRule(phoneNumber, reason)
         }
     }
 
