@@ -29,6 +29,9 @@ interface SourceDao {
     @Query("SELECT * FROM sources WHERE id = :id")
     suspend fun getSourceById(id: Int): SourceEntity?
 
+    @Query("SELECT * FROM sources WHERE name = :name LIMIT 1")
+    suspend fun getSourceByName(name: String): SourceEntity?
+
     @Query("SELECT * FROM sources ORDER BY priority DESC, name ASC")
     fun getAllSources(): Flow<List<SourceEntity>>
 
@@ -88,6 +91,12 @@ interface UnifiedEntryDao {
 
     @Query("SELECT * FROM unified_entries")
     suspend fun getAllEntries(): List<UnifiedEntryEntity>
+
+    @Query("SELECT * FROM unified_entries WHERE sourceId = :sourceId")
+    suspend fun getAllBySource(sourceId: Int): List<UnifiedEntryEntity>
+
+    @Query("DELETE FROM unified_entries WHERE phoneNumber = :phoneNumber AND sourceId = :sourceId")
+    suspend fun deleteEntryByNumberAndSource(phoneNumber: String, sourceId: Int)
 }
 
 /**
