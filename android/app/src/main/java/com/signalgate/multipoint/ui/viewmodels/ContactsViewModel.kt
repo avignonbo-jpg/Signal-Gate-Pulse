@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.signalgate.multipoint.database.entities.SourceEntity
 import com.signalgate.multipoint.database.entities.UnifiedEntryEntity
+import com.signalgate.multipoint.database.repositories.BlocklistRepository
 import com.signalgate.multipoint.database.repositories.DataSourceRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,7 +20,8 @@ data class ContactItem(
 )
 
 class ContactsViewModel(
-    private val repository: DataSourceRepository
+    private val repository: DataSourceRepository,
+    private val blocklistRepository: BlocklistRepository? = null   // Injected later
 ) : ViewModel() {
 
     private val _contacts = MutableStateFlow<List<ContactItem>>(emptyList())
@@ -63,12 +65,8 @@ class ContactsViewModel(
             )
 
             cursor?.use {
-                val nameIndex = it.getColumnIndex(
-                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
-                )
-                val numberIndex = it.getColumnIndex(
-                    ContactsContract.CommonDataKinds.Phone.NUMBER
-                )
+                val nameIndex = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numberIndex = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
                 while (it.moveToNext()) {
                     val name = it.getString(nameIndex) ?: continue
                     val number = it.getString(numberIndex) ?: continue
@@ -107,27 +105,20 @@ class ContactsViewModel(
         _searchQuery.value = query
     }
 
-    fun saveSelectedToAllowList() {
+    /**
+     * Fixed version: Uses pre-seeded Contacts Allow List sourceId instead of creating duplicates.
+     */
+    fun saveSelectedToAllowList(contactsSourceId: Int) {
         viewModelScope.launch {
             val selected = _contacts.value.filter { it.isSelected }
             if (selected.isEmpty()) return@launch
-
-            // Ensure a contacts source exists
-            val contactsSource = SourceEntity(
-                name = "Contacts Allow List",
-                type = "MANUAL",
-                pathOrUrl = "",
-                isEnabled = true,
-                priority = 100 // Contacts get highest priority
-            )
-            val sourceId = repository.insertSource(contactsSource).toInt()
 
             selected.forEach { contact ->
                 repository.insertEntry(
                     UnifiedEntryEntity(
                         phoneNumber = contact.normalizedNumber,
                         action = "ALLOW",
-                        sourceId = sourceId,
+                        sourceId = contactsSourceId,
                         category = "Contact",
                         confidence = 100,
                         metadata = contact.displayName
@@ -136,6 +127,16 @@ class ContactsViewModel(
             }
 
             _isSaved.value = true
+        }
+    }
+
+    /**
+     * New: Block a single contact via BlocklistRepository (Step 1.3 requirement)
+     */
+    fun blockContact(phoneNumber: String, reason: String = "Manual block from contacts") {
+        viewModelScope.launch {
+            blocklistRepository?.addBlockRule(phoneNumber, reason)
+            // Optional: refresh contacts list or show feedback
         }
     }
 
