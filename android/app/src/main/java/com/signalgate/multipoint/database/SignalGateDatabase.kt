@@ -1,8 +1,6 @@
 package com.signalgate.multipoint.database
 
-import android.content.Context
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -18,8 +16,15 @@ import com.signalgate.multipoint.database.entities.SyncHistoryEntry
 import com.signalgate.multipoint.database.entities.UnifiedEntryEntity
 
 /**
- * SignalGateDatabase is the main Room database for the SignalGate Multi-Port application.
- * It manages all data related to sources, entries, call logs, settings, and sync history.
+ * SignalGateDatabase is the Room database abstract class for SignalGate Pulse.
+ *
+ * Construction is exclusively managed by SecureDatabase via Koin injection.
+ * Do NOT instantiate this class directly. Static construction methods have been
+ * intentionally omitted — any bypass of SecureDatabase would create an unencrypted
+ * database at a different filename and silently lose all user data.
+ *
+ * Sole permitted construction path:
+ *   SecureDatabase.getDatabase(context) injected via AppModule -> databaseModule
  */
 @Database(
     entities = [
@@ -38,44 +43,17 @@ abstract class SignalGateDatabase : RoomDatabase() {
     abstract fun callLogDao(): CallLogDao
     abstract fun settingDao(): SettingDao
     abstract fun syncHistoryDao(): SyncHistoryDao
-
-    companion object {
-        private const val DATABASE_NAME = "signalgate_multiport.db"
-        private var instance: SignalGateDatabase? = null
-
-        fun getInstance(context: Context): SignalGateDatabase {
-            return instance ?: synchronized(this) {
-                instance ?: buildDatabase(context).also { instance = it }
-            }
-        }
-
-        private fun buildDatabase(context: Context): SignalGateDatabase {
-            return Room.databaseBuilder(
-                context.applicationContext,
-                SignalGateDatabase::class.java,
-                DATABASE_NAME
-            )
-                .enableMultiInstanceInvalidation()
-                .addMigrations(
-                    // Add migrations here as the schema evolves
-                )
-                .build()
-        }
-
-        fun closeDatabase() {
-            instance?.close()
-            instance = null
-        }
-    }
 }
 
 /**
- * Migration example (for future schema updates).
- * This is a placeholder for database migrations.
+ * Migration placeholder for future schema updates.
+ * Add migrations here as the schema evolves and bump the @Database version above.
+ *
+ * Example usage when needed:
+ *   SecureDatabase.getDatabase(context) is built with .addMigrations(MIGRATION_1_2)
  */
 val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        // Example migration: add a new column
-        // database.execSQL("ALTER TABLE sources ADD COLUMN new_column TEXT DEFAULT NULL")
+        // Example: db.execSQL("ALTER TABLE sources ADD COLUMN new_column TEXT DEFAULT NULL")
     }
 }
