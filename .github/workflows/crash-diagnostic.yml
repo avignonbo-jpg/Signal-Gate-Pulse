@@ -9,10 +9,10 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Checkout develop branch
+      - name: Checkout consumer-v1 branch
         uses: actions/checkout@v4
         with:
-          ref: develop
+          ref: consumer-v1
 
       - name: Enable KVM
         run: |
@@ -25,7 +25,6 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
-          cache: 'gradle'
 
       - name: Grant Execute Permission for Gradle
         run: chmod +x android/gradlew
