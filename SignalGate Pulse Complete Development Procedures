@@ -1,0 +1,632 @@
+SignalGate Pulse
+Complete Development Procedures Scope
+Consumer-Grade Android Call Protection
+Version 4.0  •  June 2026  •  Authority: Architecture Contract
+
+
+Document Purpose
+This document is the single authoritative procedural framework for bringing SignalGate Pulse to production readiness. It synthesizes the Architecture Contract, all requirements identified during active development sessions, direct code inspection of the live consumer-v1 branch, and the complete governance model for future releases.
+SignalGate Pulse is the consumer-facing fork. Its philosophy: set-and-forget protection — silent, correct, zero daily management. But set-and-forget until you need it: every decision must be auditable, reversible, and surfaced on demand.
+Pulse and Multi-Port are separate standalone applications sharing no live code dependency.
+Reading requirement: Before editing any file in this project, read Architecture-Contract.md in full. Non-negotiable regardless of tool or session context.
+
+
+
+Live Branch Audit — consumer-v1
+A full code inspection of the live consumer-v1 branch was performed against this document prior to the start of development. Results below establish the true starting state.
+Confirmed Done — No Action Required
+Item
+Finding
+Action
+AppModule.kt — ContactsViewModel
+Registered via koinViewModel()
+Done
+AppModule.kt — LogcatViewModel
+Registered via koinViewModel()
+Done
+AppModule.kt — OnboardingViewModel
+Registered via koinViewModel()
+Done
+AppModule.kt — MultiPortSyncWorker
+Correctly commented out
+Done
+AppModule.kt — DB routing
+Routes through SecureDatabase (not Room directly)
+Done
+OnboardingWizardScreen.kt
+Uses koinViewModel() throughout
+Done
+PermissionSettingsScreen.kt
+Real permission launchers + LaunchedEffect audit
+Done
+ContactsViewModel.kt — allowlist import
+Multi-select import flow working
+Done
+
+
+Confirmed Bugs — Must Fix Before Building
+These bugs were found by direct code inspection of the live branch. They are not theoretical — they exist in the code right now and will cause real failures if not fixed first.
+
+
+Item
+Finding
+Action
+SignalGateDatabase.kt — dual build path
+Companion object getInstance()/buildDatabase() creates an unencrypted database at 'signalgate_multiport.db'. SecureDatabase creates 'secure_signal.db'. Two separate files, two separate build paths. Any code calling getInstance() gets an unencrypted DB with no data.
+Fix first — Step 1.0
+ContactsViewModel — duplicate source rows
+saveSelectedToAllowList() always calls insertSource() with a new SourceEntity. Never checks if 'Contacts Allow List' row already exists. Every import creates a duplicate source row with a different sourceId.
+Fix in Step 1.3
+CallScreeningService — overlay trigger bug
+triggerOverlay() fires on spamStatus string comparison ('LIKELY SPAM'/'SPAM'), not CallDecision enum. Pattern-matched blocks write decision=BLOCK but spamStatus=UNKNOWN and never trigger the overlay.
+Fix in Step 1.6
+SettingsScreen — SharedPreferences instead of SettingEntry
+Shield color values (shield_red, shield_green, shield_blue) stored in SharedPreferences. Document defines SettingEntry as the single config store. Two config systems coexist from day one.
+Migrate in Step 2.6
+
+
+Confirmed Expected Gaps — Queued for Build
+Item
+Finding
+Action
+BlocklistRepository.kt
+Does not exist
+Phase 1 — Step 1.2
+PendingCardEntity
+Does not exist
+Phase 1 — Step 1.7
+RoleManager.ROLE_CALL_SCREENING
+Zero references in entire codebase
+Phase 1 — Step 1.5
+BlockAllowList screen
+Placeholder Text composable in NavGraph
+Phase 1 — Step 1.2
+Consumer dashboard
+OperationalDashboard (prosumer view) is home screen
+Phase 2
+blockedToday counter
+MutableStateFlow(0), never incremented
+Phase 2 — Step 2.4
+Calls Screened counter
+No field exists anywhere
+Phase 2 — Step 2.5
+SecureDatabase passphrase
+Hardcoded 'your-secure-passphrase'
+Phase 1 — Step 1.12
+
+
+
+
+Database Schema Reference
+The following six Room entities form the complete persistence layer for SignalGate Pulse. All accessed exclusively through DAOs via repository wrappers. No ViewModel or engine accesses Room directly.
+Entity
+Table Name
+Purpose
+Status
+SourceEntity
+sources
+Data source registry (CSV, URL, MANUAL, Contacts)
+Exists
+UnifiedEntryEntity
+unified_entries
+Block/Allow rules from all sources
+Exists
+CallLogEntry
+call_log
+Permanent audit record of every screened call
+Exists
+SettingEntry
+settings
+Key/value store for all app configuration
+Exists
+SyncHistoryEntry
+sync_history
+Sync operation history per source
+Exists
+PendingCardEntity
+pending_cards
+Short-lived post-call digest queue
+NEW — to build
+
+
+PendingCardEntity fields: id, phoneNumber, timestamp, decision, confidence, decisionSource, dismissed (Boolean). Distinct from CallLogEntry: CallLogEntry is permanent audit; PendingCardEntity is a short-lived queue deleted on card dismissal.
+
+Critical schema constraint: UnifiedEntryEntity.sourceId is non-nullable with a foreign key to SourceEntity. Two dedicated source rows must be seeded at first install: (1) MANUAL — for user-created block/allow rules, priority 100. (2) Contacts Allow List — for contact imports, priority 100. Both must be checked before insert, never blindly inserted.
+
+
+Corrected Build Sequence
+The live branch audit revised the starting order. Confirmed bugs must be resolved before new features are built on top of them.
+Step 1.0: Remove SignalGateDatabase companion object (5-min fix, eliminates data-loss trap)
+Step 1.1: First-install source seeding — MANUAL + Contacts Allow List rows, checked before insert
+Step 1.2: BlocklistRepository.kt — now unblocked by Step 1.1
+Step 1.3: ContactsViewModel rewrite — fix duplicate-source bug + add per-contact block path
+Step 1.4: Onboarding wizard refinement
+Step 1.5: RoleManager — request and check ROLE_CALL_SCREENING
+Step 1.6: Blocked call audit trail + fix overlay trigger bug
+Then Steps 1.7 through 1.13 in document order
+
+
+Part I: Road to Initial Production Readiness
+Phase 1: Feature Completion and Architectural Alignment
+Goal: Finalize core functionality while enforcing absolute compliance with the Architecture Contract's layered security model.
+Step 1.0: SignalGateDatabase Companion Object Removal
+Fix this before touching anything else. The companion object's getInstance()/buildDatabase()/closeDatabase() methods construct an unencrypted Room database at 'signalgate_multiport.db'. SecureDatabase constructs the encrypted database at 'secure_signal.db'. These are two separate files. Any future code path that calls getInstance() will get a silent, empty, unencrypted database — appearing to the user as all data lost.
+
+Remove getInstance(), buildDatabase(), and closeDatabase() from SignalGateDatabase.kt companion object entirely.
+The only permitted construction path is Koin injecting SecureDatabase.getDatabase(androidContext()).
+After removal, the companion object itself can be deleted — it has no remaining purpose.
+Verify: grep the entire codebase for 'SignalGateDatabase.getInstance' — must return zero results after the fix.
+Deliverable: SignalGateDatabase.kt with companion object removed. Zero getInstance() references in codebase.
+
+Step 1.1: First-Install Source Seeding
+Prerequisite for Steps 1.2 and 1.3. UnifiedEntryEntity.sourceId is non-nullable with a foreign key constraint. Block/allow inserts will fail without a valid sourceId.
+
+At first database open, check whether each required source row already exists before inserting.
+MANUAL source: name = 'Manual User Rules', type = 'MANUAL', pathOrUrl = 'local', isEnabled = true, priority = 100. Used by BlocklistRepository for all user-created block/allow rules.
+Contacts Allow List source: name = 'Contacts Allow List', type = 'MANUAL', pathOrUrl = 'contacts', isEnabled = true, priority = 100. Used by ContactsViewModel for all contact imports.
+Store both sourceIds in SettingEntry for retrieval without re-querying on every operation.
+Logic: query by name first — if row exists, reuse its id. If not, insert and store the new id. Never blindly insert.
+Deliverable: DatabaseInitializer (or equivalent) that seeds both source rows idempotently at first install.
+
+Step 1.2: BlocklistRepository.kt
+Purpose-specific wrapper around UnifiedEntryEntity / UnifiedEntryDao.
+Must NOT be a parallel data system to DataSourceRepository.
+UnifiedEntryDao already provides: findUnifiedAllowEntry(), findUnifiedBlockEntry(), getAllBlockPatterns(), deleteEntry(), insertEntry() — the repository is a thin facade over these.
+All inserts use the MANUAL sourceId from Step 1.1.
+Expose: addBlockRule(phoneNumber), removeBlockRule(phoneNumber), addAllowRule(phoneNumber), removeAllowRule(phoneNumber), queryByNumber(phoneNumber), getAllUserRules() (for data export to Multi-Port).
+Register in Koin repositoryModule.
+Deliverable: BlocklistRepository.kt with block/allow CRUD via UnifiedEntryDao using the MANUAL sourceId.
+
+Step 1.3: ContactsViewModel.kt Rewrite
+saveSelectedToAllowList() currently calls insertSource() unconditionally every time. This creates duplicate 'Contacts Allow List' source rows on every import. Fix before adding any new functionality.
+
+Fix saveSelectedToAllowList(): retrieve the Contacts Allow List sourceId from SettingEntry (seeded in Step 1.1) instead of inserting a new source row.
+Preserve the existing multi-select allowlist import flow — only the source-row handling changes.
+Add per-contact block action routed through BlocklistRepository (Step 1.2).
+Both allow-import and block-contact flows coexist cleanly in the same ViewModel with no state bleed.
+Deliverable: ContactsViewModel with fixed source-row handling, preserved allowlist import, and new per-contact block path.
+
+Step 1.4: Onboarding Wizard Refinement
+Steps in order: permissions → contacts → aggressiveness/mode → risk acknowledgment.
+Package: com.signalgate.multipoint.ui.onboarding.
+Must use koinViewModel() throughout — never viewModel().
+Wizard detects already-granted permissions and skips those steps on re-entry.
+OnboardingViewModel handles all state progression and validation.
+Graceful degradation: wizard completes even if some permissions are denied, with clear per-item status shown.
+Re-entry triggerable from the consumer dashboard Settings button at any time.
+Every permission step must explain why in plain English, not Android-speak. This is the first thing a non-technical user sees.
+
+Step 1.5: RoleManager — Call Screening Role
+CRITICAL: ROLE_CALL_SCREENING is never requested or checked anywhere in the codebase. Without this role the OS never invokes CallScreeningService. The entire engine is silently inert.
+
+Add RoleManager.ROLE_CALL_SCREENING request to the onboarding wizard permissions step.
+Add RoleManager.isRoleHeld(ROLE_CALL_SCREENING) check to the Permission Health Check screen.
+If the role is ever lost post-install: dashboard Shield must immediately reflect INACTIVE and surface a re-grant prompt on next resume.
+Check on every Lifecycle.Event.ON_RESUME — not cached.
+Step 1.6: Blocked Call Audit Trail + Overlay Trigger Fix
+Two confirmed bugs in one step. Every BLOCK decision leaves zero trace anywhere. And the overlay trigger reads the wrong field.
+
+Bug 1 — Zero audit trail:
+Every BLOCK decision must write to two destinations simultaneously:
+CallLogEntry — permanent audit record: decision = 'BLOCK', spamCategory, confidence, matchedSources.
+PendingCardEntity — short-lived digest queue entry: phoneNumber, timestamp, decision, confidence, decisionSource, dismissed = false.
+Keep setSkipCallLog(true) and setSkipNotification(true) at the Android level — correct behavior preserved.
+Bug 2 — Overlay trigger uses wrong field (confirmed in live code):
+// CURRENT (wrong):
+if (callInfo.spamStatus == "LIKELY SPAM" || callInfo.spamStatus == "SPAM") {
+// CORRECT:
+if (callInfo.callDecision == CallDecision.BLOCK) {
+spamStatus is a classification label. callDecision is the actual action taken. All overlay, card-creation, and notification logic must key off callDecision, not spamStatus.
+Deliverable: CallScreeningService writing both records on BLOCK, with overlay trigger corrected to use CallDecision enum.
+
+Step 1.7: Post-Call Digest Card System
+Post-call blocked-call notification is not a live overlay during an active call. It is a batched digest surfaced after calls end, cadence controlled by the aggressiveness setting in SettingEntry.
+Near-real-time tier: card appears shortly after call ends.
+Batched tiers: unseen PendingCardEntity records accumulate and surface every 2, 4, or 8 hours via WorkManager periodic worker.
+Silent tier: events log to CallLogEntry only. PendingCardEntity is still created but the worker never surfaces it.
+User: swipe individual cards to dismiss (deletes PendingCardEntity row). Tap 'Dismiss All' (deletes all dismissed=false rows).
+Each card: number, timestamp, reason, confidence, one-tap 'not spam' → unblock + whitelist via BlocklistRepository.
+Implementation: CallOverlayService / CallOverlayViewModel render the card stack. PostCallNotifier retired or demoted to fallback for devices where overlay permission is denied.
+PendingCardEntity must be added to SignalGateDatabase @Database annotation and a new PendingCardDao created before the card system is built.
+Step 1.8: Permission Health Check Screen
+Four distinct Android grant mechanisms, all surfaced in one screen with guided recovery, re-evaluating live state every time it opens.
+Standard runtime permissions (READ_CONTACTS, POST_NOTIFICATIONS, READ_CALL_LOG): shared composable extracted from PermissionSettingsScreen.kt — reusable in both wizard and this screen.
+Overlay special permission: Settings.ACTION_MANAGE_OVERLAY_PERMISSION intent. Button exists in SettingsScreens.kt — consolidate here.
+Call screening role: RoleManager intent (Step 1.5). Currently completely absent.
+Battery optimization exemption: ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS. Per-OEM (Samsung/Xiaomi/Huawei/OnePlus) deep links with graceful fallback where APIs don't exist.
+Lost call-screening role: persistent banner on consumer dashboard, not just this screen.
+This screen is the primary support tool for the non-technical user getting confusing behavior. It is the difference between an uninstall and a fix.
+
+Step 1.9: Gray-Zone Heuristics for Unknown Callers
+Calls that pass all blocklist filters but are not in contacts are unconditionally allowed. Heuristics slot in as step 4.5 in CallScreeningEngine's existing 5-step priority chain.
+Light tier (cheap, on-device): toll-free/premium prefix detection, repeated/sequential digit patterns, area-code vs SIM-region mismatch, call-velocity bursts from same prefix block.
+Mid tier: surface partial confidence BloomFilterEngine/PrecedenceEngine already compute but discard below the block threshold. Near-miss becomes a real signal.
+Tie to SignalGateMode: LPP skips heuristics, MULTI_GATE applies light tier, FULL_THROTTLE applies light + mid.
+Default disposition for gray-zone: advisory not blocking. Label 'Caution', surface in post-call digest for one-tap review. False positives on real callers cost more trust than missed spam.
+Step 1.10: Quick Temporary Block — Non-Contacts for N Hours
+Single toggle on consumer dashboard: block all non-contact calls for 2, 4, or 8 hours.
+Store expiry timestamp in SettingEntry (key: block_non_contacts_until). Check System.currentTimeMillis() > expiry inline at screening time. No WorkManager needed.
+'Contacts' means the curated allowlist from ContactsViewModel, not the full device contact list.
+Toggle auto-cancels at expiry with no user action.
+Step 1.11: Koin Dependency Injection Audit
+AppModule.kt registrations confirmed complete by live branch inspection: ContactsViewModel, LogcatViewModel, OnboardingViewModel all registered. MultiPortSyncWorker correctly commented out. No action needed on these specific items.
+
+BlocklistRepository must be added to repositoryModule once built (Step 1.2).
+PendingCardRepository and PendingCardViewModel must be added once built (Step 1.7).
+ConsumerDashboardViewModel must be added once built (Phase 2).
+After each new component: run a Koin verification test to confirm the full DI graph resolves without errors at startup.
+Step 1.12: SQLCipher Key Management — Keystore Design
+CRITICAL: SecureDatabase.kt passphrase is hardcoded as 'your-secure-passphrase'. Pre-launch blocker. The comment says 'Derive from Biometric/KeyStore in prod' — the biometric approach has a fundamental flaw for background service context.
+
+Two separate concerns that must not be conflated:
+Database key — needed by CallScreeningService at any time, including when phone is locked. No biometric prompt possible. Correct approach:
+At first install: generate a cryptographically random 256-bit key.
+Store in Android Keystore with setUserAuthenticationRequired(false) and setUnlockedDeviceRequired(false).
+On every DB open: retrieve silently from Keystore, pass to SupportOpenHelperFactory.
+User sees nothing. Key is hardware-backed. Background service always has access.
+Optional biometric UI gate — separate feature gating the history screen in the UI. NOT the source of the encryption key.
+V1 decision: skip the biometric history gate. Add as opt-in Settings toggle in a future release.
+Rationale: adds friction on a screen showing spam numbers, not financial data. Wrong trade-off for v1.
+Deliverable: Keystore-Key-Design.md written before any code changes to SecureDatabase.kt. Covers key generation, storage, retrieval, rotation on reinstall, and recovery strategy.
+
+Step 1.13: Timber Logging Integration
+Add Timber to build.gradle — not just imported.
+Verify dependency declaration, ProGuard rules, and initialization in Application class.
+Constructor-passed Context injection style — do not refactor to androidContext().
+Define structured security event taxonomy: specific Timber tags for role loss, permission revocation, sync failure above threshold, block-count anomaly.
+Centralized log aggregation is out of scope for v1. Structured local tags queryable from the Logcat viewer is the correct level.
+
+
+Phase 2: Consumer Dashboard
+Goal: Replace OperationalDashboard (prosumer view) with a consumer-appropriate home screen wired to real live data. Move the prosumer view to an Advanced/debug-only screen.
+Step 2.1: Dashboard Architecture Decision
+Consumer dashboard becomes the default startDestination in NavGraph.
+OperationalDashboard retained and navigable from Settings as the Advanced screen.
+New ConsumerDashboardViewModel (Layer 6). Existing DashboardViewModel retained for the advanced screen.
+Add Screen.ConsumerDashboard to Screen.kt and wire in NavGraph.kt.
+Step 2.2: Consumer Dashboard UI
+Visual specification from approved mockup:
+Hero section: glowing shield icon (ShieldStatusGlow composable already exists), 'SHIELD ACTIVE' / 'SHIELD INACTIVE' state, subtitle 'Your protection is running in the background.'
+Stat card 1: 'Calls Screened Today:' with live count.
+Stat card 2: 'Threats Blocked:' with live count.
+Primary action: SETTINGS → Screen.Settings.route (already wired).
+Secondary action: 'View Recent Activity →' → Screen.CallLog.route (already wired).
+Quick toggle: 'Block Non-Contacts for N Hours' (Step 1.10).
+Upgrade path entry: single minimal menu item pointing toward Multi-Port.
+Dark theme, neon cyan accents, glassmorphic shield treatment per brand identity.
+Step 2.3: Shield Active — Real Data Wiring
+Nothing in the codebase checks whether the app holds the call-screening role. Service object existing is not the same as the OS agreeing to invoke it.
+
+Query RoleManager.isRoleHeld(ROLE_CALL_SCREENING) as the sole source of truth.
+Rechecked on every Lifecycle.Event.ON_RESUME.
+True: glowing shield + SHIELD ACTIVE. False: dimmed shield + SHIELD INACTIVE + re-grant prompt.
+Step 2.4: Threats Blocked Counter — Real Data Wiring
+blockedToday in DashboardViewModel is MutableStateFlow(0). Nothing ever increments it.
+
+CallLogDao already provides getBlockedCallsCount(startTime: Long) — confirmed by live code inspection.
+Pass midnight of the current day as startTime. The query is written; it just needs to be called.
+ConsumerDashboardViewModel observes this as a Flow, requeried at midnight via a coroutine delay loop.
+BLOCK events must write a CallLogEntry (Step 1.6) for this query to return real data.
+Step 2.5: Calls Screened Today Counter — Real Data Wiring
+No matching field exists anywhere yet.
+CallLogDao already provides getCallsInRange(startTime, endTime) — confirmed by live code inspection.
+Pass midnight as startTime and Long.MAX_VALUE as endTime.
+Requires every screened call (BLOCK and ALLOW) to write a CallLogEntry — Step 1.6 makes this true for BLOCK.
+Step 2.6: SettingEntry — Configuration Keys and SharedPreferences Migration
+SettingsScreen.kt uses SharedPreferences for shield color values (shield_red, shield_green, shield_blue). SettingEntry is the document-defined single config store. Migrate these at the same time as adding new keys to avoid two systems coexisting indefinitely.
+
+Defined SettingEntry keys:
+aggressiveness_mode: 'LPP' / 'MULTI_GATE' / 'FULL_THROTTLE'
+notification_cadence: 'REALTIME' / 'HOURS_2' / 'HOURS_4' / 'HOURS_8' / 'SILENT'
+block_non_contacts_until: Long timestamp (0 = not active)
+onboarding_complete: 'true' / 'false'
+shield_role_prompted: 'true' / 'false'
+manual_source_id: Int (stored after first-install seeding)
+contacts_source_id: Int (stored after first-install seeding)
+shield_red / shield_green / shield_blue: migrate from SharedPreferences to here
+Migrate existing SharedPreferences values on first SettingEntry write — read old value if SettingEntry row absent, write to SettingEntry, never read SharedPreferences for these keys again.
+Step 2.7: Multi-Port Upgrade Path
+Separate APKs, separate applicationIds. Upgrade = user installs a second app.
+Entry point: single menu item in consumer dashboard. Non-intrusive, no push notifications.
+On tap: deep link to Multi-Port Play Store listing.
+Data portability: design block/allow list export format now. getAllUserRules() via BlocklistRepository produces a shareable JSON file. Users must be able to migrate curated rules.
+
+
+Phase 3: Security Hardening
+Goal: Fortify security boundaries and validate critical runtime paths.
+Step 3.1: Input Validation — Presentation Layer
+All user inputs validated before reaching ViewModels.
+SanitizationEngine (Layer 2) for phone number format and URL checking.
+Rejection of malformed inputs at the UI perimeter — nothing unvalidated reaches domain logic.
+Step 3.2: CallScreeningEngine Policy Validation
+Verify threat-source precedence rules enforce correctly across all source types.
+Test edge cases: overlapping block/allow rules, wildcard patterns, null inputs, gray-zone confidence thresholds.
+CallScreeningService delegates to engine without any inline decision logic in the service class itself.
+PhoneStateReceiver triggers screening without race conditions.
+Step 3.3: Transport Layer Data Governance
+CallLogRepository, DataSourceRepository, SyncHistoryRepository, BlocklistRepository are the sole data access points.
+No Layer 5 or 6 component accesses Room directly.
+All repository methods enforce transaction boundaries with rollback on failure.
+Step 3.4: Network Communication Security
+OkHttp configured with TLS 1.3 enforcement and certificate pinning.
+Network operations isolated from UI thread via coroutines with structured concurrency.
+CRITICAL: TrustedSourceCatalog.kt FTC/FCC data source URLs are placeholders. Verify and replace before shipping.
+
+Step 3.5: Dependency Scanning — CI Integration
+OWASP Dependency-Check integrated into CI pipeline — runs on every push.
+Blocks merge on any critical/high vulnerability in a direct dependency.
+Monthly manual review of transitive dependency advisories.
+Step 3.6: Mobile Security Analysis
+MobSF (Mobile Security Framework) static + dynamic analysis against the release APK before each major release.
+MobSF covers: data leakage paths, exported component exposure, permission misuse, hardcoded strings. Correct tooling for Android. Classical web-DAST does not apply to this app.
+Confirm LogcatViewerScreen is absent from release APK via MobSF component scan.
+Confirm hardcoded SQLCipher passphrase absent — Keystore derivation confirmed.
+Step 3.7: Performance Targets
+Post-call digest card render: within 200ms of CallScreeningService decision.
+Cold startup time: under 1.5 seconds.
+Consumer dashboard stat counters: update within 100ms of event.
+
+
+Phase 4: Repository Governance and Workflow Hardening
+Goal: Establish tooling and conventions that keep the codebase clean, auditable, and corruption-free.
+Step 4.1: Pre-Delivery Verification Protocol
+Before any file is delivered for commit, the following checks must be run programmatically:
+Brace balance: count opening vs closing braces in the file — must match exactly.
+No unintended shell expansion patterns: confirm no unescaped heredoc-style patterns that would expand in a shell context.
+Import completeness: every import statement in a Kotlin file must reference a class that actually exists in the repo or declared dependencies. No forward references to unbuilt files.
+These checks apply to every .kt, .gradle, .yml, and .json file before it is written to the branch.
+Step 4.2: Pre-Push Integrity Hook
+Tracked .githooks/pre-push script blocking pushes when corruption is detected. Activate locally with:
+git config core.hooksPath .githooks
+git diff --check: blocks on trailing whitespace and conflict markers.
+yamllint .github/workflows/*.yml: blocks on YAML syntax errors.
+Install yamllint:
+pip install --user yamllint --break-system-packages
+Hook committed to .githooks/ — travels with every clone. core.hooksPath must be set locally on each device.
+Status: hook script exists but not yet confirmed active in Termux. Open task until explicitly verified.
+
+Step 4.3: CI-Side Corruption Validation
+yamllint step in pulse-ci.yml validating all workflow files on every push.
+git diff --check step against merge base.
+actionlint step for workflow structure validation.
+OWASP Dependency-Check step (Step 3.5).
+PULSE-TODO count collected and uploaded as artifact every run.
+Step 4.4: GitHub Repository Protections
+Secret scanning push protection: Settings → Code security. Blocks pushes containing recognizable token patterns.
+gitleaks in pre-commit/pre-push Termux step.
+CODEOWNERS: require explicit review on Architecture-Contract.md, .gemini/config.yaml, .github/workflows/*.
+Branch protection on consumer-v1: require PR for non-owner pushes. Add self to bypass list.
+Required status checks: pulse-ci.yml must pass before any PR is mergeable.
+Step 4.5: Gemini Code Assist Governance
+auto_apply_fixes: false must remain set in .gemini/config.yaml. Verify live on GitHub.
+custom_instructions reference Architecture-Contract.md with APPROVED/NEEDS CHANGES/BLOCKED verdict system and required logging to error_corrections.md. Keep intact.
+gemini-review.yml must remain absent from consumer-v1 workflows.
+Check Settings → Integrations → GitHub Apps after each session for newly added write-access integrations.
+Step 4.6: Documentation Structure
+Architecture-Contract.md: immutable spec. Rarely touched. git blame tells a clear story of rule changes only.
+files_to_change.md: live mutable checklist. High churn, low permanence.
+error_corrections.md: append-only log. Every contributor prepends newest entry. Never edit old entries.
+CLAUDE.md at repo root: 'Before editing any file, read Architecture-Contract.md in full.' Claude Code loads this automatically every session.
+Step 4.7: PULSE-TODO Convention
+// PULSE-TODO (YYYY-MM-DD): Description. See Architecture-Contract §N.
+Grep command: grep -rn "PULSE-TODO" android/app/src/main/
+Gemini custom_instructions: 'When flagging an unresolved concern, leave a PULSE-TODO comment at the relevant line.'
+CI artifact collects PULSE-TODO count on every build.
+Step 4.8: Repository Severance Protocol
+Neither project has reached the severance point. Procedure applies when each has a solid foundation and complete frame.
+Tag the exact commit: git tag v1-shell-frozen — immutable.
+Create one offline archive zip as disaster-recovery copy.
+Leave fork network via GitHub Settings → Danger Zone (public repo, under 1GB, no child forks).
+After severance: delete all intermediate branches and forks.
+
+
+Phase 5: Quality Assurance and Deployment
+Step 5.1: Automated Unit Testing
+JUnit tests for CallScreeningEngine, BloomFilterEngine, PrecedenceEngine, all repositories.
+Specific test: BLOCK decision writes both CallLogEntry and PendingCardEntity — assert both rows exist.
+Specific test: overlay trigger fires on CallDecision.BLOCK, not spamStatus string.
+Specific test: MANUAL and Contacts Allow List SourceEntity rows exist after first database open.
+Specific test: ContactsViewModel import reuses existing Contacts source row, never creates duplicates.
+Specific test: SignalGateDatabase.getInstance() method does not exist — compilation confirms removal.
+Minimum 80% code coverage for Layer 4-6 classes.
+Step 5.2: Automated UI Testing
+Compose UI Tests for onboarding wizard, block/allow list management, consumer dashboard.
+Permission Health Check: simulate each grant mechanism absent/present.
+Post-call digest: simulate block events, verify card at correct cadence tier, deleted on dismissal.
+Shield state: simulate role grant and revoke, verify dashboard updates on next resume.
+SettingEntry config keys: verify SharedPreferences migration completes and old keys are no longer read.
+Step 5.3: Static Analysis and CI
+Detekt / KtLint for Kotlin coding standards.
+ArchUnit: Layer 7 never imports Layer 2 directly.
+All checks pass before merge eligibility.
+Mandatory practice: never reference a class or import that does not exist in the repo. Confirm file contents before modifying. Both rules exist because both caused CI failures in this project.
+
+Step 5.4: Beta / UAT
+Closed beta via Google Play Internal Testing.
+Feedback focus: consumer dashboard clarity, false-positive recovery, Permission Health Check on OEM skins.
+Specific validation: non-technical user can identify and fix a missing permission without outside help.
+Step 5.5: Phased Production Rollout
+5% → 20% → 50% → 100% over minimum 7 days. 48-hour observation minimum between phases.
+Crash-free session rate target: 99.5%. Rollback trigger: crash rate > 0.5% or screening engine failure.
+
+
+Part II: Future Release Lifecycle Procedures
+Stage 1: Feature Request and Architectural Review
+Step F1.1: Feature Proposal
+Description of user value and technical approach.
+All OSI layers affected identified.
+Security boundary implications stated explicitly.
+For new screens: dedicated ViewModel proposed.
+For new persistence: PendingCardEntity vs CallLogEntry distinction respected.
+Step F1.2: Architectural Review
+No violation of layer ownership rules.
+Encryption and data persistence impact assessed for any new Room entity.
+Formal contract update required if deviation approved.
+Enforce: never reference a class or import that does not exist. Confirm file contents before modifying. Run pre-delivery verification protocol (Step 4.1) on every file.
+
+Stage 2: Development and Integration
+Step F2.1: Branch and Development
+Established Koin module patterns followed.
+One ViewModel per screen — no exceptions.
+SQLCipher encryption mandatory for any new Room entity.
+koinViewModel() — never viewModel().
+Timber logging with structured security event tags.
+PULSE-TODO comments for incomplete work.
+Append to error_corrections.md after every session.
+Run pre-delivery verification protocol on every file before committing.
+Step F2.2: Pull Request and Automated Checks
+Pre-push hook passes (whitespace + YAML).
+Static analysis, unit tests, security scans, layer dependency verification all green.
+OWASP Dependency-Check passes on new/updated dependencies.
+Stage 3: Release Management
+Step F3.1: Release Candidate
+Version bump and release notes.
+LogcatViewerScreen confirmed debug-only via MobSF APK scan.
+Hardcoded passphrase confirmed absent.
+FTC/FCC data source URLs re-verified.
+SettingEntry migration from SharedPreferences confirmed complete.
+Step F3.2: Post-Release Monitoring
+Monitor: crash rates, ANR rates, false positive/negative rates, PendingCardEntity queue depth anomalies.
+Monitor consumer dashboard: shield state accuracy, blocked count, screened count.
+Hotfix branch within 4 hours of critical issue confirmation.
+Stage 4: Continuous Compliance
+Step F4.1: Dependency Maintenance
+Monthly review of dependency vulnerability advisories.
+Quarterly update of SQLCipher, OkHttp, Room, Koin, Compose.
+Re-run MobSF and OWASP scan after any major dependency version bump.
+Step F4.2: Performance Regression Testing
+Post-call digest card render: under 200ms.
+Cold startup: under 1.5 seconds.
+Dashboard stat counters: update within 100ms of event.
+
+
+Compliance Summary
+Principle
+Enforcement Mechanism
+Phase
+SignalGateDatabase companion object removed
+Grep confirms zero getInstance() calls
+Step 1.0
+Single Activity + Compose Navigation
+ArchUnit / Code review
+Phase 1
+One ViewModel per Screen
+ArchUnit / PR checklist
+Phase 1
+koinViewModel() — never viewModel()
+ArchUnit / Code review
+Phase 1
+Koin DI Coverage (100%)
+Koin test verification / CI
+Phase 1
+Room + SQLCipher Encryption
+Integration test / Security audit
+Phase 1
+Keystore-derived key (no hardcoded string)
+Security audit / MobSF APK scan
+Phase 1
+Keystore-Key-Design.md written before code changes
+PR checklist
+Phase 1
+Biometric gate: skipped v1, future Settings toggle
+Architecture decision logged
+Phase 1
+MANUAL SourceEntity seeded at first install
+Unit test / Integration test
+Step 1.1
+Contacts Allow List SourceEntity seeded idempotently
+Unit test / Integration test
+Step 1.1
+ContactsViewModel: no duplicate source rows
+Unit test: import twice, one row
+Step 1.3
+ROLE_CALL_SCREENING requested and checked
+Integration test / Code review
+Step 1.5
+BLOCK writes CallLogEntry + PendingCardEntity
+Unit tests
+Step 1.6
+Overlay trigger keyed to CallDecision enum
+Unit tests / Code review
+Step 1.6
+Consumer dashboard real data wiring
+UI tests / Integration tests
+Phase 2
+Shield Active = RoleManager.isRoleHeld()
+Integration tests
+Step 2.3
+Threats Blocked via CallLogDao.getBlockedCallsCount()
+Unit tests
+Step 2.4
+Calls Screened via CallLogDao.getCallsInRange()
+Unit tests
+Step 2.5
+SharedPreferences migrated to SettingEntry
+Integration test / Code review
+Step 2.6
+SettingEntry keys defined and documented
+Code review
+Step 2.6
+Gray-zone heuristics tied to SignalGateMode
+Unit tests / Code review
+Step 1.9
+PendingCardEntity dismissed=true on swipe
+UI tests
+Step 1.7
+Permission Health Check screen live state
+UI tests / UAT
+Step 1.8
+Pre-delivery verification: brace balance checked
+Pre-commit script / Code review
+Ongoing
+Pre-delivery verification: imports declared
+Pre-commit script / CI build
+Ongoing
+Pre-push hook active in Termux
+Local git config verified
+Phase 4
+CI-side YAML + whitespace + OWASP validation
+pulse-ci.yml steps
+Phase 4
+CODEOWNERS protecting contract + workflows
+GitHub branch protection
+Phase 4
+Secret scanning push protection enabled
+GitHub repo settings
+Phase 4
+PULSE-TODO convention in use
+CI artifact / grep
+Phase 4
+MobSF APK scan per major release
+Release checklist
+Phase 3
+Structured Timber security event taxonomy
+Code review
+Phase 1
+Verified live FTC/FCC URLs before shipping
+Release checklist
+Phase 3
+Timber properly declared in build.gradle
+CI build
+Phase 1
+No references to non-existent classes/imports
+CI build / Code review
+Ongoing
+Confirm file contents before modifying
+PR checklist
+Ongoing
+Phased rollout with monitoring
+Release management
+Phase 5
+
+
+
+
+Document Control
+Authority: SignalGate Pulse Architecture Contract
+Version: 4.0 — Supersedes all prior versions
+Key additions in v4.0: Live Branch Audit section, Corrected Build Sequence, Step 1.0 (SignalGateDatabase companion removal), ContactsViewModel duplicate-source-row bug fix, SharedPreferences-to-SettingEntry migration, Step 4.1 pre-delivery verification protocol, all compliance entries updated
+Review cycle: every release or upon formal architectural change
+Mandatory for: all developers, QA engineers, release managers, AI coding assistants
+Log all session actions to: error_corrections.md (append-only, newest first)
+Open task tracker: files_to_change.md (mutable checklist)
