@@ -1,6 +1,25 @@
-# Signal Gate Multi-Path
+# SignalGate Pulse
+A native Android application built with Kotlin for high performance call blocking.
 
-A native Android application built with Kotlin for high-performance call screening and blocking. This project has been migrated from React Native to pure Android to ensure maximum reliability and minimal APK size.
+---
+Pulse is the consumer-grade, set-and-forget call protection mode of SignalGate. It’s the layer that continuously watches incoming calls, learns from patterns, and quietly filters risk so the user gets less spam, less interruption, and less manual decision-making. 
+
+What Pulse is
+Pulse is the always-on screening experience for everyday users who want safety without managing rules. It is designed to feel automatic, lightweight, and invisible until a call needs attention. 
+
+What Pulse does
+Pulse screens incoming calls in real time, applies your protection rules, and routes suspicious calls into safe handling paths such as block, screen, or quiet notification. It is the mode that keeps the phone usable without requiring the user to constantly tune settings. 
+
+What it is used for
+Pulse is used for spam defense, scam reduction, nuisance-call suppression, and low-friction personal call management. It is especially useful for users who want protection but do not want a technical or highly configurable setup. 
+
+Market value
+The market value of Pulse is that it turns call blocking from a reactive utility into a consumer convenience product. Instead of selling “advanced controls,” it sells peace of mind, fewer interruptions, and a calmer phone experience, which is a stronger consumer proposition than raw filtering power alone. 
+
+Unique value
+Its unique value in the call-blocking field is that it frames protection as a continuous signal-processing layer, not just a blocklist. That makes it feel smarter and more modern than standard call blockers, while still staying simple enough for non-technical users who just want it to work.
+---
+
 
 ## Project Structure
 
@@ -25,25 +44,4 @@ A native Android application built with Kotlin for high-performance call screeni
 └── README.md
 ```
 
-## Features
-
-- **Native CallScreeningService**: Implements `android.telecom.CallScreeningService` for direct system-level call interception.
-- **Local Persistence**: Uses **Room Database** for high-performance, local storage of blocked numbers and patterns.
-- **Smart Filtering**: Supports both exact number matching and prefix/pattern-based blocking.
-- **Optimized Performance**: 
-  - **R8/ProGuard**: Enabled for code shrinking and obfuscation.
-  - **Resource Shrinking**: Removes unused resources to minimize APK size.
-  - **Asynchronous Processing**: Uses Kotlin Coroutines for non-blocking database operations.
-
-## Setup & Build
-
-1. Open the `android` folder in Android Studio.
-2. Ensure you have the Android SDK for API 34 installed.
-3. Build the project using `./gradlew assembleRelease` to generate the optimized APK.
-
-## Permissions
-
-The app requires the following permissions to function as a default call screening app:
-- `android.permission.BIND_SCREENING_SERVICE`
-- `android.permission.READ_PHONE_STATE`
-- `android.permission.READ_CALL_LOG`
+## 
