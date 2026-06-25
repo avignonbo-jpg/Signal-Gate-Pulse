@@ -4,6 +4,7 @@ import android.content.Context
 import com.signalgate.multipoint.database.DatabaseInitializer
 import com.signalgate.multipoint.database.SecureDatabase
 import com.signalgate.multipoint.database.SignalGateDatabase
+import com.signalgate.multipoint.database.daos.SourceDao
 import com.signalgate.multipoint.database.repositories.BlocklistRepository
 import com.signalgate.multipoint.database.repositories.CallLogRepository
 import com.signalgate.multipoint.database.repositories.DataSourceRepository
@@ -21,6 +22,7 @@ import com.signalgate.multipoint.ui.onboarding.OnboardingViewModel
 import com.signalgate.multipoint.data.security.BloomFilterEngine
 import com.signalgate.multipoint.data.security.PrecedenceEngine
 import com.signalgate.multipoint.data.security.SecureCsvParser
+import kotlinx.coroutines.runBlocking
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
@@ -42,17 +44,22 @@ val repositoryModule = module {
     single { CallLogRepository(get()) }
     single { SyncHistoryRepository(get()) }
 
-    // BlocklistRepository uses MANUAL sourceId (seeded in DatabaseInitializer)
+    // BlocklistRepository requires the MANUAL sourceId seeded by DatabaseInitializer.
+    // runBlocking is intentional here: Koin's single{} lambda is not a coroutine scope,
+    // and this lookup is a single indexed DB read that only runs once at startup after
+    // seedRequiredSources() has already completed. Replace with SettingEntry cache
+    // lookup in Step 2.6 when the SettingEntry key store is wired up.
     single {
-        val sourceDao = get<com.signalgate.multipoint.database.daos.SourceDao>()
-        val manualSource = sourceDao.getSourceByName("Manual User Rules")
-        val manualSourceId = manualSource?.id ?: throw IllegalStateException("Manual source not seeded")
+        val sourceDao = get<SourceDao>()
+        val manualSourceId = runBlocking {
+            sourceDao.getSourceByName("Manual User Rules")?.id
+                ?: error("Manual source row not found — ensure DatabaseInitializer.seedRequiredSources() ran before Koin resolves repositoryModule")
+        }
         BlocklistRepository(get(), manualSourceId)
     }
 }
 
 val logicModule = module {
-    // Security layer
     single { BloomFilterEngine() }
     single { SecureCsvParser(get()) }
     single {
@@ -62,13 +69,10 @@ val logicModule = module {
             localManualBlockListCache = hashSetOf()
         )
     }
-    // CallScreeningEngine now uses DataSourceRepository (no direct DB access)
     single { CallScreeningEngine(get()) }
-    // Sync engine now uses DataSourceRepository + SyncHistoryRepository
     single { DataSyncEngine(get(), get()) }
 
-    // WorkManager workers (factory required for KoinWorkerFactory)
-    // MultiPortSyncWorker reference removed as it's missing in this branch
+    // MultiPortSyncWorker intentionally omitted — not present in consumer-v1 branch
     /*
     factory { (context: android.content.Context, params: androidx.work.WorkerParameters) ->
         com.signalgate.multipoint.service.workers.MultiPortSyncWorker(
@@ -79,7 +83,7 @@ val logicModule = module {
 }
 
 val viewModelModule = module {
-    viewModel { ContactsViewModel(get(), get()) }  // Now receives BlocklistRepository
+    viewModel { ContactsViewModel(get(), get()) }
     viewModel { TelemetryViewModel(get()) }
     viewModel { CallOverlayViewModel() }
     viewModel { DashboardViewModel(get()) }
@@ -91,8 +95,10 @@ val viewModelModule = module {
 
 val appModule = listOf(databaseModule, repositoryModule, logicModule, viewModelModule)
 
-// Optional: Call this from MainApplication.onCreate() after Koin startup
+// Call this from MainApplication.onCreate() after Koin starts and before any
+// repository module is resolved. seedRequiredSources() is idempotent — safe to
+// call on every launch.
 suspend fun initializeDatabase(context: Context) {
-    val sourceDao = org.koin.core.context.GlobalContext.get().get<com.signalgate.multipoint.database.daos.SourceDao>()
+    val sourceDao = org.koin.core.context.GlobalContext.get().get<SourceDao>()
     DatabaseInitializer.seedRequiredSources(context, sourceDao)
 }
