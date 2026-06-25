@@ -1,0 +1,43 @@
+# SignalGate Pulse: Final Target Architecture Contract
+
+## Executive Summary
+
+The SignalGate Pulse project represents a streamlined, prosumer-grade iteration of the broader SignalGate ecosystem. This contract defines the final target architecture, serving as the authoritative reference for all future development cycles. The architecture is designed to prioritize security, maintainability, and a seamless user experience through a modern Android development stack. By establishing clear boundaries and ownership across a layered model, this contract ensures that the application remains robust against evolving threats while providing a simplified interface for its users.
+
+## Architectural Foundations
+
+The core of SignalGate Pulse is built upon a **Single Activity Architecture**, utilizing `MainActivity` as the exclusive host for all user interface components. This approach, combined with **Jetpack Compose Navigation**, facilitates a declarative and centralized navigation management system, eliminating the complexities associated with multi-activity or fragment-based designs.
+
+Dependency injection is managed through **Koin**, which provides a lightweight and idiomatic approach to managing component lifecycles and dependencies. For data persistence, **Room** is employed to provide a robust abstraction over SQLite, with mandatory integration of **SQLCipher** to ensure all data at rest is encrypted. Each screen within the application is governed by a dedicated **ViewModel**, ensuring a strict separation of concerns and a reactive data flow from the domain layer to the UI.
+
+## OSI Layer Mapping and Security Boundaries
+
+The architecture adopts a seven-layer model inspired by the OSI framework to define class ownership and security responsibilities. Each layer operates within a specific "security boundary," which dictates its level of access and the nature of its interactions with other layers.
+
+| Layer | Name | Ownership (Primary Classes/Components) | Security Boundary Definition |
+| :--- | :--- | :--- | :--- |
+| **7** | **Application** | `MainActivity`, `SignalGateNavGraph`, All Screen Composables, UI Components, Theme Definitions | **Outer Perimeter**: No direct access to sensitive data or business logic. Responsible for input sanitization and secure UI rendering. |
+| **6** | **Presentation** | `DashboardViewModel`, `CallOverlayViewModel`, `OnboardingViewModel`, and all other Screen ViewModels | **State Mediation**: Manages UI state and handles user interactions. Must never store sensitive raw data; only presentable, sanitized states. |
+| **5** | **Session** | `CallScreeningEngine`, `DataSyncEngine`, `CallScreeningService`, `PhoneStateReceiver` | **Policy Enforcement**: Orchestrates business logic and enforces security policies. The primary gatekeeper for call screening and data sync operations. |
+| **4** | **Transport** | `CallLogRepository`, `DataSourceRepository`, `SyncHistoryRepository` | **Data Governance**: Mediates access between domain logic and persistence. Responsible for ensuring data integrity and secure retrieval/storage paths. |
+| **3** | **Network** | `ThreatSource`, `CallLogItem`, `SignalGateMode`, `SecureCsvParser`, OkHttp configurations | **Communication Security**: Defines data models and manages external communication. Responsible for TLS enforcement and secure parsing of external data. |
+| **2** | **Data Link** | `SignalGateDatabase`, `DatabaseDAOs`, `SecurityUtils`, `BloomFilterEngine`, `SanitizationEngine` | **Persistence Security**: Direct interaction with encrypted storage and low-level security utilities. Manages cryptographic keys and sanitization logic. |
+| **1** | **Physical** | Android OS APIs, `CallScreeningService` System Interface, Hardware-backed KeyStore | **System Integrity**: Relies on the underlying Android security model (SELinux, sandboxing). Responsible for proper permission management and secure API usage. |
+
+## Layered Security Specifications
+
+### Application and Presentation Layers (Layers 7 & 6)
+
+The Application Layer serves as the primary interface for user interaction. Its security boundary is defined by its isolation from the core data processing logic. Composables must strictly consume state from ViewModels and should never initiate direct data operations. The Presentation Layer, through ViewModels, acts as a buffer, ensuring that the UI only receives data that is safe for display. For instance, the `LogcatViewerScreen` is strictly restricted to debug builds to prevent the inadvertent exposure of system logs in production environments.
+
+### Session and Transport Layers (Layers 5 & 4)
+
+The Session Layer contains the "brains" of the application, such as the `CallScreeningEngine`. Its security boundary is focused on policy enforcement—ensuring that call screening decisions are made based on the established precedence of threat sources. The Transport Layer repositories act as the single source of truth for the Domain Layer, abstracting the complexities of encrypted storage and ensuring that all data access follows authorized paths.
+
+### Network, Data Link, and Physical Layers (Layers 3, 2, & 1)
+
+At the lowest levels, security is centered on data protection and system interaction. The Network Layer ensures that all external data models are robust against injection and that communication is conducted over secure channels. The Data Link Layer provides the foundational security utilities, including the `BloomFilterEngine` for efficient, privacy-preserving lookups and `SecurityUtils` for cryptographic operations. Finally, the Physical Layer represents the application's reliance on the Android OS's inherent security features, requiring meticulous management of system permissions and hardware-backed security features where available.
+
+## Compliance and Future Modifications
+
+Every future change to the SignalGate Pulse codebase must reference this architecture contract. Any deviation from the defined layers, DI strategies, or security boundaries requires a formal review and update to this document. This ensures that the prosumer-grade standards of the SignalGate ecosystem are maintained throughout the lifecycle of the Pulse application.
