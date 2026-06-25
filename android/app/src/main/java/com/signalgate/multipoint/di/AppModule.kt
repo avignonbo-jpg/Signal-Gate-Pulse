@@ -1,7 +1,10 @@
 package com.signalgate.multipoint.di
 
+import android.content.Context
+import com.signalgate.multipoint.database.DatabaseInitializer
 import com.signalgate.multipoint.database.SecureDatabase
 import com.signalgate.multipoint.database.SignalGateDatabase
+import com.signalgate.multipoint.database.repositories.BlocklistRepository
 import com.signalgate.multipoint.database.repositories.CallLogRepository
 import com.signalgate.multipoint.database.repositories.DataSourceRepository
 import com.signalgate.multipoint.database.repositories.SyncHistoryRepository
@@ -38,6 +41,14 @@ val repositoryModule = module {
     single { DataSourceRepository(get(), get()) }
     single { CallLogRepository(get()) }
     single { SyncHistoryRepository(get()) }
+
+    // BlocklistRepository uses MANUAL sourceId (seeded in DatabaseInitializer)
+    single {
+        val sourceDao = get<com.signalgate.multipoint.database.daos.SourceDao>()
+        val manualSource = sourceDao.getSourceByName("Manual User Rules")
+        val manualSourceId = manualSource?.id ?: throw IllegalStateException("Manual source not seeded")
+        BlocklistRepository(get(), manualSourceId)
+    }
 }
 
 val logicModule = module {
@@ -68,7 +79,7 @@ val logicModule = module {
 }
 
 val viewModelModule = module {
-    viewModel { ContactsViewModel(get()) }
+    viewModel { ContactsViewModel(get(), get()) }  // Now receives BlocklistRepository
     viewModel { TelemetryViewModel(get()) }
     viewModel { CallOverlayViewModel() }
     viewModel { DashboardViewModel(get()) }
@@ -79,3 +90,9 @@ val viewModelModule = module {
 }
 
 val appModule = listOf(databaseModule, repositoryModule, logicModule, viewModelModule)
+
+// Optional: Call this from MainApplication.onCreate() after Koin startup
+suspend fun initializeDatabase(context: Context) {
+    val sourceDao = org.koin.core.context.GlobalContext.get().get<com.signalgate.multipoint.database.daos.SourceDao>()
+    DatabaseInitializer.seedRequiredSources(context, sourceDao)
+}
