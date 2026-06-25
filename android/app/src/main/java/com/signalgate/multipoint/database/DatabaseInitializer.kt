@@ -1,35 +1,44 @@
 package com.signalgate.multipoint.database
 
 import android.content.Context
-import com.signalgate.multipoint.database.entities.SourceEntity
+import com.signalgate.multipoint.database.daos.SettingDao
 import com.signalgate.multipoint.database.daos.SourceDao
+import com.signalgate.multipoint.database.entities.SettingEntry
+import com.signalgate.multipoint.database.entities.SourceEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
  * Idempotent first-install seeding for required SourceEntity rows.
- * Must be called early (e.g. in Application onCreate or first DB access).
+ * After seeding, stores both sourceIds in SettingEntry so repositories and
+ * ViewModels can retrieve them without re-querying on every operation.
+ * Must be called from MainApplication.onCreate() after Koin starts, before
+ * any repository module that depends on these IDs is resolved.
  */
 object DatabaseInitializer {
 
-    suspend fun seedRequiredSources(context: Context, sourceDao: SourceDao) = withContext(Dispatchers.IO) {
-        // MANUAL source - for user-created block/allow rules
-        ensureSourceExists(
+    suspend fun seedRequiredSources(
+        context: Context,
+        sourceDao: SourceDao,
+        settingDao: SettingDao
+    ) = withContext(Dispatchers.IO) {
+        val manualId = ensureSourceExists(
             sourceDao = sourceDao,
             name = "Manual User Rules",
             type = "MANUAL",
             pathOrUrl = "local",
             priority = 100
         )
+        storeSourceId(settingDao, "manual_source_id", manualId)
 
-        // Contacts Allow List source
-        ensureSourceExists(
+        val contactsId = ensureSourceExists(
             sourceDao = sourceDao,
             name = "Contacts Allow List",
             type = "MANUAL",
             pathOrUrl = "contacts",
             priority = 100
         )
+        storeSourceId(settingDao, "contacts_source_id", contactsId)
     }
 
     private suspend fun ensureSourceExists(
@@ -38,9 +47,9 @@ object DatabaseInitializer {
         type: String,
         pathOrUrl: String,
         priority: Int
-    ) {
+    ): Int {
         val existing = sourceDao.getSourceByName(name)
-        if (existing != null) return
+        if (existing != null) return existing.id
 
         val source = SourceEntity(
             name = name,
@@ -49,6 +58,15 @@ object DatabaseInitializer {
             isEnabled = true,
             priority = priority
         )
-        sourceDao.insertSource(source)
+        return sourceDao.insertSource(source).toInt()
+    }
+
+    private suspend fun storeSourceId(settingDao: SettingDao, key: String, id: Int) {
+        val existing = settingDao.getSettingByKey(key)
+        if (existing != null) {
+            settingDao.updateSettingValue(key, id.toString())
+        } else {
+            settingDao.insertSetting(SettingEntry(key = key, value = id.toString(), type = "INT"))
+        }
     }
 }
