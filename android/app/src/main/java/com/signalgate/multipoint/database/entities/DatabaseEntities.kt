@@ -22,17 +22,16 @@ data class SourceEntity(
     val type: String, // "CSV", "XLSX", "URL", "MANUAL"
     val pathOrUrl: String,
     val isEnabled: Boolean = true,
-    val lastSynced: Long = 0, // Timestamp in milliseconds
-    val priority: Int = 0, // 0 = lowest, higher = higher priority
+    val lastSynced: Long = 0,
+    val priority: Int = 0,
     val entriesCount: Int = 0,
-    val healthStatus: String = "UNKNOWN", // "HEALTHY", "ERROR", "DISABLED"
+    val healthStatus: String = "UNKNOWN",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
 
 /**
  * UnifiedEntryEntity represents a phone number entry with its action and source.
- * This unified table replaces separate block/allow tables for better performance.
  */
 @Entity(
     tableName = "unified_entries",
@@ -54,20 +53,22 @@ data class SourceEntity(
 data class UnifiedEntryEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
-    val phoneNumber: String, // Normalized phone number or pattern
+    val phoneNumber: String,
     val action: String, // "BLOCK", "ALLOW"
-    val sourceId: Int, // Foreign key to SourceEntity
-    val isPattern: Boolean = false, // True if phoneNumber is a pattern (e.g., +1800*)
-    val category: String? = null, // e.g., "Telemarketing", "Robocall", "Scam"
-    val confidence: Int? = null, // 0-100
-    val riskLevel: String? = null, // "HIGH", "MEDIUM", "LOW"
-    val metadata: String? = null, // JSON string for additional data
+    val sourceId: Int,
+    val isPattern: Boolean = false,
+    val category: String? = null,
+    val confidence: Int? = null,
+    val riskLevel: String? = null,
+    val metadata: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
 
 /**
- * CallLogEntry represents a logged incoming call.
+ * CallLogEntry is the permanent audit record of every screened call.
+ * Written on every BLOCK and ALLOW decision. Never deleted except by
+ * explicit purge (deleteOldCallLogs). Not to be confused with PendingCardEntity.
  */
 @Entity(
     tableName = "call_log",
@@ -84,17 +85,18 @@ data class CallLogEntry(
     val normalizedPhoneNumber: String,
     val timestamp: Long = System.currentTimeMillis(),
     val decision: String, // "ALLOW", "BLOCK", "SCREEN"
-    val spamStatus: String, // "LIKELY SPAM", "SPAM", "UNKNOWN", "SAFE"
+    val spamStatus: String,
     val spamCategory: String? = null,
     val confidence: Int? = null,
     val riskLevel: String? = null,
     val matchedSources: String? = null, // JSON array of source names
-    val duration: Int = 0, // Duration in seconds
+    val duration: Int = 0,
     val notes: String? = null
 )
 
 /**
- * SettingEntry represents application settings.
+ * SettingEntry is the single config store for all app settings.
+ * SharedPreferences must not be used for any key defined here.
  */
 @Entity(
     tableName = "settings",
@@ -105,9 +107,9 @@ data class CallLogEntry(
 data class SettingEntry(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
-    val key: String, // Setting key
-    val value: String, // Setting value
-    val type: String = "STRING", // "STRING", "INT", "BOOLEAN", "JSON"
+    val key: String,
+    val value: String,
+    val type: String = "STRING",
     val updatedAt: Long = System.currentTimeMillis()
 )
 
@@ -134,10 +136,39 @@ data class SyncHistoryEntry(
     val id: Int = 0,
     val sourceId: Int,
     val timestamp: Long = System.currentTimeMillis(),
-    val status: String, // "SUCCESS", "FAILURE", "PARTIAL"
+    val status: String,
     val entriesAdded: Int = 0,
     val entriesUpdated: Int = 0,
     val entriesRemoved: Int = 0,
     val errorMessage: String? = null,
-    val duration: Long = 0 // Duration in milliseconds
+    val duration: Long = 0
+)
+
+/**
+ * PendingCardEntity is the short-lived post-call digest queue.
+ *
+ * Distinct from CallLogEntry:
+ * - CallLogEntry = permanent audit record, never auto-deleted
+ * - PendingCardEntity = ephemeral UI queue, deleted on card dismissal
+ *
+ * Created on every BLOCK decision alongside the CallLogEntry.
+ * Dismissed = true when user swipes the card. Row deleted on swipe or
+ * 'Dismiss All'. Never surfaces in history — that is CallLogEntry's job.
+ */
+@Entity(
+    tableName = "pending_cards",
+    indices = [
+        Index(value = ["dismissed"]),
+        Index(value = ["timestamp"])
+    ]
+)
+data class PendingCardEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
+    val phoneNumber: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val decision: String,           // "BLOCK"
+    val confidence: Int?,
+    val decisionSource: String?,    // Which source triggered the block
+    val dismissed: Boolean = false
 )
