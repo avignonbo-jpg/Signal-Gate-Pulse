@@ -1,13 +1,14 @@
 package com.signalgate.multipoint.ui.dashboard
 
+import android.app.role.RoleManager
+import android.content.Context
+import android.os.Build
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.signalgate.multipoint.database.entities.SourceEntity
 import com.signalgate.multipoint.database.repositories.DataSourceRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.util.*
 
 class DashboardViewModel(
     private val repository: DataSourceRepository
@@ -29,6 +30,12 @@ class DashboardViewModel(
     private val _ledStates = MutableStateFlow<Map<Int, Boolean>>(emptyMap())
     val ledStates: StateFlow<Map<Int, Boolean>> = _ledStates.asStateFlow()
 
+    // Shield active = OS has granted ROLE_CALL_SCREENING.
+    // Rechecked on every ON_RESUME via checkShieldStatus(context).
+    // Never cached between resumes — role can be revoked at any time.
+    private val _shieldActive = MutableStateFlow(false)
+    val shieldActive: StateFlow<Boolean> = _shieldActive.asStateFlow()
+
     init {
         observeDataSources()
     }
@@ -42,6 +49,19 @@ class DashboardViewModel(
                 }
                 _ledStates.value = newLedStates
             }
+        }
+    }
+
+    /**
+     * Must be called on every Lifecycle.Event.ON_RESUME from the dashboard screen.
+     * Queries RoleManager directly — never relies on a previously cached value.
+     */
+    fun checkShieldStatus(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+            _shieldActive.value = roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
+        } else {
+            _shieldActive.value = false
         }
     }
 
@@ -87,17 +107,5 @@ class DashboardViewModel(
                 _isSyncing.value = false
             }
         }
-    }
-}
-
-class DashboardViewModelFactory(
-    private val repository: DataSourceRepository
-) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(DashboardViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return DashboardViewModel(repository) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }
