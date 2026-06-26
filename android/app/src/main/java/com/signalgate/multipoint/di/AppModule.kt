@@ -37,6 +37,7 @@ val databaseModule = module {
     single { get<SignalGateDatabase>().callLogDao() }
     single { get<SignalGateDatabase>().settingDao() }
     single { get<SignalGateDatabase>().syncHistoryDao() }
+    single { get<SignalGateDatabase>().pendingCardDao() }
 }
 
 val repositoryModule = module {
