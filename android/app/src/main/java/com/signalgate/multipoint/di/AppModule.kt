@@ -83,7 +83,7 @@ val logicModule = module {
 }
 
 val viewModelModule = module {
-    viewModel { ContactsViewModel(get(), get()) }
+    viewModel { ContactsViewModel(get(), get(), get()) }
     viewModel { TelemetryViewModel(get()) }
     viewModel { CallOverlayViewModel() }
     viewModel { DashboardViewModel(get()) }
@@ -99,6 +99,8 @@ val appModule = listOf(databaseModule, repositoryModule, logicModule, viewModelM
 // repository module is resolved. seedRequiredSources() is idempotent — safe to
 // call on every launch.
 suspend fun initializeDatabase(context: Context) {
-    val sourceDao = org.koin.core.context.GlobalContext.get().get<SourceDao>()
-    DatabaseInitializer.seedRequiredSources(context, sourceDao)
+    val koin = org.koin.core.context.GlobalContext.get()
+    val sourceDao = koin.get<SourceDao>()
+    val settingDao = koin.get<com.signalgate.multipoint.database.daos.SettingDao>()
+    DatabaseInitializer.seedRequiredSources(context, sourceDao, settingDao)
 }
