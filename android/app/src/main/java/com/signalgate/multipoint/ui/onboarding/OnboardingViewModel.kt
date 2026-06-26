@@ -1,6 +1,8 @@
 package com.signalgate.multipoint.ui.onboarding
 
 import android.Manifest
+import android.app.role.RoleManager
+import android.content.Context
 import android.os.Build
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,6 +81,10 @@ class OnboardingViewModel : ViewModel() {
     )
     val permissionStates = _permissionStates.asStateFlow()
 
+    // ROLE_CALL_SCREENING state — checked on every ON_RESUME, never cached between resumes
+    private val _callScreeningRoleHeld = MutableStateFlow(false)
+    val callScreeningRoleHeld = _callScreeningRoleHeld.asStateFlow()
+
     var riskThreshold: String = "Medium"
 
     fun onPermissionResult(permission: String, granted: Boolean) {
@@ -91,10 +97,24 @@ class OnboardingViewModel : ViewModel() {
         _permissionStates.value = states
     }
 
-
     fun allRequiredGranted(): Boolean {
         return permissions
             .filter { it.isRequired }
             .all { _permissionStates.value[it.permission] == true }
+    }
+
+    /**
+     * Check whether ROLE_CALL_SCREENING is currently held.
+     * Must be called on every ON_RESUME — never rely on a cached value.
+     * Only available on API 29+; returns false on older devices.
+     */
+    fun checkCallScreeningRole(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+            _callScreeningRoleHeld.value = roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
+        } else {
+            // Below API 29 ROLE_CALL_SCREENING does not exist — treat as not held
+            _callScreeningRoleHeld.value = false
+        }
     }
 }
