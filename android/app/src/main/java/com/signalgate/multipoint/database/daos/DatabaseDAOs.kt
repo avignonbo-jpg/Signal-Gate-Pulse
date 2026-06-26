@@ -9,6 +9,7 @@ import com.signalgate.multipoint.database.entities.CallLogEntry
 import com.signalgate.multipoint.database.entities.SettingEntry
 import com.signalgate.multipoint.database.entities.SourceEntity
 import com.signalgate.multipoint.database.entities.SyncHistoryEntry
+import com.signalgate.multipoint.database.entities.PendingCardEntity
 import com.signalgate.multipoint.database.entities.UnifiedEntryEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -163,4 +164,33 @@ interface SyncHistoryDao {
 
     @Query("DELETE FROM sync_history WHERE timestamp < :timestamp")
     suspend fun deleteOldSyncHistory(timestamp: Long)
+}
+
+/**
+ * DAO for PendingCardEntity operations.
+ * Cards are created on BLOCK decisions and deleted on dismissal.
+ * Never used for permanent history — that is CallLogDao's job.
+ */
+@Dao
+interface PendingCardDao {
+    @Insert
+    suspend fun insertCard(card: PendingCardEntity): Long
+
+    @Query("SELECT * FROM pending_cards WHERE dismissed = 0 ORDER BY timestamp DESC")
+    fun getUndismissedCards(): Flow<List<PendingCardEntity>>
+
+    @Query("UPDATE pending_cards SET dismissed = 1 WHERE id = :cardId")
+    suspend fun dismissCard(cardId: Int)
+
+    @Query("DELETE FROM pending_cards WHERE id = :cardId")
+    suspend fun deleteCard(cardId: Int)
+
+    @Query("DELETE FROM pending_cards WHERE dismissed = 1")
+    suspend fun deleteAllDismissed()
+
+    @Query("DELETE FROM pending_cards")
+    suspend fun deleteAll()
+
+    @Query("SELECT COUNT(*) FROM pending_cards WHERE dismissed = 0")
+    fun getUndismissedCount(): Flow<Int>
 }
