@@ -31,6 +31,10 @@ import android.content.Context
 import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 @Composable
 fun OperationalDashboard(
@@ -59,6 +63,19 @@ fun OperationalDashboard(
     val dataSources by viewModel.dataSources.collectAsState(initial = emptyList())
     val enabledCount by viewModel.enabledSourcesCount.collectAsState(initial = 0)
     val isSyncing by viewModel.isSyncing.collectAsState()
+    val shieldActive by viewModel.shieldActive.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Recheck role on every resume — never rely on cached state
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.checkShieldStatus(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val lastSyncTime = if (dataSources.isEmpty()) "Never"
     else formatLastSync(dataSources.maxOfOrNull { it.lastSynced } ?: 0)
@@ -123,13 +140,43 @@ fun OperationalDashboard(
 
             // Shield status — scaled down in portrait so it fits
             ShieldStatusGlow(
-                statusText = "ACTIVE",
-                glowColor = NeonGreen,
+                statusText = if (shieldActive) "ACTIVE" else "INACTIVE",
+                glowColor = if (shieldActive) NeonGreen else NeonRed,
                 modifier = if (isPortrait) Modifier.scale(0.75f) else Modifier
             )
         }
 
         HorizontalDivider(color = BorderGlass, thickness = 1.dp)
+
+        // Shield inactive banner — shown whenever ROLE_CALL_SCREENING is not held
+        if (!shieldActive) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = NeonRed.copy(alpha = 0.15f),
+                tonalElevation = 0.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = NeonRed,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Shield inactive — call screening role not granted. Tap to fix.",
+                        color = NeonRed,
+                        fontSize = 12.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
 
         // ── Scrollable body ───────────────────────────────────────────────────
         LazyColumn(
