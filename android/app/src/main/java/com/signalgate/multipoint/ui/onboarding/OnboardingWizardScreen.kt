@@ -1,9 +1,12 @@
 package com.signalgate.multipoint.ui.onboarding
 
+import android.app.role.RoleManager
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,10 +20,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -28,8 +34,6 @@ import com.signalgate.multipoint.ui.theme.*
 import com.signalgate.multipoint.ui.viewmodels.ContactItem
 import com.signalgate.multipoint.ui.viewmodels.ContactsViewModel
 import org.koin.androidx.compose.koinViewModel
-
-
 
 @Composable
 fun OnboardingWizardScreen(
@@ -47,10 +51,21 @@ fun OnboardingWizardScreen(
 @Composable
 fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewModel) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val permissionStates by viewModel.permissionStates.collectAsState()
+    val roleHeld by viewModel.callScreeningRoleHeld.collectAsState()
     var showRationaleDialog by remember { mutableStateOf<PermissionItem?>(null) }
 
-    val launcher = rememberLauncherForActivityResult(
+    // Role launcher — opens system dialog to grant ROLE_CALL_SCREENING
+    val roleLauncher = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) {
+            // Result comes back via ON_RESUME check below, not here
+        }
+    } else null
+
+    val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
         results.forEach { (permission, isGranted) ->
@@ -58,12 +73,21 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
         }
     }
 
-    // Initial check
-    LaunchedEffect(Unit) {
-        val currentStates = viewModel.permissions.associate { 
-            it.permission to (ContextCompat.checkSelfPermission(context, it.permission) == PackageManager.PERMISSION_GRANTED)
+    // Re-check everything on every resume — never rely on cached state
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val currentStates = viewModel.permissions.associate { item ->
+                    item.permission to (ContextCompat.checkSelfPermission(
+                        context, item.permission
+                    ) == PackageManager.PERMISSION_GRANTED)
+                }
+                viewModel.updateAllPermissions(currentStates)
+                viewModel.checkCallScreeningRole(context)
+            }
         }
-        viewModel.updateAllPermissions(currentStates)
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Column(
@@ -78,7 +102,7 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
             color = TextPrimary,
             fontWeight = FontWeight.Bold
         )
-        
+
         Text(
             text = "Grant these permissions to activate SignalGate's core shielding layers.",
             style = MaterialTheme.typography.bodyMedium,
@@ -90,13 +114,12 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Standard runtime permissions
             items(viewModel.permissions) { permission ->
                 val isGranted = permissionStates[permission.permission] ?: false
-                
+
                 Surface(
-                    onClick = { 
-                        if (!isGranted) showRationaleDialog = permission 
-                    },
+                    onClick = { if (!isGranted) showRationaleDialog = permission },
                     shape = MaterialTheme.shapes.medium,
                     color = SurfaceGlass,
                     tonalElevation = 2.dp
@@ -119,11 +142,51 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
                                 fontSize = 12.sp
                             )
                         }
-                        
                         Icon(
                             imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.Warning,
                             contentDescription = null,
                             tint = if (isGranted) NeonCyan else NeonRed
+                        )
+                    }
+                }
+            }
+
+            // ROLE_CALL_SCREENING — separate from runtime permissions, needs its own flow
+            item {
+                Surface(
+                    onClick = {
+                        if (!roleHeld && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+                            val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
+                            roleLauncher?.launch(intent)
+                        }
+                    },
+                    shape = MaterialTheme.shapes.medium,
+                    color = SurfaceGlass,
+                    tonalElevation = 2.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Call Screening Role",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Lets SignalGate intercept and analyze every incoming call. Without this, the shield is completely inactive — no calls will ever be screened.",
+                                color = TextSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Icon(
+                            imageVector = if (roleHeld) Icons.Default.CheckCircle else Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = if (roleHeld) NeonCyan else NeonRed
                         )
                     }
                 }
@@ -134,27 +197,36 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
 
         Button(
             onClick = {
-                val ungranted = viewModel.permissions.filter { 
-                    (permissionStates[it.permission] == false)
-                }.map { it.permission }
-                
-                if (ungranted.isEmpty()) {
-                    navController.navigate("contacts")
-                } else {
-                    launcher.launch(ungranted.toTypedArray())
+                val ungranted = viewModel.permissions
+                    .filter { permissionStates[it.permission] == false }
+                    .map { it.permission }
+
+                when {
+                    ungranted.isNotEmpty() -> permissionLauncher.launch(ungranted.toTypedArray())
+                    !roleHeld && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
+                        val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+                        val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
+                        roleLauncher?.launch(intent)
+                    }
+                    else -> navController.navigate("contacts")
                 }
             },
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (viewModel.allRequiredGranted()) NeonCyan else SurfaceGlass,
-                contentColor = if (viewModel.allRequiredGranted()) Color.Black else TextSecondary
+                containerColor = if (viewModel.allRequiredGranted() && roleHeld) NeonCyan else SurfaceGlass,
+                contentColor = if (viewModel.allRequiredGranted() && roleHeld) Color.Black else TextSecondary
             )
         ) {
-            Text(if (viewModel.allRequiredGranted()) "Continue" else "Grant Permissions")
+            Text(
+                when {
+                    !viewModel.allRequiredGranted() -> "Grant Permissions"
+                    !roleHeld -> "Grant Call Screening Role"
+                    else -> "Continue"
+                }
+            )
         }
     }
 
-    // Rationale Dialog
     showRationaleDialog?.let { permission ->
         AlertDialog(
             onDismissRequest = { showRationaleDialog = null },
@@ -162,21 +234,16 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
             text = { Text(permission.rationale) },
             confirmButton = {
                 TextButton(onClick = {
-                    launcher.launch(arrayOf(permission.permission))
+                    permissionLauncher.launch(arrayOf(permission.permission))
                     showRationaleDialog = null
-                }) {
-                    Text("Grant")
-                }
+                }) { Text("Grant") }
             },
             dismissButton = {
-                TextButton(onClick = { showRationaleDialog = null }) {
-                    Text("Not Now")
-                }
+                TextButton(onClick = { showRationaleDialog = null }) { Text("Not Now") }
             }
         )
     }
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -196,9 +263,7 @@ fun ContactsImportStep(
     }
 
     LaunchedEffect(isSaved) {
-        if (isSaved) {
-            navController.navigate("sources")
-        }
+        if (isSaved) navController.navigate("sources")
     }
 
     Column(
@@ -212,7 +277,7 @@ fun ContactsImportStep(
             color = TextPrimary,
             fontWeight = FontWeight.Bold
         )
-        
+
         Text(
             text = "Select contacts to automatically allow. These calls will bypass all security filters.",
             style = MaterialTheme.typography.bodyMedium,
@@ -225,7 +290,9 @@ fun ContactsImportStep(
             onValueChange = { viewModel.onSearchQueryChanged(it) },
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("Search contacts...", color = TextSecondary) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) },
+            leadingIcon = {
+                Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary)
+            },
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = SurfaceGlass,
                 unfocusedContainerColor = SurfaceGlass,
@@ -239,7 +306,9 @@ fun ContactsImportStep(
         )
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -259,7 +328,12 @@ fun ContactsImportStep(
         }
 
         if (isLoading) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator(color = NeonCyan)
             }
         } else {
@@ -268,7 +342,10 @@ fun ContactsImportStep(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(filteredContacts) { contact ->
-                    ContactRow(contact = contact, onToggle = { viewModel.toggleContact(contact.normalizedNumber) })
+                    ContactRow(
+                        contact = contact,
+                        onToggle = { viewModel.toggleContact(contact.normalizedNumber) }
+                    )
                 }
             }
         }
@@ -315,7 +392,7 @@ fun ContactRow(contact: ContactItem, onToggle: () -> Unit) {
                     fontSize = 12.sp
                 )
             }
-            
+
             Checkbox(
                 checked = contact.isSelected,
                 onCheckedChange = { onToggle() },
@@ -332,11 +409,17 @@ fun ContactRow(contact: ContactItem, onToggle: () -> Unit) {
 @Composable
 fun SourcesSelectionStep(navController: NavHostController) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Source Configuration", color = TextPrimary, style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "Source Configuration",
+            color = TextPrimary,
+            style = MaterialTheme.typography.headlineSmall
+        )
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = { navController.navigate("risk") }) {
             Text("Continue")
@@ -347,13 +430,19 @@ fun SourcesSelectionStep(navController: NavHostController) {
 @Composable
 fun RiskThresholdStep(navController: NavHostController) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Risk Profile Set", color = TextPrimary, style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "Risk Profile Set",
+            color = TextPrimary,
+            style = MaterialTheme.typography.headlineSmall
+        )
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = { /* Finish onboarding */ }) {
+        Button(onClick = { /* Finish onboarding — Step 1.4 */ }) {
             Text("Finish Setup")
         }
     }
