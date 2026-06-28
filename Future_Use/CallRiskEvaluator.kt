@@ -1,4 +1,3 @@
-app/src/main/java/com/signalgate/logic/CallRiskEvaluator.kt
 package com.signalgate.multipoint.logic
 
 import android.os.Build
