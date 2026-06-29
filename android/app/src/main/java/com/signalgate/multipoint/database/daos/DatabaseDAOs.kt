@@ -6,10 +6,10 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import com.signalgate.multipoint.database.entities.CallLogEntry
+import com.signalgate.multipoint.database.entities.PendingCardEntity
 import com.signalgate.multipoint.database.entities.SettingEntry
 import com.signalgate.multipoint.database.entities.SourceEntity
 import com.signalgate.multipoint.database.entities.SyncHistoryEntry
-import com.signalgate.multipoint.database.entities.PendingCardEntity
 import com.signalgate.multipoint.database.entities.UnifiedEntryEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -168,7 +168,7 @@ interface SyncHistoryDao {
 
 /**
  * DAO for PendingCardEntity operations.
- * Cards are created on BLOCK decisions and deleted on dismissal.
+ * Cards are created on Tier 3 HEURISTIC_BLOCK decisions and deleted on dismissal.
  * Never used for permanent history — that is CallLogDao's job.
  */
 @Dao
@@ -181,6 +181,14 @@ interface PendingCardDao {
 
     @Query("UPDATE pending_cards SET dismissed = 1 WHERE id = :cardId")
     suspend fun dismissCard(cardId: Int)
+
+    /**
+     * Dismisses all undismissed cards matching a phone number.
+     * Used by the ACTION_NOT_SPAM broadcast so CallActionReceiver can dismiss
+     * the card inline without needing the card's primary key.
+     */
+    @Query("UPDATE pending_cards SET dismissed = 1 WHERE phoneNumber = :phoneNumber AND dismissed = 0")
+    suspend fun dismissByPhoneNumber(phoneNumber: String)
 
     @Query("DELETE FROM pending_cards WHERE id = :cardId")
     suspend fun deleteCard(cardId: Int)
