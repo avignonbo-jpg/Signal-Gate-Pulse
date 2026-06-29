@@ -1,14 +1,20 @@
 package com.signalgate.multipoint
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.telecom.Call
 import android.telecom.CallScreeningService as TelecomCallScreeningService
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import com.signalgate.multipoint.database.daos.PendingCardDao
 import com.signalgate.multipoint.database.entities.CallLogEntry
 import com.signalgate.multipoint.database.entities.PendingCardEntity
 import com.signalgate.multipoint.database.repositories.CallLogRepository
-import com.signalgate.multipoint.database.daos.PendingCardDao
 import com.signalgate.multipoint.logic.CallScreeningEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,21 +22,25 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
 /**
- * SignalGateCallScreeningService extends the Android framework's CallScreeningService.
- * The class is intentionally named differently from the framework class to avoid
- * the self-extension compile error that existed in a previous revision.
+ * SignalGateCallScreeningService — five-tier call handling per Architecture Contract v5.
  *
- * Implements the Priority Hierarchy:
- * 1. Manual Allow-list (Whitelist)
- * 2. Manual Block-list
- * 3. Pattern/Prefix Rules
- * 4. Aggregated Data Sources
- * 5. Default (Allow)
+ * Tier 1 ALLOWLISTED    : ALLOW — rings, basic log, no notification.
+ * Tier 2 FEDERAL_BLOCK  : setSilenceCall(true) — voicemail, CallLogEntry only, no notification.
+ * Tier 3 HEURISTIC_BLOCK: setSilenceCall(true) — voicemail, CallLogEntry + PendingCard + notification.
+ * Tier 4 HEURISTIC_FLAG : SCREEN — rings, faint log tag, no PendingCard.
+ * Tier 5 CLEAN_UNKNOWN  : ALLOW — rings, standard log.
  *
- * Step 1.6 changes:
- * - Overlay trigger fixed: keys off callDecision == BLOCK, not spamStatus string
- * - Every BLOCK writes to CallLogEntry (permanent audit) AND PendingCardEntity (digest queue)
- * - Every ALLOW also writes to CallLogEntry so Calls Screened counter works (Step 2.5)
+ * setSilenceCall(true) is intentional on BLOCK decisions. Unlike setDisallowCall(true)
+ * which sends a busy tone, setSilenceCall routes the caller to voicemail silently.
+ * A mis-blocked caller can leave a voicemail; with a busy tone they cannot.
+ *
+ * No SYSTEM_ALERT_WINDOW permission used. POST_NOTIFICATIONS only.
+ *
+ * Changes from prior version:
+ * — setSilenceCall(true) replaces setDisallowCall(true)                        (Step 1.6)
+ * — overlay trigger now keys off callDecision enum, not spamStatus string       (Step 1.6)
+ * — writeAuditRecords writes PendingCardEntity on Tier 3 only                  (Step 1.6)
+ * — fireBlockedCallNotification() replaces triggerOverlay()                     (Step 1.8)
  */
 class SignalGateCallScreeningService : TelecomCallScreeningService() {
 
@@ -38,139 +48,100 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
     private val callLogRepository: CallLogRepository by inject()
     private val pendingCardDao: PendingCardDao by inject()
 
-    companion object {
-        private const val TAG = "SignalGateCallScreening"
-    }
+    enum class CallDecision { ALLOW, BLOCK, SCREEN }
 
-    /**
-     * Enum representing the decision for an incoming call.
-     */
-    enum class CallDecision {
-        ALLOW,
-        BLOCK,
-        SCREEN
+    companion object {
+        private const val TAG = "SignalGateScreening"
+        const val BLOCKED_CALL_CHANNEL_ID   = "blocked_call_review"
+        const val BLOCKED_CALL_CHANNEL_NAME = "Blocked Call Review"
     }
 
     override fun onScreenCall(details: Call.Details) {
-        Log.d(TAG, "Screening call from: ${details.handle?.schemeSpecificPart}")
-
         val phoneNumber = details.handle?.schemeSpecificPart ?: return
+        Log.d(TAG, "onScreenCall: $phoneNumber")
 
         CoroutineScope(Dispatchers.Default).launch {
             try {
-                val callInfo = analyzeIncomingCall(phoneNumber)
-                val decision = callInfo.callDecision
-
-                applyCallDecision(details, decision)
-                writeAuditRecords(callInfo, decision)
-
-                // Bug fix (Step 1.6): trigger overlay on CallDecision.BLOCK,
-                // NOT on spamStatus string. Pattern-matched blocks set
-                // decision=BLOCK but spamStatus=UNKNOWN — the old string check
-                // meant those blocks never triggered the overlay.
-                if (decision == CallDecision.BLOCK) {
-                    triggerOverlay(callInfo)
+                val callInfo = screeningEngine.screenCall(phoneNumber)
+                applyCallDecision(details, callInfo)
+                writeAuditRecords(callInfo)
+                if (callInfo.tier == CallTier.HEURISTIC_BLOCK) {
+                    fireBlockedCallNotification(callInfo)
                 }
-
             } catch (e: Exception) {
-                Log.e(TAG, "Error screening call", e)
-                val safeResponse = CallResponse.Builder()
-                    .setDisallowCall(false)
-                    .setSkipCallLog(false)
-                    .setSkipNotification(false)
-                    .build()
-                respondToCall(details, safeResponse)
+                Log.e(TAG, "Error screening call — defaulting to allow", e)
+                respondToCall(
+                    details,
+                    CallResponse.Builder()
+                        .setDisallowCall(false)
+                        .setSkipCallLog(false)
+                        .setSkipNotification(false)
+                        .build()
+                )
             }
         }
     }
 
-    /**
-     * Analyzes an incoming call via the screening engine.
-     */
-    private suspend fun analyzeIncomingCall(phoneNumber: String): CallInfo {
-        return try {
-            screeningEngine.screenCall(phoneNumber)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error analyzing call", e)
-            CallInfo(
-                originalPhoneNumber = phoneNumber,
-                normalizedPhoneNumber = normalizePhoneNumber(phoneNumber),
-                spamStatus = "UNKNOWN",
-                spamCategory = null,
-                confidence = null,
-                riskLevel = null,
-                matchedSources = emptyList(),
-                callDecision = CallDecision.ALLOW
-            )
-        }
-    }
+    // ── Call response ──────────────────────────────────────────────────────────
 
-    /**
-     * Applies the call decision by building a CallResponse and responding to the call.
-     * setSkipCallLog(true) and setSkipNotification(true) on BLOCK are correct Android
-     * behavior — we suppress the OS-level log and notification because we handle them
-     * ourselves via CallLogEntry and the post-call digest card system.
-     */
-    private fun applyCallDecision(details: Call.Details, decision: CallDecision) {
-        val response = when (decision) {
-            CallDecision.ALLOW -> CallResponse.Builder()
-                .setDisallowCall(false)
-                .setSkipCallLog(false)
-                .setSkipNotification(false)
-                .build()
-            CallDecision.BLOCK -> CallResponse.Builder()
-                .setDisallowCall(true)
-                .setSkipCallLog(true)
-                .setSkipNotification(true)
-                .build()
+    private fun applyCallDecision(details: Call.Details, callInfo: CallInfo) {
+        val response = when (callInfo.callDecision) {
+            CallDecision.ALLOW,
             CallDecision.SCREEN -> CallResponse.Builder()
                 .setDisallowCall(false)
                 .setSkipCallLog(false)
                 .setSkipNotification(false)
                 .build()
+
+            CallDecision.BLOCK -> CallResponse.Builder()
+                .setSilenceCall(true)
+                .setSkipCallLog(true)
+                .setSkipNotification(true)
+                .build()
         }
         respondToCall(details, response)
     }
 
+    // ── Audit trail ────────────────────────────────────────────────────────────
+
     /**
-     * Writes both audit records on BLOCK. Writes CallLogEntry only on ALLOW/SCREEN.
+     * Writes audit records based on tier:
      *
-     * BLOCK -> CallLogEntry (permanent) + PendingCardEntity (digest queue)
-     * ALLOW -> CallLogEntry only (for Calls Screened counter, Step 2.5)
-     * SCREEN -> CallLogEntry only
-     *
-     * These are written on Dispatchers.IO to avoid blocking the screening coroutine.
+     * ALL tiers write a CallLogEntry (feeds Calls Screened Today counter).
+     * TIER 3 only also writes a PendingCardEntity (surfaces in Screen.Digest).
+     * TIER 2 is intentionally silent — no PendingCard, no notification.
      */
-    private fun writeAuditRecords(callInfo: CallInfo, decision: CallDecision) {
+    private fun writeAuditRecords(callInfo: CallInfo) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val matchedSourcesJson = callInfo.matchedSources
-                    .joinToString(prefix = "[\"", separator = "\",\"", postfix = "\"]")
-                    .takeIf { callInfo.matchedSources.isNotEmpty() }
+                val sourcesJson = callInfo.matchedSources
+                    .takeIf { it.isNotEmpty() }
+                    ?.joinToString(prefix = "[\"", separator = "\",\"", postfix = "\"]")
 
                 callLogRepository.insertCallLog(
                     CallLogEntry(
-                        phoneNumber = callInfo.originalPhoneNumber,
+                        phoneNumber           = callInfo.originalPhoneNumber,
                         normalizedPhoneNumber = callInfo.normalizedPhoneNumber,
-                        timestamp = System.currentTimeMillis(),
-                        decision = decision.name,
-                        spamStatus = callInfo.spamStatus,
-                        spamCategory = callInfo.spamCategory,
-                        confidence = callInfo.confidence,
-                        riskLevel = callInfo.riskLevel,
-                        matchedSources = matchedSourcesJson
+                        timestamp             = System.currentTimeMillis(),
+                        decision              = callInfo.callDecision.name,
+                        spamStatus            = callInfo.spamStatus,
+                        spamCategory          = callInfo.spamCategory,
+                        confidence            = callInfo.confidence,
+                        riskLevel             = callInfo.riskLevel,
+                        matchedSources        = sourcesJson,
+                        notes                 = callInfo.tier.name
                     )
                 )
 
-                if (decision == CallDecision.BLOCK) {
+                if (callInfo.tier == CallTier.HEURISTIC_BLOCK) {
                     pendingCardDao.insertCard(
                         PendingCardEntity(
-                            phoneNumber = callInfo.normalizedPhoneNumber,
-                            timestamp = System.currentTimeMillis(),
-                            decision = decision.name,
-                            confidence = callInfo.confidence,
+                            phoneNumber    = callInfo.normalizedPhoneNumber,
+                            timestamp      = System.currentTimeMillis(),
+                            decision       = callInfo.callDecision.name,
+                            confidence     = callInfo.confidence,
                             decisionSource = callInfo.matchedSources.firstOrNull(),
-                            dismissed = false
+                            dismissed      = false
                         )
                     )
                 }
@@ -180,22 +151,86 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
         }
     }
 
+    // ── Notification ───────────────────────────────────────────────────────────
+
     /**
-     * Triggers the overlay service to display the blocked call card.
-     * Only called when decision == CallDecision.BLOCK.
+     * Fires a high-priority notification for Tier 3 HEURISTIC_BLOCK decisions only.
+     *
+     * Offers two actions:
+     *   "Not Spam" — RemoteAction broadcast to CallActionReceiver. Allowlists the
+     *                number and dismisses the PendingCard without opening the app.
+     *   Tap        — content intent deep-links to Screen.Digest via signalgate://digest.
+     *
+     * Notification ID = phoneNumber.hashCode() so repeated blocks from the same number
+     * update the existing notification rather than stacking new ones.
+     *
+     * No SYSTEM_ALERT_WINDOW needed — POST_NOTIFICATIONS only.
      */
-    private fun triggerOverlay(callInfo: CallInfo) {
-        val overlayIntent = Intent(this, CallOverlayService::class.java).apply {
-            putExtra("call_info", callInfo)
+    private fun fireBlockedCallNotification(callInfo: CallInfo) {
+        val context = applicationContext
+        val notificationId = callInfo.normalizedPhoneNumber.hashCode()
+
+        createBlockedCallChannel(context)
+
+        val digestIntent = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse("signalgate://digest"),
+            context,
+            MainActivity::class.java
+        ).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(overlayIntent)
-        } else {
-            startService(overlayIntent)
+        val contentPendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            digestIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notSpamIntent = Intent(context, CallActionReceiver::class.java).apply {
+            action = CallActionReceiver.ACTION_NOT_SPAM
+            putExtra(CallActionReceiver.EXTRA_PHONE_NUMBER, callInfo.normalizedPhoneNumber)
+            putExtra(CallActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
         }
+        val notSpamPendingIntent = PendingIntent.getBroadcast(
+            context,
+            notificationId,
+            notSpamIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val confidenceText = callInfo.confidence?.let { " ($it% match)" } ?: ""
+        val bodyText = "${callInfo.originalPhoneNumber}$confidenceText"
+
+        val notification = NotificationCompat.Builder(context, BLOCKED_CALL_CHANNEL_ID)
+            .setSmallIcon(R.drawable.shield_logo)
+            .setContentTitle("Call Blocked")
+            .setContentText(bodyText)
+            .setContentIntent(contentPendingIntent)
+            .addAction(0, "Not Spam", notSpamPendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .build()
+
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(notificationId, notification)
     }
 
-    private fun normalizePhoneNumber(phoneNumber: String): String {
-        return phoneNumber.replace(Regex("[^0-9+]"), "")
+    private fun createBlockedCallChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                BLOCKED_CALL_CHANNEL_ID,
+                BLOCKED_CALL_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Review calls blocked by SignalGate Pulse"
+                setShowBadge(true)
+                enableVibration(false)
+                setSound(null, null)
+            }
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(channel)
+        }
     }
 }
