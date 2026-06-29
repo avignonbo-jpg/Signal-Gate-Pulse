@@ -8,9 +8,11 @@
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.WRITE_CALL_LOG" />
 
-    <!-- Notifications and UI -->
+    <!-- Notifications — POST_NOTIFICATIONS is all that is needed for Step 1.8.
+         The overlay window permission has been intentionally omitted. SignalGate
+         Pulse does not draw over other apps. Any PR reintroducing an overlay
+         permission should be blocked — see Architecture Contract v5. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -44,6 +46,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Deep link for blocked-call notification tap → Screen.Digest.
+                 Internal scheme only — not registered for browser handling.
+                 NavController resolves signalgate://digest automatically via
+                 the navDeepLink declaration in NavGraph.kt. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:scheme="signalgate"
+                    android:host="digest" />
+            </intent-filter>
+
         </activity>
 
         <!-- Call Screening Service (Layer 1 — system-level call decisions) -->
@@ -59,7 +73,9 @@
 
         </service>
 
-        <!-- Call Overlay Service (Layer 1 — foreground UI during active call) -->
+        <!-- Call Overlay Service — class retained, not called from Step 1.8 onward.
+             PULSE-TODO (2026-06-28): Remove this entry in the CallOverlayService
+             cleanup PR once the class itself is deleted. -->
         <service
             android:name=".CallOverlayService"
             android:enabled="true"
