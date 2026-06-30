@@ -16,7 +16,6 @@ import com.signalgate.multipoint.ui.RecentCallsViewModel
 import com.signalgate.multipoint.ui.dashboard.DashboardViewModel
 import com.signalgate.multipoint.ui.digest.PendingCardViewModel
 import com.signalgate.multipoint.ui.onboarding.OnboardingViewModel
-import com.signalgate.multipoint.ui.overlay.CallOverlayViewModel
 import com.signalgate.multipoint.ui.viewmodels.ContactsViewModel
 import com.signalgate.multipoint.ui.viewmodels.LogcatViewModel
 import com.signalgate.multipoint.ui.viewmodels.TelemetryViewModel
@@ -87,7 +86,6 @@ val logicModule = module {
 val viewModelModule = module {
     viewModel { ContactsViewModel(get(), get(), get()) }
     viewModel { TelemetryViewModel(get()) }
-    viewModel { CallOverlayViewModel() }
     viewModel { DashboardViewModel(get()) }
     viewModel { BlockedNumbersViewModel(get()) }
     viewModel { RecentCallsViewModel(get(), get()) }
