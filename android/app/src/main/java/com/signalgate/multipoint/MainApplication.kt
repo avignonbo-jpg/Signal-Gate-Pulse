@@ -11,6 +11,7 @@ import com.signalgate.multipoint.di.initializeDatabase
 import com.signalgate.multipoint.security.SecurityUtils
 import com.signalgate.multipoint.workers.CommunitySyncWorker
 import kotlinx.coroutines.runBlocking
+import timber.log.Timber
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
@@ -37,6 +38,12 @@ class MainApplication : Application(), Configuration.Provider {
         super.onCreate()
 
         SecurityUtils.enableStrictMode()
+
+        // Plant Timber logging tree before any module is resolved.
+        // DebugTree in debug builds only — no logging in release per Step 1.13.
+        if (android.BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
 
         startKoin {
             androidLogger()
