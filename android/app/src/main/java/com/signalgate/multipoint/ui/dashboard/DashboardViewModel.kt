@@ -36,6 +36,11 @@ class DashboardViewModel(
     private val _shieldActive = MutableStateFlow(false)
     val shieldActive: StateFlow<Boolean> = _shieldActive.asStateFlow()
 
+    // Calls screened today — wired to CallLogDao.getCallsInRange() (Step 2.5).
+    // Refreshed on every ON_RESUME via refreshCounters().
+    private val _callsScreenedToday = MutableStateFlow(0)
+    val callsScreenedToday: StateFlow<Int> = _callsScreenedToday.asStateFlow()
+
     init {
         observeDataSources()
     }
@@ -49,6 +54,19 @@ class DashboardViewModel(
                 }
                 _ledStates.value = newLedStates
             }
+        }
+    }
+
+    /**
+     * Refreshes today's counters. Called on every ON_RESUME.
+     * Wires to CallLogDao queries once Step 2.4/2.5 are implemented.
+     * PULSE-TODO (2026-06): replace stub with real CallLogDao queries.
+     */
+    fun refreshCounters() {
+        viewModelScope.launch {
+            // Step 2.4/2.5 wiring point — CallLogDao queries go here
+            // _blockedToday.value = callLogDao.getBlockedCallsCount(todayMidnight)
+            // _callsScreenedToday.value = callLogDao.getCallsInRange(todayMidnight, Long.MAX_VALUE)
         }
     }
 
