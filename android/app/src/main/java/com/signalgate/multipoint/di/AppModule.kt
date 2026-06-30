@@ -4,21 +4,26 @@ import android.content.Context
 import com.signalgate.multipoint.database.DatabaseInitializer
 import com.signalgate.multipoint.database.SecureDatabase
 import com.signalgate.multipoint.database.SignalGateDatabase
+import com.signalgate.multipoint.database.daos.SettingDao
 import com.signalgate.multipoint.database.daos.SourceDao
 import com.signalgate.multipoint.database.repositories.BlocklistRepository
 import com.signalgate.multipoint.database.repositories.CallLogRepository
 import com.signalgate.multipoint.database.repositories.DataSourceRepository
 import com.signalgate.multipoint.database.repositories.SyncHistoryRepository
+import com.signalgate.multipoint.logic.CallRiskEvaluator
 import com.signalgate.multipoint.logic.CallScreeningEngine
 import com.signalgate.multipoint.logic.DataSyncEngine
+import com.signalgate.multipoint.logic.ReliableSourceManager
 import com.signalgate.multipoint.ui.BlockedNumbersViewModel
 import com.signalgate.multipoint.ui.RecentCallsViewModel
 import com.signalgate.multipoint.ui.dashboard.DashboardViewModel
 import com.signalgate.multipoint.ui.digest.PendingCardViewModel
 import com.signalgate.multipoint.ui.onboarding.OnboardingViewModel
+import com.signalgate.multipoint.ui.overlay.CallOverlayViewModel
 import com.signalgate.multipoint.ui.viewmodels.ContactsViewModel
 import com.signalgate.multipoint.ui.viewmodels.LogcatViewModel
 import com.signalgate.multipoint.ui.viewmodels.TelemetryViewModel
+import com.signalgate.multipoint.workers.CommunitySyncWorker
 import com.signalgate.multipoint.data.security.BloomFilterEngine
 import com.signalgate.multipoint.data.security.PrecedenceEngine
 import com.signalgate.multipoint.data.security.SecureCsvParser
@@ -27,8 +32,27 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
+/**
+ * AppModule aggregates all Koin DI bindings per Architecture Contract §2.
+ *
+ * Module split (one per layer, as required):
+ *   databaseModule  — SignalGateDatabase, all DAOs
+ *   repositoryModule — all four repositories
+ *   engineModule    — L2/L3/L6 logic: ReliableSourceManager, CallRiskEvaluator,
+ *                     CallScreeningEngine, DataSyncEngine, BloomFilterEngine,
+ *                     PrecedenceEngine, SecureCsvParser
+ *   viewModelModule — one viewModel{} binding per screen ViewModel (Contract §4)
+ *   workerModule    — CommunitySyncWorker via KoinWorkerFactory (Contract §2)
+ *
+ * Startup ordering constraint (binding per Contract §2):
+ *   DatabaseInitializer.seedRequiredSources() MUST complete before this
+ *   function returns — it runs synchronously in MainApplication.onCreate()
+ *   via runBlocking BEFORE any inbound caller (e.g. a cold CallScreeningService
+ *   invocation) can resolve a Koin binding. Async seeding is explicitly
+ *   disallowed as a regression of the 2026-06 race-condition fix.
+ */
+
 val databaseModule = module {
-    // Database is built via SecureDatabase to ensure SQLCipher encryption (Layer 2)
     single<SignalGateDatabase> {
         SecureDatabase.getDatabase(androidContext())
     }
@@ -46,21 +70,26 @@ val repositoryModule = module {
     single { SyncHistoryRepository(get()) }
 
     // BlocklistRepository requires the MANUAL sourceId seeded by DatabaseInitializer.
-    // runBlocking is intentional here: Koin's single{} lambda is not a coroutine scope,
-    // and this lookup is a single indexed DB read that only runs once at startup after
-    // seedRequiredSources() has already completed. Replace with SettingEntry cache
-    // lookup in Step 2.6 when the SettingEntry key store is wired up.
+    // runBlocking is intentional: Koin's single{} lambda is not a coroutine scope,
+    // and this is a single indexed DB read that runs once at startup after
+    // seedRequiredSources() has already completed synchronously.
+    // PULSE-TODO (2026-06): replace with SettingEntry key read in Step 2.4
+    // once the SettingEntry migration is complete — avoids runBlocking entirely.
     single {
         val sourceDao = get<SourceDao>()
         val manualSourceId = runBlocking {
             sourceDao.getSourceByName("Manual User Rules")?.id
-                ?: error("Manual source row not found — ensure DatabaseInitializer.seedRequiredSources() ran before Koin resolves repositoryModule")
+                ?: error(
+                    "Manual source row not found — DatabaseInitializer.seedRequiredSources() " +
+                    "must complete synchronously before any Koin module is resolved"
+                )
         }
         BlocklistRepository(get(), manualSourceId)
     }
 }
 
-val logicModule = module {
+val engineModule = module {
+    // L4 — input sanitization boundary
     single { BloomFilterEngine() }
     single { SecureCsvParser(get()) }
     single {
@@ -70,22 +99,22 @@ val logicModule = module {
             localManualBlockListCache = hashSetOf()
         )
     }
-    single { CallScreeningEngine(get()) }
-    single { DataSyncEngine(get(), get()) }
 
-    // MultiPortSyncWorker intentionally omitted — not present in consumer-v1 branch
-    /*
-    factory { (context: android.content.Context, params: androidx.work.WorkerParameters) ->
-        com.signalgate.multipoint.service.workers.MultiPortSyncWorker(
-            context, params, get(), get(), get()
-        )
-    }
-    */
+    // L2 — transport boundary (OkHttp, TLS, timeouts owned here)
+    single { ReliableSourceManager(get(), get()) }
+
+    // L6 — decision boundary
+    // CallRiskEvaluator is a stateless object — exposed here so CallScreeningEngine
+    // can receive it as a constructor parameter for testability.
+    single { CallRiskEvaluator }
+    single { CallScreeningEngine(get(), get()) }
+    single { DataSyncEngine(get(), get()) }
 }
 
 val viewModelModule = module {
     viewModel { ContactsViewModel(get(), get(), get()) }
     viewModel { TelemetryViewModel(get()) }
+    viewModel { CallOverlayViewModel() }
     viewModel { DashboardViewModel(get()) }
     viewModel { BlockedNumbersViewModel(get()) }
     viewModel { RecentCallsViewModel(get(), get()) }
@@ -94,14 +123,33 @@ val viewModelModule = module {
     viewModel { PendingCardViewModel(get(), get()) }
 }
 
-val appModule = listOf(databaseModule, repositoryModule, logicModule, viewModelModule)
+/**
+ * workerModule — every CoroutineWorker that ships in v1 must have an entry here.
+ * Resolved via KoinWorkerFactory; WorkManager never constructs workers directly.
+ * Contract §2: a Worker with no workerModule entry is not shippable.
+ */
+val workerModule = module {
+    factory { (context: android.content.Context, params: androidx.work.WorkerParameters) ->
+        CommunitySyncWorker(context, params, get())
+    }
+}
 
-// Call this from MainApplication.onCreate() after Koin starts and before any
-// repository module is resolved. seedRequiredSources() is idempotent — safe to
-// call on every launch.
+val appModule = listOf(
+    databaseModule,
+    repositoryModule,
+    engineModule,
+    viewModelModule,
+    workerModule
+)
+
+/**
+ * Called synchronously from MainApplication.onCreate() inside runBlocking,
+ * before onCreate() returns. Seeds both required source rows and stores their
+ * IDs in SettingEntry. Safe to call on every launch — fully idempotent.
+ */
 suspend fun initializeDatabase(context: Context) {
     val koin = org.koin.core.context.GlobalContext.get()
     val sourceDao = koin.get<SourceDao>()
-    val settingDao = koin.get<com.signalgate.multipoint.database.daos.SettingDao>()
+    val settingDao = koin.get<SettingDao>()
     DatabaseInitializer.seedRequiredSources(context, sourceDao, settingDao)
 }
