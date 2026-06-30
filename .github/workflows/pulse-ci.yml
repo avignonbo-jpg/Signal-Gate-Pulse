@@ -63,3 +63,10 @@ jobs:
           name: lint-report
           path: android/app/build/reports/lint-results-pulseDebug.html
           retention-days: 7
+
+      - name: Verify build.gradle compose-metrics gate
+        run: |
+          if ! grep -q 'project.hasProperty("composeCompilerReports")' android/app/build.gradle; then
+            echo "::error::compose-metrics gating reverted in app/build.gradle"
+            exit 1
+          fi
