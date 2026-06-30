@@ -2,26 +2,34 @@ package com.signalgate.multipoint.ui.onboarding
 
 import android.app.role.RoleManager
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -30,6 +38,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.signalgate.multipoint.R
 import com.signalgate.multipoint.ui.theme.*
 import com.signalgate.multipoint.ui.viewmodels.ContactItem
 import com.signalgate.multipoint.ui.viewmodels.ContactsViewModel
@@ -42,11 +51,57 @@ fun OnboardingWizardScreen(
 ) {
     NavHost(navController = navController, startDestination = "permissions") {
         composable("permissions") { PermissionsStep(navController, viewModel) }
-        composable("contacts") { ContactsImportStep(navController) }
-        composable("sources") { SourcesSelectionStep(navController) }
-        composable("risk") { RiskThresholdStep(navController) }
+        composable("contacts")    { ContactsImportStep(navController) }
+        composable("sources")     { SourcesSelectionStep(navController) }
+        composable("risk")        { RiskThresholdStep(navController) }
     }
 }
+
+// ── Step progress indicator ────────────────────────────────────────────────────
+
+@Composable
+private fun StepIndicator(currentStep: Int, totalSteps: Int) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(SurfaceGlass)
+            .border(1.dp, BorderGlass, RoundedCornerShape(20.dp))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "Step $currentStep of $totalSteps",
+            color = TextPrimary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(modifier = Modifier.width(4.dp))
+        HorizontalDivider(
+            modifier = Modifier.width(1.dp).height(14.dp),
+            color = BorderGlass,
+            thickness = 1.dp
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            repeat(totalSteps) { index ->
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (index < currentStep) NeonCyan
+                            else BorderGlass
+                        )
+                )
+            }
+        }
+    }
+}
+
+// ── STEP 1: Permissions ────────────────────────────────────────────────────────
 
 @Composable
 fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewModel) {
@@ -54,35 +109,30 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
     val lifecycleOwner = LocalLifecycleOwner.current
     val permissionStates by viewModel.permissionStates.collectAsState()
     val roleHeld by viewModel.callScreeningRoleHeld.collectAsState()
-    var showRationaleDialog by remember { mutableStateOf<PermissionItem?>(null) }
+    var showLearnMore by remember { mutableStateOf(false) }
 
-    // Role launcher — opens system dialog to grant ROLE_CALL_SCREENING
     val roleLauncher = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.StartActivityForResult()
-        ) {
-            // Result comes back via ON_RESUME check below, not here
-        }
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
     } else null
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
-        results.forEach { (permission, isGranted) ->
-            viewModel.onPermissionResult(permission, isGranted)
+        results.forEach { (permission, granted) ->
+            viewModel.onPermissionResult(permission, granted)
         }
     }
 
-    // Re-check everything on every resume — never rely on cached state
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                val currentStates = viewModel.permissions.associate { item ->
-                    item.permission to (ContextCompat.checkSelfPermission(
-                        context, item.permission
-                    ) == PackageManager.PERMISSION_GRANTED)
-                }
-                viewModel.updateAllPermissions(currentStates)
+                viewModel.updateAllPermissions(
+                    viewModel.permissions.associate { item ->
+                        item.permission to (ContextCompat.checkSelfPermission(
+                            context, item.permission
+                        ) == PackageManager.PERMISSION_GRANTED)
+                    }
+                )
                 viewModel.checkCallScreeningRole(context)
             }
         }
@@ -93,157 +143,199 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .background(DeepSpaceBackground)
+            .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "Security Clearances",
-            style = MaterialTheme.typography.headlineMedium,
-            color = TextPrimary,
-            fontWeight = FontWeight.Bold
-        )
+        Spacer(modifier = Modifier.height(24.dp))
 
-        Text(
-            text = "Grant these permissions to activate SignalGate's core shielding layers.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
-            modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
-        )
-
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        // Wordmark
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Standard runtime permissions
-            items(viewModel.permissions) { permission ->
-                val isGranted = permissionStates[permission.permission] ?: false
-
-                Surface(
-                    onClick = { if (!isGranted) showRationaleDialog = permission },
-                    shape = MaterialTheme.shapes.medium,
-                    color = SurfaceGlass,
-                    tonalElevation = 2.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = permission.title,
-                                color = TextPrimary,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = permission.description,
-                                color = TextSecondary,
-                                fontSize = 12.sp
-                            )
-                        }
-                        Icon(
-                            imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = if (isGranted) NeonCyan else NeonRed
-                        )
-                    }
-                }
-            }
-
-            // ROLE_CALL_SCREENING — separate from runtime permissions, needs its own flow
-            item {
-                Surface(
-                    onClick = {
-                        if (!roleHeld && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
-                            val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
-                            roleLauncher?.launch(intent)
-                        }
-                    },
-                    shape = MaterialTheme.shapes.medium,
-                    color = SurfaceGlass,
-                    tonalElevation = 2.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Call Screening Role",
-                                color = TextPrimary,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "Lets SignalGate intercept and analyze every incoming call. Without this, the shield is completely inactive — no calls will ever be screened.",
-                                color = TextSecondary,
-                                fontSize = 12.sp
-                            )
-                        }
-                        Icon(
-                            imageVector = if (roleHeld) Icons.Default.CheckCircle else Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = if (roleHeld) NeonCyan else NeonRed
-                        )
-                    }
-                }
+            androidx.compose.foundation.Image(
+                painter = painterResource(R.drawable.ic_signal_gate_logo),
+                contentDescription = null,
+                modifier = Modifier.size(32.dp)
+            )
+            Column {
+                Text(
+                    text = "SIGNAL GATE",
+                    color = TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "PULSE",
+                    color = NeonCyan,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 2.sp
+                )
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+
+        StepIndicator(currentStep = 1, totalSteps = 3)
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            text = "Step 1: Security Foundation",
+            color = NeonCyan,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Hero shield — pre-rendered glowing asset
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.shield_logo),
+            contentDescription = "Shield",
+            modifier = Modifier.size(200.dp)
+        )
+
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Permission label row
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_signal_gate_logo),
+                contentDescription = null,
+                tint = NeonCyan,
+                modifier = Modifier.size(24.dp)
+            )
+            Column {
+                Text(
+                    text = "Permission Request: Call Screening",
+                    color = TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Grant permission to screen incoming\ncalls for real-time protection.",
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Start
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        // GRANT ACCESS primary CTA
+        val allReady = viewModel.allRequiredGranted() && roleHeld
         Button(
             onClick = {
                 val ungranted = viewModel.permissions
                     .filter { permissionStates[it.permission] == false }
                     .map { it.permission }
-
                 when {
-                    ungranted.isNotEmpty() -> permissionLauncher.launch(ungranted.toTypedArray())
+                    ungranted.isNotEmpty() ->
+                        permissionLauncher.launch(ungranted.toTypedArray())
                     !roleHeld && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
-                        val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
-                        val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
-                        roleLauncher?.launch(intent)
+                        val roleManager =
+                            context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+                        roleLauncher?.launch(
+                            roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
+                        )
                     }
                     else -> navController.navigate("contacts")
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .border(
+                    width = 1.5.dp,
+                    brush = Brush.horizontalGradient(listOf(NeonCyan, AccentPrimary)),
+                    shape = RoundedCornerShape(28.dp)
+                ),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (viewModel.allRequiredGranted() && roleHeld) NeonCyan else SurfaceGlass,
-                contentColor = if (viewModel.allRequiredGranted() && roleHeld) Color.Black else TextSecondary
-            )
+                containerColor = if (allReady) NeonCyan.copy(alpha = 0.2f)
+                                 else SurfaceDark.copy(alpha = 0.6f),
+                contentColor = TextPrimary
+            ),
+            shape = RoundedCornerShape(28.dp)
         ) {
+            Icon(
+                imageVector = if (allReady) Icons.Default.CheckCircle else Icons.Default.Lock,
+                contentDescription = null,
+                tint = NeonCyan,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
             Text(
-                when {
-                    !viewModel.allRequiredGranted() -> "Grant Permissions"
-                    !roleHeld -> "Grant Call Screening Role"
-                    else -> "Continue"
-                }
+                text = when {
+                    allReady -> "CONTINUE  ›"
+                    !viewModel.allRequiredGranted() -> "GRANT ACCESS  ›"
+                    else -> "GRANT CALL SCREENING  ›"
+                },
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
             )
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Learn More link
+        HorizontalDivider(color = BorderGlass.copy(alpha = 0.4f), thickness = 1.dp)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                tint = NeonCyan,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            TextButton(onClick = { showLearnMore = true }) {
+                Text("Learn More", color = NeonCyan, fontSize = 13.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 
-    showRationaleDialog?.let { permission ->
+    if (showLearnMore) {
         AlertDialog(
-            onDismissRequest = { showRationaleDialog = null },
-            title = { Text(permission.title) },
-            text = { Text(permission.rationale) },
-            confirmButton = {
-                TextButton(onClick = {
-                    permissionLauncher.launch(arrayOf(permission.permission))
-                    showRationaleDialog = null
-                }) { Text("Grant") }
+            onDismissRequest = { showLearnMore = false },
+            title = { Text("About Call Screening", color = TextPrimary) },
+            text = {
+                Text(
+                    "SignalGate Pulse uses Android's built-in Call Screening role to " +
+                    "analyze incoming calls before your phone rings. This is a system-level " +
+                    "permission — only one app can hold it at a time. Your calls are analyzed " +
+                    "on-device and never sent to any external server.",
+                    color = TextSecondary,
+                    fontSize = 14.sp
+                )
             },
-            dismissButton = {
-                TextButton(onClick = { showRationaleDialog = null }) { Text("Not Now") }
-            }
+            confirmButton = {
+                TextButton(onClick = { showLearnMore = false }) {
+                    Text("Got it", color = NeonCyan)
+                }
+            },
+            containerColor = SurfaceDark
         )
     }
 }
+
+// ── STEP 2: Contacts ───────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -258,31 +350,32 @@ fun ContactsImportStep(
     val isSaved by viewModel.isSaved.collectAsState()
     val filteredContacts = viewModel.filteredContacts
 
-    LaunchedEffect(Unit) {
-        viewModel.loadContacts(context)
-    }
-
-    LaunchedEffect(isSaved) {
-        if (isSaved) navController.navigate("sources")
-    }
+    LaunchedEffect(Unit) { viewModel.loadContacts(context) }
+    LaunchedEffect(isSaved) { if (isSaved) navController.navigate("sources") }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp)
+            .background(DeepSpaceBackground)
+            .padding(horizontal = 24.dp)
     ) {
-        Text(
-            text = "Contacts Auto-Allow",
-            style = MaterialTheme.typography.headlineMedium,
-            color = TextPrimary,
-            fontWeight = FontWeight.Bold
-        )
+        Spacer(modifier = Modifier.height(24.dp))
+
+        StepIndicator(currentStep = 2, totalSteps = 3)
+
+        Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = "Select contacts to automatically allow. These calls will bypass all security filters.",
-            style = MaterialTheme.typography.bodyMedium,
+            text = "Step 2: Contacts Auto-Allow",
+            color = NeonCyan,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "Select contacts to automatically allow through the shield.",
             color = TextSecondary,
-            modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
+            fontSize = 14.sp,
+            modifier = Modifier.padding(top = 6.dp, bottom = 16.dp)
         )
 
         TextField(
@@ -301,37 +394,31 @@ fun ContactsImportStep(
                 focusedTextColor = TextPrimary,
                 unfocusedTextColor = TextPrimary
             ),
-            shape = MaterialTheme.shapes.medium,
+            shape = RoundedCornerShape(12.dp),
             singleLine = true
         )
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
+                .padding(vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "${viewModel.selectedCount} selected",
-                color = NeonCyan,
-                fontSize = 14.sp
-            )
+            Text("${viewModel.selectedCount} selected", color = NeonCyan, fontSize = 13.sp)
             Row {
                 TextButton(onClick = { viewModel.selectAll() }) {
-                    Text("Select All", color = NeonCyan)
+                    Text("Select All", color = NeonCyan, fontSize = 12.sp)
                 }
                 TextButton(onClick = { viewModel.clearSelection() }) {
-                    Text("Clear", color = TextSecondary)
+                    Text("Clear", color = TextSecondary, fontSize = 12.sp)
                 }
             }
         }
 
         if (isLoading) {
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(color = NeonCyan)
@@ -350,19 +437,25 @@ fun ContactsImportStep(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Button(
             onClick = { viewModel.saveSelectedToAllowList() },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .border(1.5.dp, NeonCyan, RoundedCornerShape(28.dp)),
             colors = ButtonDefaults.buttonColors(
-                containerColor = NeonCyan,
-                contentColor = Color.Black
+                containerColor = NeonCyan.copy(alpha = 0.2f),
+                contentColor = TextPrimary
             ),
+            shape = RoundedCornerShape(28.dp),
             enabled = !isLoading
         ) {
-            Text("Import & Continue")
+            Text("IMPORT & CONTINUE  ›", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -370,7 +463,7 @@ fun ContactsImportStep(
 fun ContactRow(contact: ContactItem, onToggle: () -> Unit) {
     Surface(
         onClick = onToggle,
-        shape = MaterialTheme.shapes.medium,
+        shape = RoundedCornerShape(12.dp),
         color = SurfaceGlass,
         tonalElevation = 2.dp
     ) {
@@ -381,18 +474,9 @@ fun ContactRow(contact: ContactItem, onToggle: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = contact.displayName,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = contact.phoneNumber,
-                    color = TextSecondary,
-                    fontSize = 12.sp
-                )
+                Text(contact.displayName, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text(contact.phoneNumber, color = TextSecondary, fontSize = 12.sp)
             }
-
             Checkbox(
                 checked = contact.isSelected,
                 onCheckedChange = { onToggle() },
@@ -406,23 +490,32 @@ fun ContactRow(contact: ContactItem, onToggle: () -> Unit) {
     }
 }
 
+// ── STEP 3: Risk / Mode ────────────────────────────────────────────────────────
+
 @Composable
 fun SourcesSelectionStep(navController: NavHostController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(DeepSpaceBackground)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            "Source Configuration",
-            color = TextPrimary,
-            style = MaterialTheme.typography.headlineSmall
-        )
+        StepIndicator(currentStep = 3, totalSteps = 3)
+        Spacer(modifier = Modifier.height(24.dp))
+        Text("Step 3: Protection Level", color = NeonCyan, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = { navController.navigate("risk") }) {
-            Text("Continue")
+        Button(
+            onClick = { navController.navigate("risk") },
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+                .border(1.5.dp, NeonCyan, RoundedCornerShape(28.dp)),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = NeonCyan.copy(alpha = 0.2f)
+            ),
+            shape = RoundedCornerShape(28.dp)
+        ) {
+            Text("CONTINUE  ›", fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = TextPrimary)
         }
     }
 }
@@ -432,18 +525,32 @@ fun RiskThresholdStep(navController: NavHostController) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(DeepSpaceBackground)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Text("You're all set.", color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
         Text(
-            "Risk Profile Set",
-            color = TextPrimary,
-            style = MaterialTheme.typography.headlineSmall
+            "SignalGate Pulse is now protecting your calls.",
+            color = TextSecondary,
+            fontSize = 15.sp,
+            textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = { /* Finish onboarding — Step 1.4 */ }) {
-            Text("Finish Setup")
+        Spacer(modifier = Modifier.height(32.dp))
+        // PULSE-TODO (2026-06): write onboarding_complete = true to SettingEntry
+        // and navigate to ConsumerDashboard instead of popping back.
+        Button(
+            onClick = { navController.popBackStack() },
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+                .border(1.5.dp, NeonCyan, RoundedCornerShape(28.dp)),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = NeonCyan.copy(alpha = 0.2f)
+            ),
+            shape = RoundedCornerShape(28.dp)
+        ) {
+            Text("GO TO DASHBOARD  ›", fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = TextPrimary)
         }
     }
 }
