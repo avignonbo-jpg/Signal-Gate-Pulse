@@ -75,12 +75,12 @@
 
         <!-- Call Overlay Service — class retained, not called from Step 1.8 onward.
              PULSE-TODO (2026-06-28): Remove this entry in the CallOverlayService
-             cleanup PR once the class itself is deleted. -->
+             cleanup PR once the class itself is deleted.
         <service
             android:name=".CallOverlayService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="phoneCall" />
+            android:foregroundServiceType="phoneCall" />  -->
 
         <!-- Phone state receiver — guards against third-party triggers -->
         <receiver
