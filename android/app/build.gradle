@@ -31,12 +31,21 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
+    // PULSE-LOCKED (do not revert without explicit owner sign-off — see CODEOWNERS):
+    // Compose compiler metrics/reports must stay gated behind the -P properties below.
+    // Ungating this causes every build (debug, release, CI) to generate compose_metrics
+    // output unconditionally, slowing builds with no benefit outside metrics.yml's
+    // explicit `-PcomposeCompilerReports=true -PcomposeCompilerMetrics=true` runs.
+    // This exact gate was reverted once already (see error_corrections.md) — if you
+    // are editing this block, confirm with the project owner first.
     kotlinOptions {
         jvmTarget = "17"
-        freeCompilerArgs += [
-            "-P", "plugin:androidx.compose.compiler.plugins.kotlin:reportsDestination=${project.buildDir}/compose_metrics",
-            "-P", "plugin:androidx.compose.compiler.plugins.kotlin:metricsDestination=${project.buildDir}/compose_metrics"
-        ]
+        if (project.hasProperty("composeCompilerReports") || project.hasProperty("composeCompilerMetrics")) {
+            freeCompilerArgs += [
+                "-P", "plugin:androidx.compose.compiler.plugins.kotlin:reportsDestination=${project.buildDir}/compose_metrics",
+                "-P", "plugin:androidx.compose.compiler.plugins.kotlin:metricsDestination=${project.buildDir}/compose_metrics"
+            ]
+        }
     }
 
     buildTypes {
