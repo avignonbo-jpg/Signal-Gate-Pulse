@@ -1,3 +1,4 @@
+ 
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -73,10 +74,6 @@
 
         </service>
 
-        <!-- Call Overlay Service — class retained, not called from Step 1.8 onward.
-             PULSE-TODO (2026-06-28): Remove this entry in the CallOverlayService
-             cleanup PR once the class itself is deleted.
-
         <!-- Phone state receiver — guards against third-party triggers -->
         <receiver
             android:name=".PhoneStateReceiver"
@@ -97,3 +94,5 @@
     </application>
 
 </manifest>
+
+ 
