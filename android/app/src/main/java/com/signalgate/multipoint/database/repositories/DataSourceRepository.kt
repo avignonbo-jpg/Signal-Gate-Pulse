@@ -38,6 +38,24 @@ class DataSourceRepository(
         return sourceDao.getSourceById(id)
     }
 
+    /**
+     * Looks up a source by exact name via a direct indexed DAO query.
+     *
+     * Bug fix (2026-06): previously callers used a private extension that
+     * called getAllSources().collect { ... } — Room's Flow from a live query
+     * never completes on its own, so collect{} suspended forever. The first
+     * caller (ReliableSourceManager.ensureSourceRow) would deadlock its
+     * coroutine indefinitely; CommunitySyncWorker would eventually be killed
+     * by WorkManager's execution timeout and silently retried forever.
+     *
+     * SourceDao.getSourceByName() is a one-shot suspend query — it returns
+     * once and only once. Always use this method for single-lookup-by-name,
+     * never a Flow collect, for exactly this reason.
+     */
+    suspend fun getSourceByName(name: String): SourceEntity? {
+        return sourceDao.getSourceByName(name)
+    }
+
     suspend fun insertSource(source: SourceEntity): Long {
         return sourceDao.insertSource(source)
     }
