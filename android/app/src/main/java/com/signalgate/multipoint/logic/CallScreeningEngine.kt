@@ -13,21 +13,24 @@ import com.signalgate.multipoint.database.repositories.DataSourceRepository
  *   "manual_allow"  → Tier 1 ALLOWLISTED  — ALLOW, no further analysis
  *   "aggregated"    → Tier 2 FEDERAL_BLOCK — BLOCK + setSilenceCall, log only
  *   "manual_block"  → Tier 2 FEDERAL_BLOCK — BLOCK + setSilenceCall, log only
- *   "pattern" (high confidence) → Tier 3 HEURISTIC_BLOCK — BLOCK + notification + PendingCard
- *   "pattern" (low confidence)  → Tier 4 HEURISTIC_FLAG  — SCREEN (ring through), faint log
- *   "default"       → gray-zone heuristics via CallRiskEvaluator → Tier 5 CLEAN_UNKNOWN
+ *   "pattern" (confidence >= 70) → Tier 3 HEURISTIC_BLOCK — BLOCK + notification + PendingCard
+ *   "pattern" (confidence  < 70) → Tier 4 HEURISTIC_FLAG  — SCREEN (ring through), faint log
+ *   "default"  → CallRiskEvaluator gray-zone check → Tier 4 HEURISTIC_FLAG or Tier 5 CLEAN_UNKNOWN
  *
- * CallRiskEvaluator (Step 1.8 — wired in this revision):
- * Provides advisory input at the gray-zone boundary only. It does not produce
- * a blocking decision — per Architecture Contract §6 L6, its score is input
- * *into* the engine decision, never the decision itself. A score above
- * HEURISTIC_RISK_THRESHOLD elevates an otherwise CLEAN_UNKNOWN to HEURISTIC_FLAG
- * (ring through + digest entry), never a silent block — the user always gets to
- * review gray-zone calls, never has them silently discarded.
+ * Step 1.11 — CallRiskEvaluator wired at gray-zone boundary:
+ * When no database rule matches, CallRiskEvaluator.evaluate() provides an advisory
+ * risk score from STIR/SHAKEN attestation and source-match count. A score at or
+ * above HEURISTIC_RISK_THRESHOLD elevates the call to HEURISTIC_FLAG (rings through
+ * + digest entry for user review). Below threshold: CLEAN_UNKNOWN (allow, no card).
+ *
+ * Architecture Contract §6 L6 constraint — enforced here:
+ * CallRiskEvaluator's score is advisory INPUT into the decision, never the decision
+ * itself. Gray-zone calls are never silently blocked — the user always gets to review
+ * them via the digest. Only Tiers 2 and 3 block calls outright.
  */
 class CallScreeningEngine(
     private val repository: DataSourceRepository,
-    private val riskEvaluator: CallRiskEvaluator
+    private val riskEvaluator: CallRiskEvaluator = CallRiskEvaluator
 ) {
 
     companion object {
@@ -119,18 +122,17 @@ class CallScreeningEngine(
     }
 
     /**
-     * Gray-zone path — no rule matched in the database.
-     * CallRiskEvaluator provides an advisory score based on source-match count
-     * and STIR/SHAKEN attestation (when available via Call.Details).
+     * Gray-zone path — no database rule matched.
+     * CallRiskEvaluator provides an advisory score from STIR/SHAKEN attestation.
+     * sourcesMatched=0 here because the repository found no hits — the STIR signal
+     * alone determines whether this is flagged or allowed through cleanly.
      *
-     * Score >= HEURISTIC_RISK_THRESHOLD: elevate to HEURISTIC_FLAG (ring through
-     * + digest entry for user review). Never silently blocked — Contract §6 L6.
-     * Score < HEURISTIC_RISK_THRESHOLD: CLEAN_UNKNOWN, standard allow.
+     * Score >= HEURISTIC_RISK_THRESHOLD → HEURISTIC_FLAG: rings through + digest card.
+     * Score <  HEURISTIC_RISK_THRESHOLD → CLEAN_UNKNOWN: allow, no card.
      *
-     * Call.Details is not available at this layer — pass sourcesMatched = 0 so
-     * the evaluator uses STIR-only scoring. When CallScreeningService passes
-     * Call.Details into the engine (future wiring point), sourcesMatched will
-     * reflect the actual source hits from the repository decision.
+     * Call.Details is not available at this layer — pass null so the evaluator uses
+     * STIR-only scoring. Future wiring: pass Call.Details from CallScreeningService
+     * into screenCall() to enable full STIR + source-match scoring.
      */
     private fun buildGrayZoneInfo(original: String, normalized: String): CallInfo {
         val evaluation = riskEvaluator.evaluate(sourcesMatched = 0, callDetails = null)
