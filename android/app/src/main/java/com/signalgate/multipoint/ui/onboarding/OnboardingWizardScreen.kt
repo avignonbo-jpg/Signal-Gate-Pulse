@@ -43,6 +43,20 @@ import com.signalgate.multipoint.ui.theme.*
 import com.signalgate.multipoint.ui.viewmodels.ContactItem
 import com.signalgate.multipoint.ui.viewmodels.ContactsViewModel
 import org.koin.androidx.compose.koinViewModel
+import timber.log.Timber
+
+/**
+ * OnboardingWizardScreen — Multi-step setup flow for new users.
+ *
+ * Steps:
+ * 1. Permissions — Request CALL_SCREENING role and required runtime permissions
+ * 2. Contacts — Import and select contacts for auto-allow (whitelist)
+ * 3. Sources — Select protection level / data sources
+ * 4. Complete — Confirm setup and navigate to dashboard
+ *
+ * Step 0.1 (2026-07-02): RiskThresholdStep now persists onboarding_complete flag.
+ * Users will not see this wizard on subsequent app launches.
+ */
 
 @Composable
 fun OnboardingWizardScreen(
@@ -59,6 +73,13 @@ fun OnboardingWizardScreen(
 
 // ── Step progress indicator ────────────────────────────────────────────────────
 
+/**
+ * StepIndicator — Visual progress indicator showing current step.
+ * Displays text (e.g., "Step 1 of 3") and a dot sequence.
+ *
+ * @param currentStep Current step number (1-indexed)
+ * @param totalSteps Total number of steps
+ */
 @Composable
 private fun StepIndicator(currentStep: Int, totalSteps: Int) {
     Row(
@@ -79,7 +100,9 @@ private fun StepIndicator(currentStep: Int, totalSteps: Int) {
 
         Spacer(modifier = Modifier.width(4.dp))
         HorizontalDivider(
-            modifier = Modifier.width(1.dp).height(14.dp),
+            modifier = Modifier
+                .width(1.dp)
+                .height(14.dp),
             color = BorderGlass,
             thickness = 1.dp
         )
@@ -103,6 +126,18 @@ private fun StepIndicator(currentStep: Int, totalSteps: Int) {
 
 // ── STEP 1: Permissions ────────────────────────────────────────────────────────
 
+/**
+ * PermissionsStep — First step: Request Call Screening role and runtime permissions.
+ *
+ * Behavior:
+ * - Checks current permission status on every resume
+ * - Prompts user to grant READ_CONTACTS and READ_CALL_LOG if needed
+ * - Prompts user to grant ROLE_CALL_SCREENING if needed
+ * - Advances to contacts step when all permissions are granted
+ *
+ * @param navController Navigation controller for step progression
+ * @param viewModel OnboardingViewModel for permission state management
+ */
 @Composable
 fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewModel) {
     val context = LocalContext.current
@@ -261,7 +296,7 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
                 ),
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (allReady) NeonCyan.copy(alpha = 0.2f)
-                                 else SurfaceDark.copy(alpha = 0.6f),
+                else SurfaceDark.copy(alpha = 0.6f),
                 contentColor = TextPrimary
             ),
             shape = RoundedCornerShape(28.dp)
@@ -337,6 +372,18 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
 
 // ── STEP 2: Contacts ───────────────────────────────────────────────────────────
 
+/**
+ * ContactsImportStep — Second step: Select contacts for auto-allow whitelist.
+ *
+ * Behavior:
+ * - Loads device contacts
+ * - Allows search and filtering
+ * - Multi-select with Select All / Clear buttons
+ * - Saves selected contacts to UnifiedEntryEntity with action='ALLOW'
+ * - Advances to sources step when saved
+ *
+ * @param navController Navigation controller for step progression
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactsImportStep(
@@ -418,7 +465,9 @@ fun ContactsImportStep(
 
         if (isLoading) {
             Box(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(color = NeonCyan)
@@ -459,6 +508,12 @@ fun ContactsImportStep(
     }
 }
 
+/**
+ * ContactRow — Individual contact selection row.
+ *
+ * @param contact Contact to display
+ * @param onToggle Callback when user toggles selection
+ */
 @Composable
 fun ContactRow(contact: ContactItem, onToggle: () -> Unit) {
     Surface(
@@ -490,8 +545,16 @@ fun ContactRow(contact: ContactItem, onToggle: () -> Unit) {
     }
 }
 
-// ── STEP 3: Risk / Mode ────────────────────────────────────────────────────────
+// ── STEP 3: Sources ────────────────────────────────────────────────────────────
 
+/**
+ * SourcesSelectionStep — Third step: Confirm protection level.
+ *
+ * Placeholder for future expansion into protection mode selection
+ * (Conservative, Balanced, Aggressive).
+ *
+ * @param navController Navigation controller for step progression
+ */
 @Composable
 fun SourcesSelectionStep(navController: NavHostController) {
     Column(
@@ -504,24 +567,53 @@ fun SourcesSelectionStep(navController: NavHostController) {
     ) {
         StepIndicator(currentStep = 3, totalSteps = 3)
         Spacer(modifier = Modifier.height(24.dp))
-        Text("Step 3: Protection Level", color = NeonCyan, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "Step 3: Protection Level",
+            color = NeonCyan,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold
+        )
         Spacer(modifier = Modifier.height(16.dp))
         Button(
             onClick = { navController.navigate("risk") },
-            modifier = Modifier.fillMaxWidth().height(56.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
                 .border(1.5.dp, NeonCyan, RoundedCornerShape(28.dp)),
             colors = ButtonDefaults.buttonColors(
                 containerColor = NeonCyan.copy(alpha = 0.2f)
             ),
             shape = RoundedCornerShape(28.dp)
         ) {
-            Text("CONTINUE  ›", fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = TextPrimary)
+            Text(
+                "CONTINUE  ›",
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                color = TextPrimary
+            )
         }
     }
 }
 
+// ── STEP 4: Completion ─────────────────────────────────────────────────────────
+
+/**
+ * RiskThresholdStep — Final step: Confirm setup and navigate to dashboard.
+ *
+ * Step 0.1 (2026-07-02): Now persists onboarding_complete flag.
+ * When user taps "GO TO DASHBOARD", this function:
+ * 1. Writes onboarding_complete = true to SharedPreferences
+ * 2. Navigates to consumer_dashboard with pop back stack
+ * 3. Prevents returning to onboarding wizard on future launches
+ *
+ * PULSE-TODO (2026-06): Replace SharedPreferences with SettingEntry — Step 2.6.
+ *
+ * @param navController Navigation controller for final navigation
+ */
 @Composable
 fun RiskThresholdStep(navController: NavHostController) {
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -530,7 +622,12 @@ fun RiskThresholdStep(navController: NavHostController) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("You're all set.", color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "You're all set.",
+            color = TextPrimary,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold
+        )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             "SignalGate Pulse is now protecting your calls.",
@@ -539,18 +636,56 @@ fun RiskThresholdStep(navController: NavHostController) {
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(32.dp))
-        // PULSE-TODO (2026-06): write onboarding_complete = true to SettingEntry
-        // and navigate to ConsumerDashboard instead of popping back.
+
+        /**
+         * Step 0.1 (2026-07-02): Persist onboarding_complete flag.
+         *
+         * Behavior:
+         * 1. Mark onboarding as complete in SharedPreferences
+         * 2. Log completion to Timber for debugging
+         * 3. Navigate to dashboard, clearing back stack
+         * 4. User will not see onboarding wizard on subsequent launches
+         *
+         * PULSE-TODO (2026-06): Migrate to SettingEntry.onboarding_complete after Step 2.6.
+         * Current implementation uses SharedPreferences for backward compatibility.
+         */
         Button(
-            onClick = { navController.popBackStack() },
-            modifier = Modifier.fillMaxWidth().height(56.dp)
+            onClick = {
+                try {
+                    // Mark onboarding as complete
+                    val prefs = context.getSharedPreferences(
+                        "${context.packageName}_preferences",
+                        Context.MODE_PRIVATE
+                    )
+                    prefs.edit()
+                        .putBoolean("onboarding_complete", true)
+                        .apply()
+
+                    Timber.tag("OnboardingWizard").i("Onboarding marked complete")
+
+                    // Navigate to dashboard, clearing back stack
+                    navController.navigate("consumer_dashboard") {
+                        popUpTo("onboarding_wizard") { inclusive = true }
+                    }
+                } catch (e: Exception) {
+                    Timber.tag("OnboardingWizard").e(e, "Failed to complete onboarding")
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
                 .border(1.5.dp, NeonCyan, RoundedCornerShape(28.dp)),
             colors = ButtonDefaults.buttonColors(
                 containerColor = NeonCyan.copy(alpha = 0.2f)
             ),
             shape = RoundedCornerShape(28.dp)
         ) {
-            Text("GO TO DASHBOARD  ›", fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = TextPrimary)
+            Text(
+                "GO TO DASHBOARD  ›",
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                color = TextPrimary
+            )
         }
     }
 }
