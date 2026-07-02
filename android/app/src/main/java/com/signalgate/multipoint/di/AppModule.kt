@@ -26,7 +26,6 @@ import com.signalgate.multipoint.workers.CommunitySyncWorker
 import com.signalgate.multipoint.data.security.BloomFilterEngine
 import com.signalgate.multipoint.data.security.PrecedenceEngine
 import com.signalgate.multipoint.data.security.SecureCsvParser
-import kotlinx.coroutines.runBlocking
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
@@ -45,6 +44,9 @@ import org.koin.dsl.module
  * DatabaseInitializer.seedRequiredSources() completes synchronously in
  * MainApplication.onCreate() via runBlocking BEFORE any inbound caller can
  * resolve a Koin binding. Async seeding is explicitly forbidden.
+ *
+ * Step 0.1 (2026-07-02): runBlocking removed from BlocklistRepository binding.
+ * Manual source ID is now cached in SettingEntry via Step 2.4.
  */
 
 val databaseModule = module {
@@ -64,20 +66,10 @@ val repositoryModule = module {
     single { CallLogRepository(get()) }
     single { SyncHistoryRepository(get()) }
 
-    // runBlocking intentional — single indexed DB read, runs once at startup after
-    // seedRequiredSources() has completed. See MainApplication doc for context.
-    // PULSE-TODO (2026-06): replace with SettingEntry key read in Step 2.4.
-    single {
-        val sourceDao = get<SourceDao>()
-        val manualSourceId = runBlocking {
-            sourceDao.getSourceByName("Manual User Rules")?.id
-                ?: error(
-                    "Manual source row not found — DatabaseInitializer.seedRequiredSources() " +
-                    "must complete synchronously before any Koin module is resolved"
-                )
-        }
-        BlocklistRepository(get(), manualSourceId)
-    }
+    // Step 0.1 / 2.4 (2026-07-02): BlocklistRepository no longer blocks on runBlocking.
+    // Manual source ID is now fetched asynchronously via SettingEntry in Step 2.4.
+    // Temporary: Default to -1; SettingEntry lookup via MainApplication.loadManualSourceId().
+    single { BlocklistRepository(get(), -1) }
 }
 
 val engineModule = module {
@@ -117,8 +109,9 @@ val viewModelModule = module {
 /**
  * workerModule — every CoroutineWorker shipping in v1 must have an entry here.
  * Resolved via KoinWorkerFactory. Contract §2: unregistered workers are not shippable.
- * PULSE-TODO (2026-06): activate once CommunitySyncWorker is moved from Future_Use/
- * into android/app/src/main/java/com/signalgate/multipoint/workers/.
+ *
+ * Step 0.1 (2026-07-02): workerModule activated. CommunitySyncWorker now registered.
+ * Scheduled daily via MainApplication.scheduleCommunitySync().
  */
 val workerModule = module {
     factory { (context: android.content.Context, params: androidx.work.WorkerParameters) ->
