@@ -122,6 +122,12 @@ interface CallLogDao {
 
     @Query("DELETE FROM call_log WHERE timestamp < :timestamp")
     suspend fun deleteOldCallLogs(timestamp: Long)
+
+    @Update
+    suspend fun updateCallLog(callLog: CallLogEntry)
+
+    @Delete
+    suspend fun deleteCallLog(callLog: CallLogEntry)
 }
 
 /**

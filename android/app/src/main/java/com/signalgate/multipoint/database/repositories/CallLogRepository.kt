@@ -14,4 +14,12 @@ class CallLogRepository(private val callLogDao: CallLogDao) {
     suspend fun getCallsByPhoneNumber(phoneNumber: String): List<CallLogEntry> {
         return callLogDao.getCallsByPhoneNumber(phoneNumber)
     }
+
+    suspend fun updateCallLog(entry: CallLogEntry) {
+        callLogDao.updateCallLog(entry)
+    }
+
+    suspend fun deleteCallLog(entry: CallLogEntry) {
+        callLogDao.deleteCallLog(entry)
+    }
 }
