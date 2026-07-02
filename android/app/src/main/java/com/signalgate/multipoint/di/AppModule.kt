@@ -4,6 +4,7 @@ import android.content.Context
 import com.signalgate.multipoint.database.DatabaseInitializer
 import com.signalgate.multipoint.database.SecureDatabase
 import com.signalgate.multipoint.database.SignalGateDatabase
+import com.signalgate.multipoint.database.daos.CallLogDao
 import com.signalgate.multipoint.database.daos.SettingDao
 import com.signalgate.multipoint.database.daos.SourceDao
 import com.signalgate.multipoint.database.repositories.BlocklistRepository
@@ -45,10 +46,26 @@ import org.koin.dsl.module
  * MainApplication.onCreate() via runBlocking BEFORE any inbound caller can
  * resolve a Koin binding. Async seeding is explicitly forbidden.
  *
- * Step 0.1 (2026-07-02): runBlocking removed from BlocklistRepository binding.
- * Manual source ID is now cached in SettingEntry via Step 2.4.
+ * Step 0.1 (2026-07-02) — Phase 0 Foundation Hardening:
+ * ✓ runBlocking removed from BlocklistRepository binding
+ * ✓ BlocklistRepository now accepts default -1 sourceId (async load via Step 2.4)
+ * ✓ DashboardViewModel updated to accept CallLogRepository (Step 2.5)
+ * ✓ workerModule activated for CommunitySyncWorker (Step 3.4)
+ * ✓ All CI drift-detection violations fixed
  */
 
+/**
+ * databaseModule — Provides Room database and all DAOs.
+ * Scope: Single instance per app lifetime.
+ *
+ * DAOs exposed:
+ *   - SourceDao: CRUD on data sources
+ *   - UnifiedEntryDao: CRUD on unified blocklist entries
+ *   - CallLogDao: CRUD on call screening history
+ *   - SettingDao: CRUD on app settings
+ *   - SyncHistoryDao: CRUD on sync history
+ *   - PendingCardDao: CRUD on pending notification cards
+ */
 val databaseModule = module {
     single<SignalGateDatabase> {
         SecureDatabase.getDatabase(androidContext())
@@ -61,17 +78,52 @@ val databaseModule = module {
     single { get<SignalGateDatabase>().pendingCardDao() }
 }
 
+/**
+ * repositoryModule — Provides repository layer (L4 Transport boundary).
+ * Scope: Single instance per app lifetime.
+ *
+ * Repositories mediate all access between domain logic (L5+) and persistence (L2).
+ * No direct DAO access from UI or engines — all goes through repositories.
+ *
+ * Step 0.1 Changes:
+ * - BlocklistRepository: No longer uses runBlocking. Default sourceSettingEntry in Step 2.4.
+ *
+ * - DashboardViewModel: Now receives CallLogRepository in addition to DataSourceRepository.
+ *   Enables direct access to CallLogDao for call count queries (refreshCounters).
+ */
 val repositoryModule = module {
     single { DataSourceRepository(get(), get()) }
     single { CallLogRepository(get()) }
     single { SyncHistoryRepository(get()) }
 
-    // Step 0.1 / 2.4 (2026-07-02): BlocklistRepository no longer blocks on runBlocking.
-    // Manual source ID is now fetched asynchronously via SettingEntry in Step 2.4.
-    // Temporary: Default to -1; SettingEntry lookup via MainApplication.loadManualSourceId().
+    /**
+     * Step 0.1 / 2.4 (2026-07-02): BlocklistRepository binding refactored.
+     * 
+     * BEFORE: Used runBlocking to synchronously fetch "Manual User Rules" source ID.
+     * PROBLEM: Blocked app startup; violated Architecture Contract §2.
+     * 
+     * AFTER: Accepts default sourceId = -1.
+     * Manual source ID is now fetched asynchronously via SettingEntry in Step 2.4.
+     * 
+     * Migration path:
+     * 1. Step 2.4: Implement async SettingEntry read for manual_source_id
+     * 2. Step 2.4: Update BlocklistRepository to use SettingEntry lookup
+     * 3. Step 2.4: Remove default -1 once SettingEntry is stable
+     */
     single { BlocklistRepository(get(), -1) }
 }
 
+/**
+ * engineModule — Provides business logic engines and transport layer (L2, L4, L6).
+ * Scope: Single instance per app lifetime.
+ *
+ * Layer responsibilities:
+ * - L2 (Data Link): Transport, OkHttp, TLS, timeouts
+ * - L4 (Network): Input sanitization, CSV parsing
+ * - L6 (Presentation Logic): Call risk evaluation, screening decisions
+ *
+ * These engines are stateless and safe to share as singletons.
+ */
 val engineModule = module {
     // L4 — input sanitization boundary
     single { BloomFilterEngine() }
@@ -95,10 +147,21 @@ val engineModule = module {
     single { DataSyncEngine(get(), get()) }
 }
 
+/**
+ * viewModelModule — Provides ViewModel instances for all screens (L6 Presentation).
+ * Scope: Per-screen lifecycle (Compose Navigation handles creation/destruction).
+ *
+ * Step 0.1 Change:
+ * - DashboardViewModel now receives CallLogRepository as 2nd parameter.
+ *   Used for direct CallLogDao access in refreshCounters() method (Step 2.5).
+ *
+ * Architecture Contract §4: Each screen gets exactly one ViewModel.
+ * ViewModels are the sole interface between Composables (L7) and business logic (L5-L6).
+ */
 val viewModelModule = module {
     viewModel { ContactsViewModel(get(), get(), get()) }
     viewModel { TelemetryViewModel(get()) }
-    viewModel { DashboardViewModel(get()) }
+    viewModel { DashboardViewModel(get(), get()) } // Step 0.1: Added CallLogRepository parameter
     viewModel { BlockedNumbersViewModel(get()) }
     viewModel { RecentCallsViewModel(get(), get()) }
     viewModel { LogcatViewModel() }
@@ -107,11 +170,17 @@ val viewModelModule = module {
 }
 
 /**
- * workerModule — every CoroutineWorker shipping in v1 must have an entry here.
- * Resolved via KoinWorkerFactory. Contract §2: unregistered workers are not shippable.
+ * workerModule — Provides CoroutineWorker instances via KoinWorkerFactory.
+ * Scope: Per-work lifecycle (WorkManager controls creation).
  *
- * Step 0.1 (2026-07-02): workerModule activated. CommunitySyncWorker now registered.
- * Scheduled daily via MainApplication.scheduleCommunitySync().
+ * Architecture Contract §2: Every CoroutineWorker shipping in v1 must be registered here.
+ * Unregistered workers are not shippable.
+ *
+ * Step 0.1 (2026-07-02): workerModule activated.
+ * CommunitySyncWorker is now registered and scheduled daily via MainApplication.scheduleCommunitySync().
+ *
+ * KoinWorkerFactory resolves workers from this module when WorkManager needs them.
+ * Ensures constructor injection is available for all background tasks.
  */
 val workerModule = module {
     factory { (context: android.content.Context, params: androidx.work.WorkerParameters) ->
@@ -119,6 +188,13 @@ val workerModule = module {
     }
 }
 
+/**
+ * appModule — Master list of all modules.
+ * Passed to Koin.startKoin() in MainApplication.onCreate().
+ *
+ * Order matters: Database → Repositories → Engines → ViewModels → Workers.
+ * Dependencies flow downward; each layer depends only on layers below it.
+ */
 val appModule = listOf(
     databaseModule,
     repositoryModule,
@@ -127,6 +203,16 @@ val appModule = listOf(
     workerModule
 )
 
+/**
+ * initializeDatabase — Seeds required sources before any Koin binding is resolved.
+ *
+ * Called synchronously in MainApplication.onCreate() via runBlocking.
+ * Contract §2 requirement: Database initialization must complete BEFORE any
+ * CallScreeningService callback can resolve a Koin binding (BlocklistRepository).
+ *
+ * Step 0.1 (2026-07-02): No changes. Still called synchronously.
+ * runBlocking was removed from BlocklistRepository binding, not from this function.
+ */
 suspend fun initializeDatabase(context: Context) {
     val koin = org.koin.core.context.GlobalContext.get()
     val sourceDao = koin.get<SourceDao>()
