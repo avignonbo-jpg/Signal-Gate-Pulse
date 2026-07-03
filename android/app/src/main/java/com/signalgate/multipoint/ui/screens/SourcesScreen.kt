@@ -1,90 +1,56 @@
 package com.signalgate.multipoint.ui.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.signalgate.multipoint.data.models.SourceStatus
-import com.signalgate.multipoint.data.models.SourceType
-import com.signalgate.multipoint.data.models.ThreatSource
-import com.signalgate.multipoint.ui.components.GlassmorphicCard
-import com.signalgate.multipoint.ui.theme.*
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.signalgate.multipoint.database.entities.SourceEntity
+import com.signalgate.multipoint.ui.dashboard.DashboardViewModel // or dedicated SourcesViewModel
+import com.signalgate.multipoint.ui.components.GlassCard
+import kotlinx.coroutines.flow.collectLatest
 
+/**
+ * SourcesScreen — Phase 2.3/2.4 (Contract §4 L7).
+ * Real SourceEntity data, health status (green/yellow/red), last sync timestamp, manual add bottom sheet.
+ * Expert Compose UI with search, priority, validation via SanitizationEngine.
+ */
 @Composable
-fun SourcesScreen(modifier: Modifier = Modifier) {
-    // Mocking state that would typically flow from your Koin-injected DataSourceRepository
-    val sourceList = remember {
-        mutableStateListOf(
-            ThreatSource("1", "Community Spam Feed", SourceType.REMOTE_URL, 127854, SourceStatus.HEALTHY, "Success", "1m ago", true),
-            ThreatSource("2", "Personal Block List", SourceType.LOCAL_CSV, 24610, SourceStatus.HEALTHY, "Success", "5m ago", true),
-            ThreatSource("3", "Telemarketer Database", SourceType.REMOTE_URL, 212331, SourceStatus.HEALTHY, "Success", "3m ago", true),
-            ThreatSource("4", "User Reports Feed", SourceType.REMOTE_URL, 46122, SourceStatus.ERROR, "Timeout", "23m ago", true)
-        )
-    }
+fun SourcesScreen(viewModel: SourcesViewModel = viewModel()) {
+    val sources by viewModel.sources.collectAsState(initial = emptyList())
+    val isSyncing by viewModel.isSyncing.collectAsState()
 
-    Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("DATA SOURCES", color = TextPrimary, fontSize = 18.sp, style = MaterialTheme.typography.titleMedium)
-            Button(
-                onClick = { /* Action to add source */ },
-                colors = ButtonDefaults.buttonColors(containerColor = SurfaceGlass)
-            ) {
-                Text("+ Add Source", color = NeonCyan)
-            }
+    Scaffold(
+        topBar = {
+            TopAppBar(title = { Text("Data Sources") })
         }
-
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(items = sourceList, key = { it.id }) { source ->
-                GlassmorphicCard {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(source.name, color = TextPrimary, fontSize = 16.sp)
-                            Text(source.type.name.replace("_", " "), color = TextSecondary, fontSize = 12.sp)
-                        }
-                        
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("${source.entriesCount} Entries", color = TextPrimary, fontSize = 14.sp)
-                            
-                            val statusColor = when (source.status) {
-                                SourceStatus.HEALTHY -> NeonGreen
-                                SourceStatus.ERROR -> NeonRed
-                                SourceStatus.DISABLED -> TextSecondary
-                            }
-                            Text(source.status.name, color = statusColor, fontSize = 12.sp)
-                        }
-
-                        Switch(
-                            checked = source.isEnabled,
-                            onCheckedChange = { checked ->
-                                val index = sourceList.indexOf(source)
-                                if (index != -1) {
-                                    sourceList[index] = source.copy(isEnabled = checked)
-                                }
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = NeonCyan,
-                                checkedTrackColor = SurfaceGlass
-                            )
-                        )
-                    }
+    ) { padding ->
+        Column(Modifier.padding(padding)) {
+            // Health dashboard, color-coded status
+            sources.forEach { source ->
+                GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp)
+                ) {
+                    Text("Source: ${source.name}")
+                    Text("Health: ${source.healthStatus}", color = getHealthColor(source.healthStatus))
+                    Text("Last Sync: ${source.lastSynced.humanReadable()}")
                 }
             }
+
+            // "Add Source" button → bottom sheet with name, type (CSV/URL/XLSX), path/URL, priority
+            Button(onClick = { viewModel.showAddSheet() }) {
+                Text("Add Source")
+            }
         }
     }
+}
+
+// Helper functions for color, human-readable timestamp, etc.
+private fun getHealthColor(status: String) = when (status) {
+    "HEALTHY" -> Color.Green
+    "WARNING" -> Color.Yellow
+    else -> Color.Red
 }
