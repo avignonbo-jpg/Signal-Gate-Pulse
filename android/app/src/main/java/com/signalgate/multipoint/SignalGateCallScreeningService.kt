@@ -11,7 +11,7 @@ import android.telecom.Call
 import android.telecom.CallScreeningService as TelecomCallScreeningService
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.signalgate.multipoint.database.daos.PendingCardDao
+// PendingCardRepository will be injected in Step 1.4
 import com.signalgate.multipoint.database.entities.CallLogEntry
 import com.signalgate.multipoint.database.entities.PendingCardEntity
 import com.signalgate.multipoint.database.repositories.CallLogRepository
@@ -46,7 +46,7 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
 
     private val screeningEngine: CallScreeningEngine by inject()
     private val callLogRepository: CallLogRepository by inject()
-    private val pendingCardDao: PendingCardDao by inject()
+    // private val pendingCardRepository: PendingCardRepository by inject() // To be added in Step 1.4
 
     enum class CallDecision { ALLOW, BLOCK, SCREEN }
 
@@ -134,16 +134,7 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                 )
 
                 if (callInfo.tier == CallTier.HEURISTIC_BLOCK) {
-                    pendingCardDao.insertCard(
-                        PendingCardEntity(
-                            phoneNumber    = callInfo.normalizedPhoneNumber,
-                            timestamp      = System.currentTimeMillis(),
-                            decision       = callInfo.callDecision.name,
-                            confidence     = callInfo.confidence,
-                            decisionSource = callInfo.matchedSources.firstOrNull(),
-                            dismissed      = false
-                        )
-                    )
+                    // pendingCardRepository.insertCard(...) // To be implemented in Step 1.4
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to write audit records for ${callInfo.normalizedPhoneNumber}", e)
