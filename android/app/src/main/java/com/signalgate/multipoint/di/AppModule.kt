@@ -11,6 +11,7 @@ import com.signalgate.multipoint.database.repositories.BlocklistRepository
 import com.signalgate.multipoint.database.repositories.CallLogRepository
 import com.signalgate.multipoint.database.repositories.DataSourceRepository
 import com.signalgate.multipoint.database.repositories.SyncHistoryRepository
+import com.signalgate.multipoint.database.repositories.PendingCardRepository
 import com.signalgate.multipoint.logic.CallRiskEvaluator
 import com.signalgate.multipoint.logic.CallScreeningEngine
 import com.signalgate.multipoint.logic.DataSyncEngine
@@ -76,6 +77,8 @@ val databaseModule = module {
     single { get<SignalGateDatabase>().settingDao() }
     single { get<SignalGateDatabase>().syncHistoryDao() }
     single { get<SignalGateDatabase>().pendingCardDao() }
+    single { PendingCardRepository(get()) }  // Phase 1.4
+    single { BlocklistRepository(get(), -1) }
 }
 
 /**
