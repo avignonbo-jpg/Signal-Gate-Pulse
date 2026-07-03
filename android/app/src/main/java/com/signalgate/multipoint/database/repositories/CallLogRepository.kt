@@ -22,4 +22,12 @@ class CallLogRepository(private val callLogDao: CallLogDao) {
     suspend fun deleteCallLog(entry: CallLogEntry) {
         callLogDao.deleteCallLog(entry)
     }
+
+    suspend fun getBlockedCallsCount(startTime: Long): Int {
+        return callLogDao.getBlockedCallsCount(startTime)
+    }
+
+    suspend fun getCallsInRange(startTime: Long, endTime: Long): Int {
+        return callLogDao.getCallsInRange(startTime, endTime)
+    }
 }

@@ -97,11 +97,11 @@ class DashboardViewModel(
                 val now = System.currentTimeMillis()
 
                 // Query blocked calls since midnight
-                val blockedCount = callLogRepository.callLogDao.getBlockedCallsCount(todayMidnight)
+                val blockedCount = callLogRepository.getBlockedCallsCount(todayMidnight)
                 _blockedToday.value = blockedCount
 
                 // Query total screened calls (all statuses) since midnight
-                val screenedCount = callLogRepository.callLogDao.getCallsInRange(todayMidnight, now)
+                val screenedCount = callLogRepository.getCallsInRange(todayMidnight, now)
                 _callsScreenedToday.value = screenedCount
 
                 Timber.tag(TAG).d(
