@@ -109,8 +109,9 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                             phoneNumber = callInfo.normalizedPhoneNumber,
                             timestamp = System.currentTimeMillis(),
                             decision = callInfo.callDecision.name,
-                            confidence = callInfo.confidence ?: 0,
-                            notes = "Tier 3 HEURISTIC_BLOCK"
+                            confidence = callInfo.confidence,
+                            decisionSource = callInfo.matchedSources.firstOrNull()
+                                ?: "Tier 3 HEURISTIC_BLOCK"
                         )
                     )
                 }
