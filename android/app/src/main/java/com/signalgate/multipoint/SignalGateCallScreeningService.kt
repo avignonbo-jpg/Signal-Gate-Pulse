@@ -24,22 +24,11 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import timber.log.Timber
 
-/**
- * SignalGateCallScreeningService — five-tier call handling per Architecture Contract v5.
- *
- * Tier 1 ALLOWLISTED    : ALLOW — rings, basic log, no notification.
- * Tier 2 FEDERAL_BLOCK  : setSilenceCall(true) — voicemail, CallLogEntry only, no notification.
- * Tier 3 HEURISTIC_BLOCK: setSilenceCall(true) — voicemail, CallLogEntry + PendingCard + notification.
- * Tier 4 HEURISTIC_FLAG : SCREEN — rings, faint log tag, no PendingCard.
- * Tier 5 CLEAN_UNKNOWN  : ALLOW — rings, standard log.
- *
- * ... (rest of comment unchanged)
- */
 class SignalGateCallScreeningService : TelecomCallScreeningService() {
 
     private val screeningEngine: CallScreeningEngine by inject()
     private val callLogRepository: CallLogRepository by inject()
-    private val pendingCardRepository: PendingCardRepository by inject()  // Phase 1.4 wired
+    private val pendingCardRepository: PendingCardRepository by inject()
 
     enum class CallDecision { ALLOW, BLOCK, SCREEN }
 
@@ -55,7 +44,7 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
 
         CoroutineScope(Dispatchers.Default).launch {
             try {
-                val callInfo = screeningEngine.screenCall(phoneNumber, details)  // Phase 1.3: Full STIR/SHAKEN wiring
+                val callInfo = screeningEngine.screenCall(phoneNumber, details)
                 applyCallDecision(details, callInfo)
                 writeAuditRecords(callInfo)
                 if (callInfo.tier == CallTier.HEURISTIC_BLOCK) {
@@ -75,12 +64,9 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
         }
     }
 
-    // ── Call response ──────────────────────────────────────────────────────────
-
     private fun applyCallDecision(details: Call.Details, callInfo: CallInfo) {
         val response = when (callInfo.callDecision) {
-            CallDecision.ALLOW,
-            CallDecision.SCREEN -> CallResponse.Builder()
+            CallDecision.ALLOW, CallDecision.SCREEN -> CallResponse.Builder()
                 .setDisallowCall(false)
                 .setSkipCallLog(false)
                 .setSkipNotification(false)
@@ -95,8 +81,6 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
         respondToCall(details, response)
     }
 
-    // ── Audit trail ────────────────────────────────────────────────────────────
-
     private fun writeAuditRecords(callInfo: CallInfo) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -106,16 +90,16 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
 
                 callLogRepository.insertCallLog(
                     CallLogEntry(
-                        phoneNumber           = callInfo.originalPhoneNumber,
+                        phoneNumber = callInfo.originalPhoneNumber,
                         normalizedPhoneNumber = callInfo.normalizedPhoneNumber,
-                        timestamp             = System.currentTimeMillis(),
-                        decision              = callInfo.callDecision.name,
-                        spamStatus            = callInfo.spamStatus,
-                        spamCategory          = callInfo.spamCategory,
-                        confidence            = callInfo.confidence,
-                        riskLevel             = callInfo.riskLevel,
-                        matchedSources        = sourcesJson,
-                        notes                 = callInfo.tier.name
+                        timestamp = System.currentTimeMillis(),
+                        decision = callInfo.callDecision.name,
+                        spamStatus = callInfo.spamStatus,
+                        spamCategory = callInfo.spamCategory,
+                        confidence = callInfo.confidence,
+                        riskLevel = callInfo.riskLevel,
+                        matchedSources = sourcesJson,
+                        notes = callInfo.tier.name
                     )
                 )
 
@@ -126,17 +110,16 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                             timestamp = System.currentTimeMillis(),
                             decision = callInfo.callDecision.name,
                             confidence = callInfo.confidence ?: 0,
-                            notes = "Tier 3 HEURISTIC_BLOCK from screening"
+                            notes = "Tier 3 HEURISTIC_BLOCK"
                         )
                     )
                 }
             } catch (e: Exception) {
-                Timber.e(e, "Failed to write audit records for ${callInfo.normalizedPhoneNumber}")
+                Timber.e(e, "Failed to write audit records")
             }
         }
     }
 
-    // ── Notification ─────────────────────────────────────────────────────────── (unchanged from your provided file)
     private fun fireBlockedCallNotification(callInfo: CallInfo) {
         val context = applicationContext
         val notificationId = callInfo.normalizedPhoneNumber.hashCode()
@@ -170,4 +153,38 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val confidenceText = callInfo.confidence?.let
+        val confidenceText = callInfo.confidence?.let { " ($it% match)" } ?: ""
+        val bodyText = "${callInfo.originalPhoneNumber}$confidenceText"
+
+        val notification = NotificationCompat.Builder(context, BLOCKED_CALL_CHANNEL_ID)
+            .setSmallIcon(R.drawable.shield_logo)
+            .setContentTitle("Call Blocked")
+            .setContentText(bodyText)
+            .setContentIntent(contentPendingIntent)
+            .addAction(0, "Not Spam", notSpamPendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .build()
+
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(notificationId, notification)
+    }
+
+    private fun createBlockedCallChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                BLOCKED_CALL_CHANNEL_ID,
+                BLOCKED_CALL_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Review calls blocked by SignalGate Pulse"
+                setShowBadge(true)
+                enableVibration(false)
+                setSound(null, null)
+            }
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(channel)
+        }
+    }
+}
