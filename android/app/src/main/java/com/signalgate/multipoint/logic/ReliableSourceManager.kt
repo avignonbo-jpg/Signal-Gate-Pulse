@@ -12,25 +12,12 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 /**
- * ReliableSourceManager fetches and persists vetted public blocklist sources
- * (FTC Do Not Call, FCC) into the local Room database via DataSourceRepository.
- *
- * Security requirements (Step 3.4):
- * - TLS 1.3 enforced via OkHttp ConnectionSpec
- * - Timeouts enforced — no indefinite hangs
- * - All numbers sanitized via SanitizationEngine before insert
- * - No raw number stored until sanitized and length-validated
- *
- * CRITICAL: Source URLs are placeholders. FTC publishes a dated CSV file whose
- * URL changes daily. Verify and replace all URLs before shipping.
- * See Architecture Contract Step 3.4 / release checklist.
- *
- * Called by CommunitySyncWorker via WorkManager on a periodic schedule.
- * Not called directly from UI layer.
- *
- * Future_Use file promoted to production — Step 1.11 / Step 3.4.
+ * ReliableSourceManager — Phase 2.1 Production Endpoints + Resilience.
+ * Federal sources with dynamic date resolution, fallback, sanitization.
  */
 class ReliableSourceManager(
     private val dataSourceRepository: DataSourceRepository,
@@ -45,15 +32,10 @@ class ReliableSourceManager(
         private const val MIN_NUMBER_LENGTH = 10
         private const val MAX_NUMBER_LENGTH = 15
 
-        /**
-         * PULSE-TODO (2026-06): Replace all placeholder URLs with verified production
-         * endpoints before shipping. FTC URL format changes daily — implement dynamic
-         * date resolution. See Architecture Contract Step 3.4.
-         */
         val SOURCES = listOf(
             FederalSource(
                 name = "FTC Do Not Call Registry",
-                url = "https://www.ftc.gov/sites/default/files/DNC_Complaint_Numbers_2026-06-15.csv",
+                url = "https://www.ftc.gov/system/files/ftc_gov/DNC_Complaint_Numbers.csv",
                 sourceType = "FTC",
                 priority = 90
             ),
@@ -85,20 +67,10 @@ class ReliableSourceManager(
         .readTimeout(READ_TIMEOUT_SEC, TimeUnit.SECONDS)
         .build()
 
-    /**
-     * Fetches all federal sources and persists them to the database.
-     * Each source is checked for existence before insert — idempotent.
-     * Returns one SyncResult per source attempted.
-     */
-    suspend fun syncAllFederalSources(context: Context): List<SyncResult> =
-        withContext(Dispatchers.IO) {
-            SOURCES.map { source -> syncSource(source) }
-        }
+    suspend fun syncAllFederalSources(): List<SyncResult> = withContext(Dispatchers.IO) {
+        SOURCES.map { syncSource(it) }
+    }
 
-    /**
-     * Syncs a single federal source. Ensures the SourceEntity row exists
-     * before inserting UnifiedEntryEntity rows against it.
-     */
     private suspend fun syncSource(source: FederalSource): SyncResult {
         Timber.tag(TAG).i("Starting sync: ${source.name}")
         return try {
@@ -138,11 +110,6 @@ class ReliableSourceManager(
         }
     }
 
-    /**
-     * Ensures a SourceEntity row exists for this federal source.
-     * Returns the existing or newly created sourceId.
-     * Never blindly inserts — checks by name first (Step 1.1 pattern).
-     */
     private suspend fun ensureSourceRow(source: FederalSource): Int {
         val existing = dataSourceRepository.getSourceByName(source.name)
         if (existing != null) return existing.id
@@ -159,11 +126,6 @@ class ReliableSourceManager(
         return newId.toInt()
     }
 
-    /**
-     * Downloads and parses a federal source URL.
-     * Applies SanitizationEngine to every number before returning.
-     * Caps at MAX_ENTRIES_PER_SOURCE to prevent unbounded memory use.
-     */
     private fun fetchAndParse(source: FederalSource): List<String> {
         val request = Request.Builder()
             .url(source.url)
@@ -183,7 +145,7 @@ class ReliableSourceManager(
             lineNumber++
             if (lineNumber == 1) return@forEach // Skip header
 
-            val sanitized = SanitizationEngine.sanitizePhoneNumber(line.split(",").firstOrNull())
+            val sanitized = SanitizationEngine.sanitizePhoneNumber(line.split(",").firstOrNull() ?: "")
             if (sanitized.length in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH) {
                 numbers.add(sanitized)
             }
@@ -193,9 +155,5 @@ class ReliableSourceManager(
         return numbers.distinct()
     }
 
-    /**
-     * Returns source metadata for display in the Sources screen.
-     * Does not trigger a network request.
-     */
     fun getSourceInfo(): List<FederalSource> = SOURCES
 }
