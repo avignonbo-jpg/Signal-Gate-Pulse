@@ -39,7 +39,7 @@ class CallScreeningEngine(
         private const val HEURISTIC_RISK_THRESHOLD = 55
     }
 
-    suspend fun screenCall(phoneNumber: String): CallInfo {
+    suspend fun screenCall(phoneNumber: String, callDetails: android.telecom.Call.Details?): CallInfo {
         val normalized = normalizePhoneNumber(phoneNumber)
         Log.d(TAG, "Screening call from: $phoneNumber (normalized: $normalized)")
 
@@ -48,7 +48,7 @@ class CallScreeningEngine(
             when (decision.action) {
                 "ALLOW" -> buildAllowInfo(phoneNumber, normalized, decision)
                 "BLOCK" -> buildBlockInfo(phoneNumber, normalized, decision)
-                else    -> buildGrayZoneInfo(phoneNumber, normalized)
+                else    -> buildGrayZoneInfo(phoneNumber, normalized, callDetails)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Engine error for $phoneNumber, defaulting to ALLOW", e)
@@ -129,13 +129,13 @@ class CallScreeningEngine(
      *
      * Score >= HEURISTIC_RISK_THRESHOLD → HEURISTIC_FLAG: rings through + digest card.
      * Score <  HEURISTIC_RISK_THRESHOLD → CLEAN_UNKNOWN: allow, no card.
-     *
-     * Call.Details is not available at this layer — pass null so the evaluator uses
-     * STIR-only scoring. Future wiring: pass Call.Details from CallScreeningService
-     * into screenCall() to enable full STIR + source-match scoring.
      */
-    private fun buildGrayZoneInfo(original: String, normalized: String): CallInfo {
-        val evaluation = riskEvaluator.evaluate(sourcesMatched = 0, callDetails = null)
+    private fun buildGrayZoneInfo(
+        original: String,
+        normalized: String,
+        callDetails: android.telecom.Call.Details?
+    ): CallInfo {
+        val evaluation = riskEvaluator.evaluate(sourcesMatched = 0, callDetails = callDetails)
         Log.d(TAG, "Gray-zone: risk=${evaluation.score} stir=${evaluation.stirLevel}")
 
         return if (evaluation.score >= HEURISTIC_RISK_THRESHOLD) {
