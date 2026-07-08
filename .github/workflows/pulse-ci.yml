@@ -26,9 +26,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./android/gradlew
 
-      - name: Claude Code Action Official
-        uses: anthropics/claude-code-action@v1
-
       - name: Build Pulse Debug APK
         working-directory: ./android
         run: ./gradlew :app:assemblePulseDebug --stacktrace --parallel
