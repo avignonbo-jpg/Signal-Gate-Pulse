@@ -71,6 +71,12 @@ android {
         pickFirst 'lib/arm64-v8a/libc++_shared.so'
         pickFirst 'lib/x86/libc++_shared.so'
         pickFirst 'lib/x86_64/libc++_shared.so'
+        // Apache POI ships duplicate service loader files — pick one and continue
+        pickFirst 'META-INF/services/org.apache.poi.ss.usermodel.WorkbookProvider'
+        pickFirst 'META-INF/services/org.apache.poi.sl.usermodel.PresentationProvider'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/DEPENDENCIES'
     }
 
     flavorDimensions "version"
@@ -84,8 +90,6 @@ android {
 
     ksp {
         arg("room.incremental", "true")
-        arg("room.schemaLocation", "$projectDir/schemas")
-}
     }
 }
 
@@ -104,6 +108,32 @@ dependencies {
 
     // HTTP Client for Reliable Sources
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    // Apache POI — XLSX streaming parser (DataSyncEngine.parseXLSXFile)
+    // Architecture Contract §4 L2 / §5.3 — streaming SAX-based XSSFReader.
+    //
+    // Android compatibility notes:
+    //   poi-ooxml-lite is the minimal artifact for XSSFReader + SAX XLSX parsing.
+    //   Full poi-ooxml pulls in xmlbeans and stax-api which conflict with Android's
+    //   bundled XML stack, causing ClassNotFoundException at runtime on devices.
+    //   The exclusions below are REQUIRED — do not remove them.
+    //   poi (core) is a transitive dependency of poi-ooxml-lite — listed explicitly
+    //   to control the version and ensure the same exclusions apply.
+    implementation('org.apache.poi:poi:5.3.0') {
+        exclude group: 'org.apache.xmlbeans', module: 'xmlbeans'
+        exclude group: 'javax.xml.stream', module: 'stax-api'
+        exclude group: 'com.fasterxml.jackson.core'
+    }
+    implementation('org.apache.poi:poi-ooxml:5.3.0') {
+        exclude group: 'org.apache.xmlbeans', module: 'xmlbeans'
+        exclude group: 'javax.xml.stream', module: 'stax-api'
+        exclude group: 'com.fasterxml.jackson.core'
+    }
+    implementation('org.apache.poi:poi-ooxml-lite:5.3.0') {
+        exclude group: 'org.apache.xmlbeans', module: 'xmlbeans'
+        exclude group: 'javax.xml.stream', module: 'stax-api'
+        exclude group: 'com.fasterxml.jackson.core'
+    }
 
     // Timber — structured logging (Step 1.13)
     // Required by CallRiskEvaluator, ReliableSourceManager, CommunitySyncWorker.
@@ -141,6 +171,12 @@ dependencies {
     implementation 'androidx.navigation:navigation-compose:2.7.7'
 
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'io.mockk:mockk:1.13.12'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1'
+    testImplementation 'org.robolectric:robolectric:4.12.1'
+    testImplementation 'androidx.test:core:1.5.0'
+    testImplementation 'androidx.test.ext:junit:1.1.5'
+
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }
