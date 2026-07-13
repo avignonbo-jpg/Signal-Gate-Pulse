@@ -40,7 +40,7 @@ import com.signalgate.multipoint.database.entities.UnifiedEntryEntity
         PendingCardEntity::class
     ],
     version = 2,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class SignalGateDatabase : RoomDatabase() {
     abstract fun sourceDao(): SourceDao
