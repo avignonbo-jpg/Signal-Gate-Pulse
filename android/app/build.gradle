@@ -1,4 +1,4 @@
-apply plugin: 'com.android.application'
+'apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-parcelize'
 apply plugin: 'com.google.devtools.ksp'
@@ -133,6 +133,7 @@ dependencies {
         exclude group: 'org.apache.xmlbeans', module: 'xmlbeans'
         exclude group: 'javax.xml.stream', module: 'stax-api'
         exclude group: 'com.fasterxml.jackson.core'
+        exclude group: 'org.apache.logging.log4j'
     }
 
     // Timber — structured logging (Step 1.13)
