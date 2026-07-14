@@ -3,7 +3,7 @@ buildscript {
     ext {
         compileSdkVersion = 35
         targetSdkVersion = 35
-        minSdkVersion = 29  // Raised to match RoleManager.ROLE_CALL_SCREENING requirement (API 29+) and avoid POI/D8 MethodHandle incompatibility below API 26
+        minSdkVersion = 29    // Raised to match RoleManager.ROLE_CALL_SCREENING requirement (API 29+) and avoid POI/D8 MethodHandle incompatibility below API 26
         buildToolsVersion = "35.0.0"
         kotlinVersion = "1.9.24"
         kspVersion = "1.9.24-1.0.20"
