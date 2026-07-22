@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App Name -->
+    <string name="app_name">SignalGate</string>
+
+    <!-- Navigation -->
+    <string name="nav_blocked">Blocked</string>
+    <string name="nav_recent">Recent</string>
+    <string name="nav_settings">Settings</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_sources">Sources</string>
+    <string name="nav_call_log">Call Log</string>
+    <string name="nav_block_list">Block / Allow Lists</string>
+    <string name="nav_audit_log">Audit Log</string>
+    <string name="nav_about">About</string>
+
+    <!-- Buttons -->
+    <string name="add_block_rule">Add Block Rule</string>
+    <string name="block_this_time">Block This Time</string>
+    <string name="block_permanently">Block Permanently</string>
+    <string name="dismiss">Dismiss</string>
+    <string name="whitelist">Whitelist</string>
+    <string name="block">Block</string>
+
+    <!-- Dialogs -->
+    <string name="add_blocked_number_title">Add Blocked Number</string>
+    <string name="phone_number_hint">Phone Number or Pattern (e.g., +1800)</string>
+    <string name="label_hint">Label (Optional)</string>
+    <string name="is_pattern_switch">Is Pattern?</string>
+
+    <!-- Status Messages -->
+    <string name="no_blocked_numbers">No blocked numbers yet</string>
+    <string name="no_recent_calls">No recent calls</string>
+    <string name="setup_required">Setup required:</string>
+    <string name="signal_gate_active">Signal Gate is active and ready!</string>
+    <string name="contacts_permission_granted">Contacts permission granted</string>
+    <string name="contacts_permission_denied">Contacts permission denied</string>
+    <string name="set_as_default_success">Set as default call screener</string>
+    <string name="set_as_default_failed">Failed to set as default call screener</string>
+
+    <!-- Actions -->
+    <string name="block_rule_added">Block rule added: %s</string>
+    <string name="blocked_number">Blocked: %s</string>
+    <string name="whitelisted_number">Whitelisted: %s</string>
+
+    <!-- Data Sources -->
+    <string name="data_sources_title">DATA SOURCES</string>
+    <string name="add_source">+ Add Source</string>
+    <string name="sync_all">Sync All Now</string>
+    <string name="source_whitelist">App Whitelist</string>
+    <string name="source_blocklist">App Blocklist</string>
+    <string name="source_github_blocklist">GitHub Community Blocklist</string>
+    <string name="source_local_file_1">Local File 1</string>
+    <string name="source_local_file_2">Local File 2</string>
+    <string name="source_archived">Archived Spamlist</string>
+    <string name="source_remote_url_1">User Remote URL 1</string>
+    <string name="source_remote_url_2">User Remote URL 2</string>
+    <string name="source_status_active">Active</string>
+    <string name="source_status_inactive">Inactive</string>
+    <string name="source_status_enabled">Enabled</string>
+    <string name="source_status_disabled">Disabled</string>
+    <string name="led_indicator_on">LED On</string>
+    <string name="led_indicator_off">LED Off</string>
+
+</resources>

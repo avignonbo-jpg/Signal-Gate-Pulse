@@ -1,0 +1,66 @@
+name: Crash Diagnostic
+
+on:
+  workflow_dispatch:
+
+jobs:
+  crash-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout consumer-v1 branch
+        uses: actions/checkout@v4
+        with:
+          ref: consumer-v1
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Grant Execute Permission for Gradle
+        run: chmod +x android/gradlew
+
+      - name: Build Pulse Debug APK
+        run: cd android && ./gradlew assemblePulseDebug --no-daemon
+
+      - name: Run Emulator and Capture Crash Log
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          force-avd-creation: false
+          disable-animations: true
+          script: |
+            echo "=== Emulator ready ==="
+            adb logcat -c
+            echo "=== Installing APK ==="
+            adb install -r android/app/build/outputs/apk/pulse/debug/app-pulse-debug.apk
+            adb logcat -v threadtime > /tmp/full_logcat.txt &
+            LOGCAT_PID=$!
+            echo "=== Launching app ==="
+            adb shell am start -n com.signalgate.multipoint/.MainActivity
+            sleep 15
+            kill $LOGCAT_PID 2>/dev/null || true
+            cp /tmp/full_logcat.txt $GITHUB_WORKSPACE/full_logcat.txt
+            echo "=== CRASH LOG ==="
+            grep -E "AndroidRuntime|FATAL|Exception|Caused by|signalgate|koin" /tmp/full_logcat.txt || echo "No crash lines found"
+            echo "=== END CRASH LOG ==="
+
+      - name: Upload Full Logcat
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-logcat
+          path: full_logcat.txt
+          retention-days: 7

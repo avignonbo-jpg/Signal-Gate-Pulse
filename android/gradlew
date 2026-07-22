@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""
+SignalGate Custom Gradle Bootstrapper
+Ensures consistent Gradle version for reliable builds.
+"""
+
+import os
+import sys
+import zipfile
+import urllib.request
+from pathlib import Path
+
+GRADLE_VERSION = "8.9"
+GRADLE_URL = f"https://services.gradle.org/distributions/gradle-{GRADLE_VERSION}-bin.zip"
+
+def ensure_gradle() -> str:
+    """Ensure Gradle is available and return binary path."""
+    gradle_home = Path(os.environ.get("GRADLE_USER_HOME", "~/.gradle")).expanduser()
+    gradle_dist = gradle_home / "wrapper" / "dists" / f"gradle-{GRADLE_VERSION}-bin"
+    gradle_bin = gradle_dist / f"gradle-{GRADLE_VERSION}" / "bin" / "gradle"
+
+    if gradle_bin.exists():
+        return str(gradle_bin)
+
+    print(f"📥 Downloading Gradle {GRADLE_VERSION}...")
+
+    gradle_dist.mkdir(parents=True, exist_ok=True)
+    zip_path = gradle_dist / f"gradle-{GRADLE_VERSION}-bin.zip"
+
+    try:
+        urllib.request.urlretrieve(GRADLE_URL, zip_path)
+        print("✅ Download complete")
+    except Exception as e:
+        print(f"❌ Download failed: {e}")
+        sys.exit(1)
+
+    print("📦 Extracting...")
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as z:
+            z.extractall(gradle_dist)
+        print("✅ Extraction complete")
+    except Exception as e:
+        print(f"❌ Extraction failed: {e}")
+        sys.exit(1)
+
+    gradle_bin.chmod(0o755)
+    zip_path.unlink(missing_ok=True)
+
+    print(f"✅ Gradle {GRADLE_VERSION} ready")
+    return str(gradle_bin)
+
+if __name__ == "__main__":
+    gradle_path = ensure_gradle()
+    
+    # Forward all arguments to real Gradle
+    cmd = [gradle_path] + sys.argv[1:]
+    try:
+        os.execv(gradle_path, cmd)
+    except Exception as e:
+        print(f"❌ Failed to launch Gradle: {e}")
+        sys.exit(1)
