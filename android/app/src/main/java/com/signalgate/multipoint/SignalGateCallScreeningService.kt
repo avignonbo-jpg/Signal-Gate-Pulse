@@ -99,7 +99,7 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                         confidence = callInfo.confidence,
                         riskLevel = callInfo.riskLevel,
                         matchedSources = sourcesJson,
-                        decisionSource = callInfo.callDecision.name
+                        notes = callInfo.tier.name
                     )
                 )
 
@@ -110,7 +110,7 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                             timestamp = System.currentTimeMillis(),
                             decision = callInfo.callDecision.name,
                             confidence = callInfo.confidence ?: 0,
-                            notes = "Tier 3 HEURISTIC_BLOCK"
+                            decisionSource = "Tier 3 HEURISTIC_BLOCK"
                         )
                     )
                 }
