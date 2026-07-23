@@ -108,7 +108,7 @@ class DataSyncEngine(
     suspend fun parseCsvFile(
         inputStream: InputStream,
         sourceId: Int
-    ): List<UnifiedEntryEntity> = csvParser.parse(inputStream, sourceId)
+    ): List<UnifiedEntryEntity> = csvParser.parseCsv(inputStream, sourceId)
 
     /**
      * Inserts a list of entries in chunks of CHUNK_SIZE to avoid binding too

@@ -93,7 +93,7 @@ class CommunitySyncWorker(
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP_EXISTING,
+                ExistingPeriodicWorkPolicy.KEEP,
                 request
             )
 

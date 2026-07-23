@@ -99,7 +99,7 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                         confidence = callInfo.confidence,
                         riskLevel = callInfo.riskLevel,
                         matchedSources = sourcesJson,
-                        notes = callInfo.tier.name
+                        decisionSource = callInfo.callDecision.name
                     )
                 )
 
