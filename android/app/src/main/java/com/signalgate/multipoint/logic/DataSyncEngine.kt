@@ -108,7 +108,26 @@ class DataSyncEngine(
     suspend fun parseCsvFile(
         inputStream: InputStream,
         sourceId: Int
-    ): List<UnifiedEntryEntity> = csvParser.parseCsv(inputStream, sourceId)
+    ): List<UnifiedEntryEntity> = withContext(Dispatchers.IO) {
+        Timber.tag(TAG).i("CSV parse started — source=$sourceId")
+        val entries = mutableListOf<UnifiedEntryEntity>()
+        csvParser.streamAndPopulate(inputStream) { phoneNumber ->
+            if (entries.size < MAX_ROWS) {
+                entries.add(
+                    UnifiedEntryEntity(
+                        phoneNumber = phoneNumber,
+                        action = "BLOCK",
+                        sourceId = sourceId,
+                        category = "CSV Import",
+                        confidence = 75,
+                        metadata = "DataSyncEngine batch"
+                    )
+                )
+            }
+        }
+        Timber.tag(TAG).i("CSV parse complete — valid=${entries.size} source=$sourceId")
+        entries
+    }
 
     /**
      * Inserts a list of entries in chunks of CHUNK_SIZE to avoid binding too
