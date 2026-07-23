@@ -86,7 +86,7 @@ android {
         arg("room.incremental", "true")
         // Phase 2.6: required for MigrationTestHelper — exportSchema = false in @Database.
         // Schema files written here should be committed to version control.
-        // arg("room.schemaLocation", "$projectDir/schemas")
+        arg("room.schemaLocation", "$projectDir/schemas")
     }
 
     // Phase 2.6: expose Room schema JSON files to androidTest so MigrationTestHelper
@@ -94,7 +94,7 @@ android {
     // Without this block, MigrationTest.kt fails at runtime:
     //   "Cannot find schema file for version X of SignalGateDatabase."
     sourceSets {
-        // androidTest.assets.srcDirs += files("$projectDir/schemas".toString())
+        androidTest.assets.srcDirs += files("$projectDir/schemas".toString())
     }
 }
 
