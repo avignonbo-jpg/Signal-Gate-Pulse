@@ -39,11 +39,16 @@ jobs:
         working-directory: ./android
         run: ./gradlew :app:lintPulseDebug --stacktrace
 
+      - name: List build outputs
+        if: always()
+        run: find android/app/build -maxdepth 5 -type f | sort
+
       - name: Upload Pulse Debug APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pulse-debug-apk
-          path: android/app/build/outputs/apk/pulse/debug/app-pulse-debug.apk
+          path: android/app/build/outputs/apk/**/app-*.apk
           retention-days: 7
 
       - name: Upload Test Results
@@ -52,8 +57,8 @@ jobs:
         with:
           name: test-results
           path: |
-            android/app/build/test-results/
-            android/app/build/reports/
+            android/app/build/test-results/**
+            android/app/build/reports/**
           retention-days: 7
 
       - name: Upload Lint Report
@@ -61,7 +66,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lint-report
-          path: android/app/build/reports/lint-results-pulseDebug.html
+          path: android/app/build/reports/**
           retention-days: 7
 
       - name: Verify build.gradle compose-metrics gate
