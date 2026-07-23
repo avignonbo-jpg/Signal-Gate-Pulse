@@ -27,6 +27,7 @@ import org.koin.androidx.compose.koinViewModel
  * with an unimported Color and an undefined Long.humanReadable() extension,
  * and would not compile.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SourcesScreen(viewModel: SourcesViewModel = koinViewModel()) {
     val sources by viewModel.sources.collectAsState(initial = emptyList())
