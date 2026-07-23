@@ -30,6 +30,7 @@ import org.koin.androidx.compose.koinViewModel
  * visibility and form-error state live on the ViewModel, matching
  * SourcesScreen's Add Source flow.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BlockAllowListScreen(viewModel: BlockedNumbersViewModel = koinViewModel()) {
     val rules by viewModel.visibleRules.collectAsState()
