@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Custom Theme Attributes -->
+    <declare-styleable name="ThemeSignalGate">
+        <attr name="background_primary" format="color" />
+        <attr name="background_secondary" format="color" />
+        <attr name="card_background" format="color" />
+        <attr name="text_muted" format="color" />
+        <attr name="accent_primary" format="color" />
+        <attr name="accent_secondary" format="color" />
+        <attr name="overlay_glass" format="color" />
+        <attr name="nav_selected" format="color" />
+        <attr name="divider_color" format="color" />
+        <attr name="shield_active" format="color" />
+        <attr name="shield_inactive" format="color" />
+    </declare-styleable>
+
+</resources>
