@@ -22,3 +22,7 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew :app:kspPulseDebugKotlin --stacktrace
+
+      - name: Find Room schemas
+        run: |
+          find . -path "*schemas*" -type f -name "*.json" -print
