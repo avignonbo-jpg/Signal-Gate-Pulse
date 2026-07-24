@@ -41,10 +41,9 @@ import com.signalgate.multipoint.database.entities.UnifiedEntryEntity
         CallLogEntry::class,
         SettingEntry::class,
         SyncHistoryEntry::class,
-        PendingCardEntity::class
     ],
-    version = 2,
-    exportSchema = false
+    version = 1,
+    exportSchema = true
 )
 abstract class SignalGateDatabase : RoomDatabase() {
     abstract fun sourceDao(): SourceDao
@@ -52,7 +51,6 @@ abstract class SignalGateDatabase : RoomDatabase() {
     abstract fun callLogDao(): CallLogDao
     abstract fun settingDao(): SettingDao
     abstract fun syncHistoryDao(): SyncHistoryDao
-    abstract fun pendingCardDao(): PendingCardDao
 }
 
 /**
