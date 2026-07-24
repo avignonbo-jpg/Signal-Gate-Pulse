@@ -26,3 +26,4 @@ jobs:
       - name: Find Room schemas
         run: |
           find . -path "*schemas*" -type f -name "*.json" -print
+          
