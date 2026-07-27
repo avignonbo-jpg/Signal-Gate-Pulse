@@ -5,13 +5,13 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.signalgate.multipoint.database.daos.CallLogDao
-// import com.signalgate.multipoint.database.daos.PendingCardDao
+import com.signalgate.multipoint.database.daos.PendingCardDao
 import com.signalgate.multipoint.database.daos.SettingDao
 import com.signalgate.multipoint.database.daos.SourceDao
 import com.signalgate.multipoint.database.daos.SyncHistoryDao
 import com.signalgate.multipoint.database.daos.UnifiedEntryDao
 import com.signalgate.multipoint.database.entities.CallLogEntry
-// import com.signalgate.multipoint.database.entities.PendingCardEntity
+import com.signalgate.multipoint.database.entities.PendingCardEntity
 import com.signalgate.multipoint.database.entities.SettingEntry
 import com.signalgate.multipoint.database.entities.SourceEntity
 import com.signalgate.multipoint.database.entities.SyncHistoryEntry
@@ -42,8 +42,8 @@ import com.signalgate.multipoint.database.entities.UnifiedEntryEntity
         SettingEntry::class,
         SyncHistoryEntry::class,
     ],
-    version = 1,
-    exportSchema = true
+    version = 2,
+    exportSchema = false
 )
 abstract class SignalGateDatabase : RoomDatabase() {
     abstract fun sourceDao(): SourceDao
