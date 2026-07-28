@@ -44,6 +44,7 @@ import org.mockito.Mockito.mock
 class KoinModuleTest : KoinTest {
 
     private lateinit var testDatabase: SignalGateDatabase
+    private lateinit var testDatabaseModule: org.koin.core.module.Module
 
     @Before
     fun setUp() {
@@ -60,7 +61,7 @@ class KoinModuleTest : KoinTest {
             )
         }
 
-        val testDatabaseModule = module {
+        testDatabaseModule = module {
             single<SignalGateDatabase> { testDatabase }
             single { testDatabase.sourceDao() }
             single { testDatabase.unifiedEntryDao() }
@@ -86,7 +87,10 @@ class KoinModuleTest : KoinTest {
 
     @Test
     fun koinGraphResolvesWithoutError() {
-        checkModules()
+        checkModules {
+            androidContext(mock(Application::class.java))
+            modules(testDatabaseModule, repositoryModule, engineModule, viewModelModule, workerModule)
+        }
     }
 
     @Test
