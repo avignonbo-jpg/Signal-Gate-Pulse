@@ -5,8 +5,6 @@ import com.signalgate.multipoint.database.daos.SettingDao
 import com.signalgate.multipoint.database.daos.SourceDao
 import com.signalgate.multipoint.database.entities.SettingEntry
 import com.signalgate.multipoint.database.entities.SourceEntity
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /**
  * Idempotent first-install seeding for required SourceEntity rows.
@@ -21,7 +19,7 @@ object DatabaseInitializer {
         context: Context,
         sourceDao: SourceDao,
         settingDao: SettingDao
-    ) = withContext(Dispatchers.IO) {
+    ) {
         val manualId = ensureSourceExists(
             sourceDao = sourceDao,
             name = "Manual User Rules",
