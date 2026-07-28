@@ -1,4 +1,4 @@
-name: Generate Room Schema
+name: Generate Room Schema 2
 
 on:
   workflow_dispatch:
