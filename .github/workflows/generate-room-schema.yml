@@ -17,18 +17,35 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Verify checked out database source
+        run: |
+          echo "=== Repository Information ==="
+          pwd
+          git branch --show-current
+          git rev-parse HEAD
+
+          echo "=== SignalGateDatabase.kt version check ==="
+          grep -n "version =" android/app/src/main/java/com/signalgate/multipoint/database/SignalGateDatabase.kt
+
+          echo "=== PendingCardEntity check ==="
+          grep -n "PendingCardEntity" android/app/src/main/java/com/signalgate/multipoint/database/SignalGateDatabase.kt
+
       - name: Generate Room schema
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew :app:kspPulseDebugKotlin --stacktrace
+          ./gradlew clean :app:kspPulseDebugKotlin --stacktrace
+
+      - name: Find Room schemas
+        run: |
+          echo "=== Room schema files ==="
+          find android/app/schemas -type f -name "*.json" -print || true
+
+          echo "=== Schema directories ==="
+          find android/app/schemas -type d -print || true
 
       - name: Upload Room schema
         uses: actions/upload-artifact@v4
         with:
           name: room-schema
           path: android/app/schemas
-
-      - name: Find Room schemas
-        run: |
-          find . -path "*schemas*" -type f -name "*.json" -print
