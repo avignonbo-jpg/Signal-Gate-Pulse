@@ -60,13 +60,13 @@ fun SettingsScreen(onNavigateToLogcat: () -> Unit = {}) {
      * 4. Step 2.6: Remove SharedPreferences fallback
      */
     var red by remember { 
-        mutableStateOf(sharedPreferences.getInt("shield_red", 66).toFloat()) 
+        mutableFloatStateOf(sharedPreferences.getInt("shield_red", 66).toFloat()) 
     }
     var green by remember { 
-        mutableStateOf(sharedPreferences.getInt("shield_green", 133).toFloat()) 
+        mutableFloatStateOf(sharedPreferences.getInt("shield_green", 133).toFloat()) 
     }
     var blue by remember { 
-        mutableStateOf(sharedPreferences.getInt("shield_blue", 244).toFloat()) 
+        mutableFloatStateOf(sharedPreferences.getInt("shield_blue", 244).toFloat()) 
     }
 
     var showDialog by remember { mutableStateOf(false) }
