@@ -527,8 +527,8 @@ fun FooterCard(
     label: String,
     value: String,
     subValue: String,
-    valueColor: Color = TextPrimary,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    valueColor: Color = TextPrimary
 ) {
     Column(
         modifier = modifier
@@ -572,7 +572,7 @@ private fun formatLastSync(timestamp: Long): String {
 }
 
 private fun formatLargeNumber(n: Int): String = when {
-    n >= 1_000_000 -> String.format("%.1fM", n / 1_000_000.0)
-    n >= 1_000     -> String.format("%.1fK", n / 1_000.0)
+    n >= 1_000_000 -> String.format(Locale.US, "%.1fM", n / 1_000_000.0)
+    n >= 1_000     -> String.format(Locale.US, "%.1fK", n / 1_000.0)
     else           -> n.toString()
 }
