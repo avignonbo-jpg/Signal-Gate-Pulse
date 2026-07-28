@@ -109,12 +109,7 @@ class OnboardingViewModel : ViewModel() {
      * Only available on API 29+; returns false on older devices.
      */
     fun checkCallScreeningRole(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
-            _callScreeningRoleHeld.value = roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
-        } else {
-            // Below API 29 ROLE_CALL_SCREENING does not exist — treat as not held
-            _callScreeningRoleHeld.value = false
-        }
+        val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+        _callScreeningRoleHeld.value = roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
     }
 }
