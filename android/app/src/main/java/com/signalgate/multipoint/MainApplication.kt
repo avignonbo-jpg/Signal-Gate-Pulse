@@ -52,11 +52,10 @@ class MainApplication : Application(), Configuration.Provider {
             try {
                 initializeDatabase(this@MainApplication)
             } catch (e: Exception) {
-                android.util.Log.e(
-                    "MainApplication",
+                Timber.e(
+                    e,
                     "FATAL: Database initialization failed — BlocklistRepository and " +
-                    "ContactsViewModel will not function correctly. Stack trace follows.",
-                    e
+                    "ContactsViewModel will not function correctly. Stack trace follows."
                 )
             }
         }
