@@ -3,7 +3,6 @@ package com.signalgate.multipoint.ui.notifications
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
 import timber.log.Timber
 
 /**
@@ -29,7 +28,6 @@ object NotificationChannelManager {
     private const val TAG = "NotificationChannelMgr"
 
     fun createAllChannels(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannels(listOf(
             blockedCallReviewChannel(),
