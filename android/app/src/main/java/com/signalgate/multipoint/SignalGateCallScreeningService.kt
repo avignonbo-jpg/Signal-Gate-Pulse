@@ -6,10 +6,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.telecom.Call
 import android.telecom.CallScreeningService as TelecomCallScreeningService
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.signalgate.multipoint.CallInfo
 import com.signalgate.multipoint.CallTier
@@ -40,7 +38,7 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
 
     override fun onScreenCall(details: Call.Details) {
         val phoneNumber = details.handle?.schemeSpecificPart ?: return
-        Log.d(TAG, "onScreenCall: $phoneNumber")
+        Timber.d("onScreenCall: $phoneNumber")
 
         CoroutineScope(Dispatchers.Default).launch {
             try {
@@ -51,7 +49,7 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                     fireBlockedCallNotification(callInfo)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error screening call — defaulting to allow", e)
+                Timber.e(e, "Error screening call — defaulting to allow")
                 respondToCall(
                     details,
                     CallResponse.Builder()
@@ -172,19 +170,17 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
     }
 
     private fun createBlockedCallChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                BLOCKED_CALL_CHANNEL_ID,
-                BLOCKED_CALL_CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Review calls blocked by SignalGate Pulse"
-                setShowBadge(true)
-                enableVibration(false)
-                setSound(null, null)
-            }
-            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            BLOCKED_CALL_CHANNEL_ID,
+            BLOCKED_CALL_CHANNEL_NAME,
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Review calls blocked by SignalGate Pulse"
+            setShowBadge(true)
+            enableVibration(false)
+            setSound(null, null)
         }
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.createNotificationChannel(channel)
     }
 }
