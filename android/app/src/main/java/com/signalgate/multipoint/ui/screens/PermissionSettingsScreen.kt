@@ -1,5 +1,6 @@
 package com.signalgate.multipoint.ui.screens
 
+import android.annotation.SuppressLint
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
@@ -187,12 +188,7 @@ fun PermissionSettingsScreen(
                     description = "Some manufacturers (Samsung, Xiaomi, Huawei, OnePlus) kill background apps aggressively. Exempting SignalGate keeps screening reliable.",
                     isRequired = false,
                     isGranted = batteryExempt,
-                    onToggleOn = {
-                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                            data = Uri.parse("package:${context.packageName}")
-                        }
-                        context.startActivity(intent)
-                    },
+                    onToggleOn = { requestBatteryOptimizationExemption(context) },
                     onToggleOff = { openApplicationSettings(context) }
                 )
             }
@@ -249,6 +245,17 @@ private fun PermissionRow(
 private fun isIgnoringBatteryOptimizations(context: Context): Boolean {
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     return powerManager.isIgnoringBatteryOptimizations(context.packageName)
+}
+
+// Call screening is silently inert if the OS kills the process in Doze/App Standby,
+// so this exemption is not optional cosmetic battery tuning — it's required for the
+// core feature to function. Suppression scoped to this single call site only.
+@SuppressLint("BatteryLife")
+private fun requestBatteryOptimizationExemption(context: Context) {
+    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+        data = Uri.parse("package:${context.packageName}")
+    }
+    context.startActivity(intent)
 }
 
 private fun openApplicationSettings(context: Context) {
