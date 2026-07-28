@@ -2,7 +2,6 @@ package com.signalgate.multipoint.ui.dashboard
 
 import android.app.role.RoleManager
 import android.content.Context
-import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.signalgate.multipoint.database.entities.SourceEntity
@@ -138,12 +137,8 @@ class DashboardViewModel(
      * taking the role). Always re-check on resume.
      */
     fun checkShieldStatus(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
-            _shieldActive.value = roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
-        } else {
-            _shieldActive.value = false
-        }
+        val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+        _shieldActive.value = roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)
     }
 
     fun toggleSourceEnabled(sourceId: Int, isEnabled: Boolean) {
