@@ -4,13 +4,7 @@
     <!-- ========================================================= -->
     <!-- LEGACY / COMPATIBILITY COLORS (Required by theme)       -->
     <!-- ========================================================= -->
-    <color name="color_primary">#00A3FF</color>
     <color name="color_primary_dark">#0066CC</color>
-    <color name="color_accent">#00D1FF</color>
-
-    <color name="colorPrimary">@color/color_primary</color>
-    <color name="colorPrimaryDark">@color/color_primary_dark</color>
-    <color name="colorAccent">@color/color_accent</color>
 
     <!-- ========================================================= -->
     <!-- MAIN DESIGN SYSTEM COLORS                                -->
@@ -22,27 +16,9 @@
     <color name="text_secondary">#A0AEC0</color>
     <color name="text_muted">#718096</color>
 
-
-    <!-- ========================================================= -->
-    <!-- COMPATIBILITY ALIASES                                     -->
-    <!-- ========================================================= -->
-
-    <color name="surface_card">@color/card_background</color>
-    <color name="surface_border">@color/divider_color</color>
-    <color name="surface_variant">@color/background_secondary</color>
-    
-    <!-- i added these per GPT-->
-    <color name="button_primary">@color/accent_primary</color>
-    <color name="button_secondary">@color/accent_secondary</color>
-
-    <color name="card_stroke">@color/divider_color</color>
-
     <!-- Glassmorphic / Accent Colors -->
     <color name="accent_primary">#00A3FF</color>
     <color name="accent_secondary">#00D1FF</color>
-    <color name="status_high">#FF4D4D</color>
-    <color name="status_medium">#FFA500</color>
-    <color name="status_low">#00C853</color>
     <color name="overlay_glass">#CC121A26</color>
 
     <!-- Additional UI Colors -->
@@ -50,14 +26,5 @@
     <color name="divider_color">#1AFFFFFF</color>
     <color name="shield_active">#00C853</color>
     <color name="shield_inactive">#FF4D4D</color>
-
-    <!-- Neon extras -->
-    <color name="neon_blue">#00D1FF</color>
-    <color name="neon_purple">#C084FC</color>
-
-    <!-- Compatibility Status Colors -->
-    <color name="error">#FF4D4D</color>
-    <color name="success">#00C853</color>
-    <color name="warning">#FFA500</color>
 
 </resources>
