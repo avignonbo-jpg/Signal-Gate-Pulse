@@ -41,6 +41,9 @@ class PhoneStateReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_PHONE_STATE) {
+            return
+        }
         val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
         Timber.tag(TAG).d("Phone state changed: $state (no-op — see class doc)")
         // Intentionally no further action. See class-level documentation.
