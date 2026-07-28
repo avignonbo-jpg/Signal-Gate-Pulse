@@ -3,7 +3,6 @@ package com.signalgate.multipoint.ui.onboarding
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -146,9 +145,8 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
     val roleHeld by viewModel.callScreeningRoleHeld.collectAsState()
     var showLearnMore by remember { mutableStateOf(false) }
 
-    val roleLauncher = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+    val roleLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
-    } else null
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -276,10 +274,10 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
                 when {
                     ungranted.isNotEmpty() ->
                         permissionLauncher.launch(ungranted.toTypedArray())
-                    !roleHeld && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
+                    !roleHeld -> {
                         val roleManager =
                             context.getSystemService(Context.ROLE_SERVICE) as RoleManager
-                        roleLauncher?.launch(
+                        roleLauncher.launch(
                             roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
                         )
                     }
