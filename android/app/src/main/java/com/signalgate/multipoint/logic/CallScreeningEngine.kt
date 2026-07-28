@@ -1,6 +1,6 @@
 package com.signalgate.multipoint.logic
 
-import android.util.Log
+import timber.log.Timber
 import com.signalgate.multipoint.CallInfo
 import com.signalgate.multipoint.CallTier
 import com.signalgate.multipoint.SignalGateCallScreeningService
@@ -41,7 +41,7 @@ class CallScreeningEngine(
 
     suspend fun screenCall(phoneNumber: String, callDetails: android.telecom.Call.Details?): CallInfo {
         val normalized = normalizePhoneNumber(phoneNumber)
-        Log.d(TAG, "Screening call from: $phoneNumber (normalized: $normalized)")
+        Timber.d("Screening call from: $phoneNumber (normalized: $normalized)")
 
         return try {
             val decision = repository.getCallDecision(normalized)
@@ -51,7 +51,7 @@ class CallScreeningEngine(
                 else    -> buildGrayZoneInfo(phoneNumber, normalized, callDetails)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Engine error for $phoneNumber, defaulting to ALLOW", e)
+            Timber.e(e, "Engine error for $phoneNumber, defaulting to ALLOW")
             buildDefaultInfo(phoneNumber, normalized)
         }
     }
@@ -67,7 +67,7 @@ class CallScreeningEngine(
             "manual_allow" -> CallTier.ALLOWLISTED
             else           -> CallTier.CLEAN_UNKNOWN
         }
-        Log.d(TAG, "ALLOW — tier=$tier source=${decision.source}")
+        Timber.d("ALLOW — tier=$tier source=${decision.source}")
         return CallInfo(
             originalPhoneNumber   = original,
             normalizedPhoneNumber = normalized,
@@ -101,7 +101,7 @@ class CallScreeningEngine(
             SignalGateCallScreeningService.CallDecision.BLOCK
         }
 
-        Log.d(TAG, "$callDecision — tier=$tier source=${decision.source} confidence=${decision.confidence}")
+        Timber.d("$callDecision — tier=$tier source=${decision.source} confidence=${decision.confidence}")
 
         return CallInfo(
             originalPhoneNumber   = original,
@@ -136,10 +136,10 @@ class CallScreeningEngine(
         callDetails: android.telecom.Call.Details?
     ): CallInfo {
         val evaluation = riskEvaluator.evaluate(sourcesMatched = 0, callDetails = callDetails)
-        Log.d(TAG, "Gray-zone: risk=${evaluation.score} stir=${evaluation.stirLevel}")
+        Timber.d("Gray-zone: risk=${evaluation.score} stir=${evaluation.stirLevel}")
 
         return if (evaluation.score >= HEURISTIC_RISK_THRESHOLD) {
-            Log.d(TAG, "SCREEN — Tier 4 HEURISTIC_FLAG (gray-zone risk=${evaluation.score})")
+            Timber.d("SCREEN — Tier 4 HEURISTIC_FLAG (gray-zone risk=${evaluation.score})")
             CallInfo(
                 originalPhoneNumber   = original,
                 normalizedPhoneNumber = normalized,
@@ -157,7 +157,7 @@ class CallScreeningEngine(
     }
 
     private fun buildDefaultInfo(original: String, normalized: String): CallInfo {
-        Log.d(TAG, "ALLOW — Tier 5 CLEAN_UNKNOWN (no match, low risk)")
+        Timber.d("ALLOW — Tier 5 CLEAN_UNKNOWN (no match, low risk)")
         return CallInfo(
             originalPhoneNumber   = original,
             normalizedPhoneNumber = normalized,
