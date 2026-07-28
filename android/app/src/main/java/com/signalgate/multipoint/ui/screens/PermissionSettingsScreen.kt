@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -69,13 +68,11 @@ fun PermissionSettingsScreen(
         viewModel.updateAllPermissions(newState)
     }
 
-    val roleLauncher = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        rememberLauncherForActivityResult(
-            ActivityResultContracts.StartActivityForResult()
-        ) {
-            // Result comes back via the resume re-check below, not here
-        }
-    } else null
+    val roleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        // Result comes back via the resume re-check below, not here
+    }
 
     // Re-check everything on every resume — never rely on cached state.
     DisposableEffect(lifecycleOwner) {
@@ -164,11 +161,9 @@ fun PermissionSettingsScreen(
                     isRequired = true,
                     isGranted = roleHeld,
                     onToggleOn = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
-                            val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
-                            roleLauncher?.launch(intent)
-                        }
+                        val roleManager = context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+                        val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
+                        roleLauncher.launch(intent)
                     },
                     onToggleOff = { openApplicationSettings(context) }
                 )
