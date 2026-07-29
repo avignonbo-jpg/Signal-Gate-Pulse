@@ -1,4 +1,4 @@
-    package com.signalgate.multipoint.di
+package com.signalgate.multipoint.di
 
 import android.app.Application
 import android.content.Context
@@ -58,6 +58,14 @@ class KoinModuleTest : KoinTest {
             .setQueryExecutor(singleThreadExecutor)
             .setTransactionExecutor(singleThreadExecutor)
             .build()
+
+        // Force the DB to fully open synchronously, on this thread, with no
+        // coroutine involved. ProcessLock's lock/unlock only guards the very
+        // first open (see FrameworkSQLiteOpenHelper — once open, get*Database()
+        // does no I/O and takes no lock). Doing that first open here, plainly,
+        // means seedRequiredSources()'s suspend DAO calls below hit an
+        // already-open DB and never touch the lock at all.
+        testDatabase.openHelper.writableDatabase
 
         runBlocking {
             DatabaseInitializer.seedRequiredSources(
