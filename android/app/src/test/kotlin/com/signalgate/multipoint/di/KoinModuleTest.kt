@@ -1,4 +1,4 @@
-package com.signalgate.multipoint.di
+    package com.signalgate.multipoint.di
 
 import android.app.Application
 import android.content.Context
