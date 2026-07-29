@@ -16,13 +16,12 @@ import org.junit.Assert.assertTrue
  *   - testGetDatabasePassphrase_afterKeyInvalidation_returnsNewBytes()
  *   - testClearDatabasePassphrase_removesPrefs()
  *   - testEnvelopeRoundTrip_decryptedMatchesOriginal()
+ *   - testEnableStrictMode_doesNotThrow() — enableStrictMode() calls real
+ *     android.os.StrictMode APIs, which throw "not mocked" on a plain JVM
+ *     unit test (no Robolectric runner here). Same category as the
+ *     Keystore-dependent methods above — needs a real Android runtime.
  */
 class SecurityUtilsTest {
-
-    @Test
-    fun enableStrictMode_doesNotThrow() {
-        SecurityUtils.enableStrictMode()
-    }
 
     @Test
     fun keystoreConstants_areNonEmpty() {
