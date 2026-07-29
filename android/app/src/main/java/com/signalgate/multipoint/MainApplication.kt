@@ -9,7 +9,6 @@ import com.signalgate.multipoint.di.initializeDatabase
 import com.signalgate.multipoint.security.SecurityUtils
 import com.signalgate.multipoint.ui.notifications.NotificationChannelManager
 import com.signalgate.multipoint.workers.CommunitySyncWorker
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import timber.log.Timber
 import org.koin.android.ext.koin.androidContext
@@ -48,7 +47,7 @@ class MainApplication : Application(), Configuration.Provider {
             modules(appModule)
         }
 
-        runBlocking(Dispatchers.IO) {
+        runBlocking {
             try {
                 initializeDatabase(this@MainApplication)
             } catch (e: Exception) {
