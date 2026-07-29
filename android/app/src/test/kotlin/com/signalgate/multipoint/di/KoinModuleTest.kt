@@ -17,6 +17,7 @@ import com.signalgate.multipoint.logic.CallScreeningEngine
 import com.signalgate.multipoint.logic.DataSyncEngine
 import com.signalgate.multipoint.logic.ReliableSourceManager
 import kotlinx.coroutines.runBlocking
+import java.util.concurrent.Executors
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -48,10 +49,15 @@ class KoinModuleTest : KoinTest {
 
     @Before
     fun setUp() {
+        val singleThreadExecutor = Executors.newSingleThreadExecutor()
         testDatabase = Room.inMemoryDatabaseBuilder(
             mock(Context::class.java),
             SignalGateDatabase::class.java
-        ).allowMainThreadQueries().build()
+        )
+            .allowMainThreadQueries()
+            .setQueryExecutor(singleThreadExecutor)
+            .setTransactionExecutor(singleThreadExecutor)
+            .build()
 
         runBlocking {
             DatabaseInitializer.seedRequiredSources(
