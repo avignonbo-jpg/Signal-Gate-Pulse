@@ -34,6 +34,8 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * AppModule — Koin DI bindings per Architecture Contract §2.
@@ -253,22 +255,45 @@ val appModule = listOf(
  * Step 0.1 (2026-07-02): No changes. Still called synchronously.
  * runBlocking was removed from BlocklistRepository binding, not from this function.
  *
- * Bloom fast-pass wiring (this session): also rehydrates both BloomFilterEngine
- * singletons from the DB via DataSourceRepository.rehydrateBloomFilters(), right
- * after seeding. This has to happen here, inside the same synchronous startup
- * path as seedRequiredSources() — BloomFilterEngine is an in-memory BitSet that
- * comes back empty on every process start (including a cold start triggered
- * directly by a CallScreeningService callback, before any Activity exists). Without
- * this, every number already in the DB from a prior session would read as
- * bloom-negative and incorrectly skip the DB fast-pass check in getCallDecision()
- * — i.e. previously-blocked callers would ALLOW through until something happened
- * to re-insert them. Same BINDING ordering guarantee as seedRequiredSources():
- * must complete before any inbound caller can resolve CallScreeningEngine.
+ * Bloom fast-pass wiring — REVISED this session: rehydrateBloomFilters() used
+ * to be called from here, inside this synchronous startup path. That's been
+ * removed — see rehydrateBloomFiltersInBackground() below and
+ * DataSourceRepository's class doc for why bloom rehydration is NOT binding
+ * the way seedRequiredSources() above it is, and why running it here was a
+ * real risk to the CallScreeningService response window at production scale.
  */
 suspend fun initializeDatabase(context: Context) {
     val koin = org.koin.core.context.GlobalContext.get()
     val sourceDao = koin.get<SourceDao>()
     val settingDao = koin.get<SettingDao>()
     DatabaseInitializer.seedRequiredSources(context, sourceDao, settingDao)
-    koin.get<DataSourceRepository>().rehydrateBloomFilters()
+}
+
+/**
+ * rehydrateBloomFiltersInBackground — kicks off DataSourceRepository's bloom
+ * filter rebuild on [scope], deliberately off the startup-blocking path.
+ *
+ * Call this from MainApplication.onCreate() AFTER the runBlocking block that
+ * calls initializeDatabase() — not inside it, and not in parallel with it,
+ * since rehydration reads via entryDao.getAllEntries() and depends on the
+ * DB actually being open (which SecureDatabase.getDatabase() lazily handles
+ * on first DAO access, but there's no reason to race it against seeding).
+ *
+ * Why this is safe to run unawaited: BloomFilterEngine is a pure read-skip
+ * optimization (see DataSourceRepository class doc) — getCallDecision() is
+ * fully correct with unrehydrated (or partially-rehydrated) filters, it just
+ * doesn't get the fast-pass speedup until this completes. Unlike
+ * seedRequiredSources(), nothing here can throw and crash a caller that
+ * hasn't finished yet — DataSourceRepository's bloomReady flag handles that.
+ *
+ * This does NOT reintroduce the async-seeding pattern the class doc above
+ * calls out as forbidden — that prohibition is specifically about
+ * seedRequiredSources() (the MANUAL source row other bindings structurally
+ * depend on). Bloom rehydration has no such dependency.
+ */
+fun rehydrateBloomFiltersInBackground(scope: CoroutineScope) {
+    val koin = org.koin.core.context.GlobalContext.get()
+    scope.launch {
+        koin.get<DataSourceRepository>().rehydrateBloomFilters()
+    }
 }
