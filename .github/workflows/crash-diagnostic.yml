@@ -43,43 +43,10 @@ jobs:
           disable-animations: true
           script: |
             echo "=== Emulator ready ==="
-            adb logcat -c
             echo "=== Installing APK ==="
             adb install -r android/app/build/outputs/apk/pulse/debug/app-pulse-debug.apk
-            adb logcat -v threadtime > /tmp/full_logcat.txt &
-            LOGCAT_PID=$!
-            echo "=== Launching app ==="
-            adb shell am start -n com.signalgate.multipoint.pulse/.MainActivity
-
-            echo "=== Verifying process actually started (polling up to 15s) ==="
-            # ASSUMPTION: relies on `pidof` (toybox) being present on this emulator image.
-            # Present on google_apis x86_64 API 33 as of this writing. If a future run ever
-            # prints "pidof: not found" instead of a PID or nothing, swap the check below for:
-            #   adb shell ps -A | grep -q com.signalgate.multipoint.pulse
-            LAUNCH_OK=0
-            for i in $(seq 1 15); do
-              if adb shell pidof com.signalgate.multipoint.pulse 2>/dev/null | grep -q '[0-9]'; then
-                LAUNCH_OK=1
-              fi
-              sleep 1
-            done
-
-            if [ "$LAUNCH_OK" -eq 1 ]; then
-              echo "App process confirmed running (com.signalgate.multipoint.pulse)"
-            else
-              echo "::warning::adb shell pidof never saw com.signalgate.multipoint.pulse running during the 15s window"
-            fi
-
-            kill $LOGCAT_PID 2>/dev/null || true
-            cp /tmp/full_logcat.txt $GITHUB_WORKSPACE/full_logcat.txt
-            echo "=== CRASH LOG ==="
-            grep -E "AndroidRuntime|FATAL|Exception|Caused by|signalgate|koin" /tmp/full_logcat.txt || echo "No crash lines found"
-            echo "=== END CRASH LOG ==="
-
-            if [ "$LAUNCH_OK" -ne 1 ]; then
-              echo "::error::App process never started. 'am start' likely targeted a component/applicationId that isn't installed, or the process died before pidof could observe it. See the full_logcat artifact for what actually happened (or didn't)."
-              exit 1
-            fi
+            chmod +x scripts/verify-launch-and-capture.sh
+            scripts/verify-launch-and-capture.sh com.signalgate.multipoint.pulse/com.signalgate.multipoint.MainActivity com.signalgate.multipoint.pulse $GITHUB_WORKSPACE
 
       - name: Upload Full Logcat
         if: always()
