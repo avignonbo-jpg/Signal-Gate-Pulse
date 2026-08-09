@@ -1,5 +1,6 @@
 package com.signalgate.multipoint.database.repositories
 
+import com.signalgate.multipoint.data.security.BloomFilterEngine
 import com.signalgate.multipoint.data.security.SanitizationEngine
 import com.signalgate.multipoint.database.daos.SourceDao
 import com.signalgate.multipoint.database.daos.UnifiedEntryDao
@@ -25,10 +26,30 @@ import kotlinx.coroutines.flow.map
  *
  * The MANUAL source (priority 100) always outranks federal sources (priority 85–90),
  * so a user's explicit "not spam" overturn is never overridden by a federal list.
+ *
+ * Bloom fast-pass (this session):
+ * getCallDecision() now checks two BloomFilterEngine instances before touching
+ * Room at all — [bloomFilter] for exact phone numbers, [patternBloomFilter] for
+ * block-pattern prefixes (see matchesAnyPatternPrefix()). Both are populated at
+ * the same chokepoint as everything else in this class, insertEntry(), so every
+ * manual rule, contacts import, and federal sync (CSV or FTC JSON API) keeps the
+ * filters in sync with the DB automatically — no separate write path to forget.
+ *
+ * Bloom filters never produce false negatives, only false positives. That means:
+ *   - A "not present" bloom result is a hard guarantee — safe to skip the DB read.
+ *   - A "might be present" bloom result is NOT a decision — it only means "go
+ *     check the real DB", exactly like today. The DB result is always authoritative;
+ *     the bloom filters only ever skip reads, never skip or override a decision.
+ *
+ * Because BloomFilterEngine is an in-memory BitSet, it is empty on every fresh
+ * process — see rehydrateBloomFilters() and AppModule.initializeDatabase() for
+ * the synchronous startup rehydration this depends on.
  */
 class DataSourceRepository(
     private val sourceDao: SourceDao,
-    private val entryDao: UnifiedEntryDao
+    private val entryDao: UnifiedEntryDao,
+    private val bloomFilter: BloomFilterEngine,
+    private val patternBloomFilter: BloomFilterEngine
 ) {
 
     fun getAllSources(): Flow<List<SourceEntity>> = sourceDao.getAllSources()
@@ -90,6 +111,13 @@ class DataSourceRepository(
      * caller pre-sanitizes category/metadata before calling insertEntry(), so
      * sanitizing here — once, centrally — is safe. Do not also sanitize these
      * fields at call sites that go through this method.
+     *
+     * Bloom fast-pass (this session): also inserts into the appropriate bloom
+     * filter, chosen by isPattern — pattern rows (e.g. "+1900") go into
+     * [patternBloomFilter] since they're a prefix fragment, not a real number,
+     * and would never exact-match anything if inserted into [bloomFilter]. This
+     * is the same chokepoint every entry type already funnels through, so both
+     * filters stay comprehensive automatically as new rules arrive.
      */
     suspend fun insertEntry(entry: UnifiedEntryEntity) {
         val sanitized = entry.copy(
@@ -98,6 +126,11 @@ class DataSourceRepository(
             metadata = entry.metadata?.let { SanitizationEngine.sanitizeTextField(it) }
         )
         entryDao.insertEntry(sanitized)
+        if (sanitized.isPattern) {
+            patternBloomFilter.insert(sanitized.phoneNumber)
+        } else {
+            bloomFilter.insert(sanitized.phoneNumber)
+        }
     }
 
     suspend fun deleteEntry(entry: UnifiedEntryEntity) = entryDao.deleteEntry(entry)
@@ -128,6 +161,12 @@ class DataSourceRepository(
      *   "aggregated"    → Tier 2 FEDERAL_BLOCK (external source)
      *   "pattern"       → Tier 3/4 depending on confidence in CallScreeningEngine
      *   "default"       → Tier 5 CLEAN_UNKNOWN
+     *
+     * Bloom fast-pass (this session): Step 1.5, below, runs before Step 2. If
+     * neither bloom filter can possibly contain this number, both Room reads
+     * (Step 2's exact lookup and Step 3's pattern query) are skipped entirely
+     * and this returns the same "default" ALLOW that Step 4 would have produced
+     * anyway — this is a read-skip optimization, not a new decision path.
      */
     suspend fun getCallDecision(rawNumber: String): CallDecision {
         val normalized = normalizePhoneNumber(rawNumber)
@@ -135,8 +174,20 @@ class DataSourceRepository(
             return CallDecision("ALLOW", "Invalid number", 0, "default")
         }
 
+        // Step 1.5: bloom fast-pass. See class doc + matchesAnyPatternPrefix() for
+        // why this is safe — a negative result here is a guarantee, not a guess.
+        val mightHaveExactEntry = bloomFilter.mightContain(normalized)
+        val mightMatchPattern = matchesAnyPatternPrefix(normalized)
+        if (!mightHaveExactEntry && !mightMatchPattern) {
+            return CallDecision("ALLOW", "No rule matched (bloom fast-pass)", 0, "default")
+        }
+
         // Step 2: exact-match lookup with priority ordering
-        val exactMatches = entryDao.findEntriesByPhoneNumberWithPriority(normalized)
+        val exactMatches = if (mightHaveExactEntry) {
+            entryDao.findEntriesByPhoneNumberWithPriority(normalized)
+        } else {
+            emptyList()
+        }
 
         // Walk priority-ordered list — first entry determines the decision
         for (entry in exactMatches) {
@@ -158,18 +209,84 @@ class DataSourceRepository(
         }
 
         // Step 3: pattern/prefix check with priority ordering
-        val patterns = entryDao.getAllBlockPatternsWithPriority()
-        val matchedPattern = patterns.firstOrNull { normalized.startsWith(it.phoneNumber) }
-        if (matchedPattern != null) {
-            return CallDecision(
-                action = "BLOCK",
-                reason = "Pattern: ${matchedPattern.phoneNumber}",
-                confidence = matchedPattern.confidence ?: 85,
-                source = "pattern"
-            )
+        if (mightMatchPattern) {
+            val patterns = entryDao.getAllBlockPatternsWithPriority()
+            val matchedPattern = patterns.firstOrNull { normalized.startsWith(it.phoneNumber) }
+            if (matchedPattern != null) {
+                return CallDecision(
+                    action = "BLOCK",
+                    reason = "Pattern: ${matchedPattern.phoneNumber}",
+                    confidence = matchedPattern.confidence ?: 85,
+                    source = "pattern"
+                )
+            }
         }
 
         return CallDecision("ALLOW", "No rule matched", 0, "default")
+    }
+
+    /**
+     * Bloom-backed prefix check for pattern/prefix block rules (Step 3's guard).
+     *
+     * BloomFilterEngine only supports exact-membership tests, but block patterns
+     * are matched by normalized.startsWith(pattern) — a prefix relation, not
+     * equality. To use a bloom filter safely for this without introducing false
+     * negatives, insertEntry() stores the *pattern string itself* (e.g. "+1900")
+     * as a member of [patternBloomFilter] — not the numbers it would match. Here,
+     * the check is flipped: every prefix of the incoming number is tested for
+     * exact membership. If "+1900" was ever inserted as a pattern, the prefix
+     * "+1900" of an incoming "+19005551234" call is an exact string match, and a
+     * bloom filter cannot miss an exact match that was actually inserted — so a
+     * "no prefix matched" result here is a hard guarantee that Step 3's DB query
+     * would find nothing, not a probabilistic guess.
+     *
+     * The reverse isn't guaranteed: a hit may be a false positive on a prefix
+     * that was never actually inserted (~2% by design). That's fine — a hit just
+     * means "don't skip Step 3's DB query", exactly as if bloom weren't involved.
+     *
+     * Bounded to normalized.length iterations (a sanitized number, ≤ ~16 chars),
+     * so worst case is ~16 cheap hash computations — far cheaper than the DB
+     * query it's guarding.
+     */
+    private fun matchesAnyPatternPrefix(normalized: String): Boolean {
+        if (normalized.isEmpty()) return false
+        for (len in 1..normalized.length) {
+            if (patternBloomFilter.mightContain(normalized.substring(0, len))) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Rehydrates both bloom filters from the DB.
+     *
+     * BloomFilterEngine is an in-memory BitSet — it comes back empty on every
+     * fresh process, including a cold start triggered directly by a
+     * CallScreeningService callback before any Activity exists. Without this,
+     * every number already in the DB from a prior session would read as
+     * bloom-negative, and getCallDecision()'s Step 1.5 would incorrectly skip
+     * the DB fast-pass for previously-blocked callers, ALLOWing them through
+     * until something happened to re-insert them (e.g. the next federal sync).
+     *
+     * Must be called synchronously at startup, before any inbound
+     * CallScreeningService callback can resolve CallScreeningEngine — same
+     * ordering guarantee as DatabaseInitializer.seedRequiredSources() (Architecture
+     * Contract §2). See AppModule.initializeDatabase().
+     *
+     * Both filters are cleared first so this is idempotent — safe to call more
+     * than once (e.g. a defensive re-call) without double-inserting.
+     */
+    suspend fun rehydrateBloomFilters() {
+        bloomFilter.clear()
+        patternBloomFilter.clear()
+        for (entry in entryDao.getAllEntries()) {
+            if (entry.isPattern) {
+                patternBloomFilter.insert(entry.phoneNumber)
+            } else {
+                bloomFilter.insert(entry.phoneNumber)
+            }
+        }
     }
 
     /**
