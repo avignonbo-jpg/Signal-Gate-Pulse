@@ -32,6 +32,7 @@ import com.signalgate.multipoint.data.security.PrecedenceEngine
 import com.signalgate.multipoint.data.security.SecureCsvParser
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 /**
@@ -94,9 +95,15 @@ val databaseModule = module {
  *
  * - DashboardViewModel: Now receives CallLogRepository in addition to DataSourceRepository.
  *   Enables direct access to CallLogDao for call count queries (refreshCounters).
+ *
+ * Bloom fast-pass wiring (this session): DataSourceRepository now also takes the
+ * two BloomFilterEngine singletons from engineModule — the default (unqualified)
+ * instance for exact phone numbers, and the "patternBloom" qualified instance for
+ * block-pattern prefixes. Both are pre-existing engineModule singletons; nothing
+ * new is declared as a dependency here that didn't already exist in the graph.
  */
 val repositoryModule = module {
-    single { DataSourceRepository(get(), get()) }
+    single { DataSourceRepository(get(), get(), get(), get(named("patternBloom"))) }
     single { CallLogRepository(get()) }
     single { SyncHistoryRepository(get()) }
 
@@ -137,6 +144,13 @@ val repositoryModule = module {
 val engineModule = module {
     // L4 — input sanitization boundary
     single { BloomFilterEngine() }
+    // Bloom fast-pass wiring (this session): a second, separate BloomFilterEngine
+    // instance dedicated to block-pattern prefixes (see DataSourceRepository's
+    // matchesAnyPatternPrefix()). Kept separate from the exact-number instance
+    // above rather than sharing one bit array — mixing two different string
+    // domains (full numbers vs. short prefixes) into one filter would inflate
+    // the false-positive rate for both without any benefit.
+    single(named("patternBloom")) { BloomFilterEngine() }
     single { SecureCsvParser(get()) }
     single {
         PrecedenceEngine(
@@ -238,10 +252,23 @@ val appModule = listOf(
  *
  * Step 0.1 (2026-07-02): No changes. Still called synchronously.
  * runBlocking was removed from BlocklistRepository binding, not from this function.
+ *
+ * Bloom fast-pass wiring (this session): also rehydrates both BloomFilterEngine
+ * singletons from the DB via DataSourceRepository.rehydrateBloomFilters(), right
+ * after seeding. This has to happen here, inside the same synchronous startup
+ * path as seedRequiredSources() — BloomFilterEngine is an in-memory BitSet that
+ * comes back empty on every process start (including a cold start triggered
+ * directly by a CallScreeningService callback, before any Activity exists). Without
+ * this, every number already in the DB from a prior session would read as
+ * bloom-negative and incorrectly skip the DB fast-pass check in getCallDecision()
+ * — i.e. previously-blocked callers would ALLOW through until something happened
+ * to re-insert them. Same BINDING ordering guarantee as seedRequiredSources():
+ * must complete before any inbound caller can resolve CallScreeningEngine.
  */
 suspend fun initializeDatabase(context: Context) {
     val koin = org.koin.core.context.GlobalContext.get()
     val sourceDao = koin.get<SourceDao>()
     val settingDao = koin.get<SettingDao>()
     DatabaseInitializer.seedRequiredSources(context, sourceDao, settingDao)
+    koin.get<DataSourceRepository>().rehydrateBloomFilters()
 }
