@@ -42,8 +42,24 @@ import kotlinx.coroutines.flow.map
  *     the bloom filters only ever skip reads, never skip or override a decision.
  *
  * Because BloomFilterEngine is an in-memory BitSet, it is empty on every fresh
- * process — see rehydrateBloomFilters() and AppModule.initializeDatabase() for
- * the synchronous startup rehydration this depends on.
+ * process — see rehydrateBloomFilters() for how it gets refilled.
+ *
+ * Rehydration readiness (revised this session): rehydration runs on a
+ * background coroutine kicked off from MainApplication, NOT inside
+ * AppModule.initializeDatabase()'s runBlocking startup path. Unlike
+ * DatabaseInitializer.seedRequiredSources() — which IS binding, because
+ * getCallDecision() and BlocklistRepository structurally depend on the
+ * MANUAL source row existing — the bloom filters are a pure read-skip
+ * optimization. getCallDecision() is fully correct with empty filters, just
+ * not yet fast, so there's no correctness reason to block startup (and, on a
+ * cold CallScreeningService-triggered process spawn, block answering a real
+ * incoming call) on a rebuild that scales with total row count, up to the
+ * 500,000-element capacity BloomFilterEngine is sized for.
+ *
+ * [bloomReady] tracks this: false until rehydration completes, during which
+ * getCallDecision() skips the fast-pass check entirely and queries Room
+ * directly — identical to how this class behaved before bloom filters
+ * existed. Never incorrect, just not optimized yet.
  */
 class DataSourceRepository(
     private val sourceDao: SourceDao,
@@ -51,6 +67,8 @@ class DataSourceRepository(
     private val bloomFilter: BloomFilterEngine,
     private val patternBloomFilter: BloomFilterEngine
 ) {
+    @Volatile
+    private var bloomReady = false
 
     fun getAllSources(): Flow<List<SourceEntity>> = sourceDao.getAllSources()
 
@@ -162,11 +180,14 @@ class DataSourceRepository(
      *   "pattern"       → Tier 3/4 depending on confidence in CallScreeningEngine
      *   "default"       → Tier 5 CLEAN_UNKNOWN
      *
-     * Bloom fast-pass (this session): Step 1.5, below, runs before Step 2. If
-     * neither bloom filter can possibly contain this number, both Room reads
-     * (Step 2's exact lookup and Step 3's pattern query) are skipped entirely
-     * and this returns the same "default" ALLOW that Step 4 would have produced
-     * anyway — this is a read-skip optimization, not a new decision path.
+     * Bloom fast-pass (this session): Step 1.5, below, runs before Step 2, but
+     * only if [bloomReady] — see class doc for why rehydration is allowed to
+     * still be in progress (or not yet started) at any given call, and why
+     * that's safe. If neither bloom filter can possibly contain this number,
+     * both Room reads (Step 2's exact lookup and Step 3's pattern query) are
+     * skipped entirely and this returns the same "default" ALLOW that Step 4
+     * would have produced anyway — this is a read-skip optimization, not a
+     * new decision path.
      */
     suspend fun getCallDecision(rawNumber: String): CallDecision {
         val normalized = normalizePhoneNumber(rawNumber)
@@ -175,9 +196,11 @@ class DataSourceRepository(
         }
 
         // Step 1.5: bloom fast-pass. See class doc + matchesAnyPatternPrefix() for
-        // why this is safe — a negative result here is a guarantee, not a guess.
-        val mightHaveExactEntry = bloomFilter.mightContain(normalized)
-        val mightMatchPattern = matchesAnyPatternPrefix(normalized)
+        // why a negative result is a guarantee, not a guess — but only once
+        // rehydration has actually finished. Not ready yet → behave exactly as
+        // if bloom filters didn't exist (always fall through to Room below).
+        val mightHaveExactEntry = !bloomReady || bloomFilter.mightContain(normalized)
+        val mightMatchPattern = !bloomReady || matchesAnyPatternPrefix(normalized)
         if (!mightHaveExactEntry && !mightMatchPattern) {
             return CallDecision("ALLOW", "No rule matched (bloom fast-pass)", 0, "default")
         }
@@ -263,21 +286,23 @@ class DataSourceRepository(
      *
      * BloomFilterEngine is an in-memory BitSet — it comes back empty on every
      * fresh process, including a cold start triggered directly by a
-     * CallScreeningService callback before any Activity exists. Without this,
-     * every number already in the DB from a prior session would read as
-     * bloom-negative, and getCallDecision()'s Step 1.5 would incorrectly skip
-     * the DB fast-pass for previously-blocked callers, ALLOWing them through
-     * until something happened to re-insert them (e.g. the next federal sync).
+     * CallScreeningService callback before any Activity exists.
      *
-     * Must be called synchronously at startup, before any inbound
-     * CallScreeningService callback can resolve CallScreeningEngine — same
-     * ordering guarantee as DatabaseInitializer.seedRequiredSources() (Architecture
-     * Contract §2). See AppModule.initializeDatabase().
+     * Runs off the startup-blocking path (see class doc) — called from a
+     * background coroutine launched in MainApplication, after
+     * AppModule.initializeDatabase() completes, not inside it. [bloomReady]
+     * is set false for the ENTIRE clear+rebuild window, not just before it
+     * starts: between clear() and the last insert(), the filters read as
+     * "nothing present," which is only a safe signal to trust once the
+     * rebuild is actually done. getCallDecision() checks [bloomReady] before
+     * trusting either filter, so a call arriving mid-rehydration just queries
+     * Room directly — never an incorrect skip.
      *
-     * Both filters are cleared first so this is idempotent — safe to call more
-     * than once (e.g. a defensive re-call) without double-inserting.
+     * Safe to call more than once (e.g. a defensive re-call) without
+     * double-inserting, since both filters are cleared first.
      */
     suspend fun rehydrateBloomFilters() {
+        bloomReady = false
         bloomFilter.clear()
         patternBloomFilter.clear()
         for (entry in entryDao.getAllEntries()) {
@@ -287,6 +312,7 @@ class DataSourceRepository(
                 bloomFilter.insert(entry.phoneNumber)
             }
         }
+        bloomReady = true
     }
 
     /**
