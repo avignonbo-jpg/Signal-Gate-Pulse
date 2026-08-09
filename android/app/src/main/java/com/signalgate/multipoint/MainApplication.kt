@@ -6,10 +6,14 @@ import com.signalgate.multipoint.BuildConfig
 import com.signalgate.multipoint.di.KoinWorkerFactory
 import com.signalgate.multipoint.di.appModule
 import com.signalgate.multipoint.di.initializeDatabase
+import com.signalgate.multipoint.di.rehydrateBloomFiltersInBackground
 import com.signalgate.multipoint.security.SecurityUtils
 import com.signalgate.multipoint.ui.notifications.NotificationChannelManager
 import com.signalgate.multipoint.workers.CommunitySyncWorker
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import timber.log.Timber
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
@@ -29,8 +33,17 @@ import org.koin.core.context.startKoin
  * is explicitly forbidden as a regression of the 2026-06 race-condition fix
  * (see Architecture Contract §2). The blocking time is a few indexed DB reads —
  * the correct tradeoff against a process crash on cold CallScreeningService start.
+ *
+ * [applicationScope] below is NOT a reintroduction of that forbidden pattern —
+ * it's used for exactly one thing, bloom filter rehydration (see AppModule's
+ * rehydrateBloomFiltersInBackground()), which has no such binding dependency:
+ * getCallDecision() is fully correct while it's still running, just not yet
+ * fast. Do not add anything else to applicationScope without checking whether
+ * it has the same binding-free property seedRequiredSources() does not.
  */
 class MainApplication : Application(), Configuration.Provider {
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()
@@ -65,6 +78,11 @@ class MainApplication : Application(), Configuration.Provider {
                 )
             }
         }
+
+        // Deliberately outside the runBlocking block above — see class doc and
+        // AppModule.rehydrateBloomFiltersInBackground() for why this one is safe
+        // to run unawaited while seedRequiredSources() above is not.
+        rehydrateBloomFiltersInBackground(applicationScope)
 
         // Phase 4.8: register all notification channels before any notification fires.
         // createAllChannels() is a no-op on API < 26 and safe to call repeatedly.
