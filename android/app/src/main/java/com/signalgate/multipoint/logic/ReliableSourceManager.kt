@@ -18,19 +18,30 @@ import java.util.concurrent.TimeUnit
  * ReliableSourceManager — Phase 3.1: verified production endpoints, resilience.
  *
  * FTC endpoint decision:
- *   The FTC publishes DNC complaint numbers via a REST API at api.ftc.gov.
- *   The previous CSV approach used a static filename on ftc.gov — the FTC embeds
- *   the publication date into the filename (the dated-filename variant), making
- *   any static URL stale within 24 hours. The REST API returns paginated JSON
- *   and is stable.
+ *   The FTC publishes DNC complaint numbers via a REST API at api.ftc.gov,
+ *   which requires an api.data.gov-issued API key. Embedding that key in the
+ *   app (even via BuildConfig, encrypted resources, R8 obfuscation, or
+ *   AndroidKeyStore) does not make it a secret — an attacker who controls the
+ *   app's runtime can observe any credential the app itself must use. It also
+ *   meant every install shared one hardcoded key's rate-limit bucket, which
+ *   would have become a real scaling problem well before any secrecy concern
+ *   mattered.
  *
- *   API key: DEMO_KEY works for development/testing (60 req/min, 1,000/hr).
- *   For production, register at https://api.data.gov/signup for a real key
- *   and store it in AndroidKeyStore — never in source.
- *   See: https://api.ftc.gov/v0/dnc-complaints (public API docs)
+ *   Fix: a scheduled GitHub Actions workflow in a separate, dedicated repo
+ *   (signalgate-dnc-mirror) holds the real FTC_API_KEY as a repo secret,
+ *   fetches and paginates the FTC API server-side, validates the result
+ *   (refuses to publish if the count craters vs. the last snapshot — see that
+ *   repo's sync_ftc_dnc.py), and publishes one flat JSON file to the
+ *   dnc-mirror-pulse branch. This app fetches that published file over a
+ *   plain, unauthenticated HTTPS GET — no credential ships in the APK, full
+ *   stop, and the FTC's own rate limit is decoupled entirely from user count.
  *
  *   Field used: "phone_number" — the E.164-formatted number in each complaint
- *   record. Other fields (subject, created_date, etc.) are discarded.
+ *   record. Filtering/sanitization already happens server-side in the mirror,
+ *   but this app re-sanitizes and re-validates length on receipt regardless —
+ *   never trust an external source blindly, even one you operate yourself.
+ *
+ *   See: https://github.com/avignonbo-jpg/signalgate-dnc-mirror
  *
  * FCC endpoint decision:
  *   opendata.fcc.gov dataset vakf-fz8e is the FCC's Informal Complaints dataset,
@@ -60,10 +71,8 @@ class ReliableSourceManager(
         private const val MIN_NUMBER_LENGTH = 10
         private const val MAX_NUMBER_LENGTH = 15
 
-        private const val FTC_API_BASE  = "https://api.ftc.gov/v0/dnc-complaints"
-        private const val FTC_API_KEY   = "DEMO_KEY"
-        private const val FTC_PAGE_SIZE = 1_000
-        private const val FTC_MAX_PAGES = 50
+        private const val FTC_API_BASE  =
+            "https://raw.githubusercontent.com/avignonbo-jpg/signalgate-dnc-mirror/dnc-mirror-pulse/dnc-numbers.json"
 
         private const val FCC_PRIMARY_URL  =
             "https://opendata.fcc.gov/api/views/vakf-fz8e/rows.csv?accessType=DOWNLOAD"
@@ -179,23 +188,24 @@ class ReliableSourceManager(
         throw lastError ?: Exception("All URLs failed for ${source.name} with empty responses")
     }
 
+    /**
+     * Fetches the pre-aggregated snapshot published by signalgate-dnc-mirror
+     * (see the class doc comment above). One flat file, no pagination needed —
+     * the mirror already did that server-side. Still re-sanitizes and
+     * re-validates length here: this app never trusts an external source
+     * blindly, even a mirror it operates itself.
+     */
     private fun fetchFtcApiNumbers(): List<String> {
+        val body = fetchRawBody(FTC_API_BASE, "FTC DNC mirror")
+        val json = JSONObject(body)
+        val dataArray = json.optJSONArray("phone_numbers") ?: return emptyList()
         val numbers = mutableListOf<String>()
-        var page = 1
-        while (page <= FTC_MAX_PAGES && numbers.size < MAX_ENTRIES_PER_SOURCE) {
-            val url  = "$FTC_API_BASE?api_key=$FTC_API_KEY&per_page=$FTC_PAGE_SIZE&page=$page"
-            val body = fetchRawBody(url, "FTC API page $page")
-            val json = JSONObject(body)
-            val dataArray = json.optJSONArray("data")
-            if (dataArray == null || dataArray.length() == 0) break
-            for (i in 0 until dataArray.length()) {
-                val rawNumber = dataArray.getJSONObject(i).optString("phone_number", "").trim()
-                val sanitized = SanitizationEngine.sanitizePhoneNumber(rawNumber)
-                if (sanitized.length in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH) numbers.add(sanitized)
-            }
-            Timber.tag(TAG).d("FTC page $page — ${dataArray.length()} records (total: ${numbers.size})")
-            page++
+        for (i in 0 until dataArray.length()) {
+            val rawNumber = dataArray.optString(i, "").trim()
+            val sanitized = SanitizationEngine.sanitizePhoneNumber(rawNumber)
+            if (sanitized.length in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH) numbers.add(sanitized)
         }
+        Timber.tag(TAG).d("FTC mirror — ${dataArray.length()} records (kept: ${numbers.size})")
         return numbers.distinct()
     }
 
