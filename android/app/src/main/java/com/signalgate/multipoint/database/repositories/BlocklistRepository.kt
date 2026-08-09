@@ -1,5 +1,6 @@
 package com.signalgate.multipoint.database.repositories
 
+import com.signalgate.multipoint.data.security.SanitizationEngine
 import com.signalgate.multipoint.database.daos.UnifiedEntryDao
 import com.signalgate.multipoint.database.entities.UnifiedEntryEntity
 
@@ -39,6 +40,15 @@ class BlocklistRepository(
         return resolved
     }
 
+    /**
+     * Security fix (audit finding): this method writes UnifiedEntryEntity directly
+     * via unifiedEntryDao — it does NOT go through DataSourceRepository.insertEntry(),
+     * so it needs its own sanitization rather than relying on that chokepoint.
+     * `reason` is sanitized here (not by the caller) — SanitizationEngine.sanitizeTextField()
+     * is not idempotent (its quote-escaping doubles up on repeat application), so
+     * callers such as BlockedNumbersViewModel must pass the raw reason and let this
+     * be the single point that sanitizes it.
+     */
     suspend fun addBlockRule(phoneNumber: String, reason: String = "Manual Block") {
         unifiedEntryDao.insertEntry(
             UnifiedEntryEntity(
@@ -47,7 +57,7 @@ class BlocklistRepository(
                 sourceId = manualSourceId(),
                 category = "Manual",
                 confidence = 100,
-                metadata = reason
+                metadata = SanitizationEngine.sanitizeTextField(reason)
             )
         )
     }
@@ -60,7 +70,7 @@ class BlocklistRepository(
                 sourceId = manualSourceId(),
                 category = "Manual",
                 confidence = 100,
-                metadata = reason
+                metadata = SanitizationEngine.sanitizeTextField(reason)
             )
         )
     }
@@ -71,8 +81,17 @@ class BlocklistRepository(
 
     suspend fun getAllUserRules(): List<UnifiedEntryEntity> = unifiedEntryDao.getAllBySource(manualSourceId())
 
+    /**
+     * Security fix (audit finding): previously stripped characters with a private
+     * `[^0-9+]` regex and never called SanitizationEngine — a third divergent
+     * sanitizer (alongside DataSourceRepository's and this class's own) that never
+     * touched the canonical one. Now routes through SanitizationEngine.sanitizePhoneNumber()
+     * first (strips anything outside the audited allowlist, enforces the 30-char
+     * cap), then applies the same E.164 shaping as before on the sanitized result.
+     */
     private fun normalize(raw: String): String {
-        var cleaned = raw.replace(Regex("[^0-9+]"), "")
+        val safe = SanitizationEngine.sanitizePhoneNumber(raw)
+        var cleaned = safe.replace(Regex("[^0-9+]"), "")
         if (cleaned.startsWith("1") && cleaned.length == 11) cleaned = "+$cleaned"
         else if (!cleaned.startsWith("+")) cleaned = "+1$cleaned"
         return cleaned

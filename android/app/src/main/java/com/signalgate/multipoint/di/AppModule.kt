@@ -147,7 +147,10 @@ val engineModule = module {
     }
 
     // L2 — transport boundary (OkHttp, TLS, timeouts owned here)
-    single { ReliableSourceManager(get(), get()) }
+    // Security fix (audit finding): third get() resolves the SecureCsvParser
+    // singleton registered above — ReliableSourceManager now streams federal CSV
+    // feeds through it instead of a hand-rolled parser. See ReliableSourceManager.
+    single { ReliableSourceManager(get(), get(), get()) }
 
     // L6 — decision boundary
     // CallRiskEvaluator is a stateless object — registered so CallScreeningEngine

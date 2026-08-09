@@ -1,5 +1,6 @@
 package com.signalgate.multipoint.ui.screens
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -49,6 +50,7 @@ import org.koin.androidx.compose.koinViewModel
 fun ConsumerDashboardScreen(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToActivity: () -> Unit = {},
+    onLaunchOnboarding: () -> Unit = {},
     viewModel: DashboardViewModel = koinViewModel()
 ) {
     val context = LocalContext.current
@@ -56,6 +58,20 @@ fun ConsumerDashboardScreen(
     val shieldActive by viewModel.shieldActive.collectAsState()
     val blockedToday by viewModel.blockedToday.collectAsState()
     val callsScreened by viewModel.callsScreenedToday.collectAsState(initial = 0)
+
+    // First-launch → onboarding routing, ported from the retired OperationalDashboard.
+    // Read-only against the "onboarding_complete" flag: OnboardingWizardScreen owns
+    // writing this key to true on completion (PULSE-TODO: migrate to SettingEntry in
+    // Step 2.6 — both this read and the wizard's write move together at that point).
+    val sharedPreferences = remember {
+        context.getSharedPreferences("${context.packageName}_preferences", Context.MODE_PRIVATE)
+    }
+    LaunchedEffect(Unit) {
+        val isOnboardingComplete = sharedPreferences.getBoolean("onboarding_complete", false)
+        if (!isOnboardingComplete) {
+            onLaunchOnboarding()
+        }
+    }
 
     // Recheck role on every resume — never cached
     DisposableEffect(lifecycleOwner) {

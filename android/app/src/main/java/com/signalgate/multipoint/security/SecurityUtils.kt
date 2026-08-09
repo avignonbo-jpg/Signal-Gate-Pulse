@@ -13,6 +13,7 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import timber.log.Timber
 
 object SecurityUtils {
 
@@ -80,6 +81,11 @@ object SecurityUtils {
      *
      * Requires a Context because the wrapped (encrypted) passphrase must be persisted
      * somewhere — SharedPreferences here; the values stored are ciphertext, not secrets.
+     *
+     * @throws KeystoreInvalidatedException if a wrapped passphrase is stored but the
+     * current Keystore key can't decrypt it — this means the existing database is about
+     * to become unreadable and callers must handle it explicitly (see SecureDatabase),
+     * not silently regenerate around it.
      */
     fun getDatabasePassphrase(context: Context): ByteArray {
         val secretKey = getOrCreateKeystoreKey()
@@ -95,13 +101,63 @@ object SecurityUtils {
                     Base64.decode(existingCiphertext, Base64.NO_WRAP),
                     Base64.decode(existingIv, Base64.NO_WRAP)
                 )
-            } catch (e: Exception) {
-                // Keystore key was invalidated (e.g. lock-screen removed on some OEMs) or the
-                // stored blob is corrupt. Fall through and re-wrap a fresh passphrase rather
-                // than crash — this is a recoverable local-cache condition, not a hard failure.
+            } catch (e: android.security.keystore.KeyPermanentlyInvalidatedException) {
+                // Android's own explicit signal that this key can never be used again.
+                // Must be caught before InvalidKeyException below — it's a subclass.
+                throw KeystoreInvalidatedException(e)
+            } catch (e: java.security.InvalidKeyException) {
+                // Key rejected outright by the Cipher — same category as above.
+                throw KeystoreInvalidatedException(e)
+            } catch (e: javax.crypto.BadPaddingException) {
+                // GCM auth-tag check failed — ciphertext/IV don't decrypt with this key.
+                // This is the actual signature of "Keystore key no longer matches what
+                // encrypted this blob" and is the case this method's callers must treat
+                // as a real, destructive-database-reset-worthy event.
+                throw KeystoreInvalidatedException(e)
             }
+            // Deliberately NOT a blanket catch (e: Exception) here — this is a
+            // destructive path (SecureDatabase.getDatabase() deletes the existing DB
+            // file on KeystoreInvalidatedException). An unrelated bug — a malformed
+            // Base64 string, a transient IllegalStateException, etc. — must surface as
+            // itself rather than being misclassified into a database wipe.
         }
 
+        // No passphrase stored yet — first install. Expected, safe to generate silently.
+        return generateAndPersistPassphrase(secretKey, prefs)
+    }
+
+    /**
+     * Explicitly generates and persists a brand-new wrapped passphrase, overwriting
+     * whatever (if anything) was stored before.
+     *
+     * Only call this after deliberately handling a [KeystoreInvalidatedException] —
+     * e.g. after logging the event and deleting the now-unreadable database file.
+     * Do not call this as an automatic fallback from [getDatabasePassphrase].
+     */
+    fun resetDatabasePassphrase(context: Context): ByteArray {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        return try {
+            generateAndPersistPassphrase(getOrCreateKeystoreKey(), prefs)
+        } catch (e: Exception) {
+            // getOrCreateKeystoreKey() only generates a fresh key when containsAlias()
+            // is false — but containsAlias() can still report true for an alias whose
+            // key material is no longer usable for any operation (the same class of
+            // invalidation that got us into this recovery path in the first place).
+            // If reusing that "existing" key just failed too, don't leave the caller
+            // with an unhandled exception: delete the alias outright so the next
+            // getOrCreateKeystoreKey() call is forced down its key-generation branch,
+            // then retry once with a guaranteed-fresh key.
+            Timber.w(e, "Reusing existing Keystore alias failed during passphrase reset — deleting alias and retrying with a fresh key")
+            KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.deleteEntry(KEY_ALIAS)
+            generateAndPersistPassphrase(getOrCreateKeystoreKey(), prefs)
+        }
+    }
+
+    private fun generateAndPersistPassphrase(
+        secretKey: SecretKey,
+        prefs: android.content.SharedPreferences
+    ): ByteArray {
         val newPassphrase = ByteArray(PASSPHRASE_LENGTH_BYTES).apply { SecureRandom().nextBytes(this) }
         val (ciphertext, iv) = encrypt(secretKey, newPassphrase)
         prefs.edit()

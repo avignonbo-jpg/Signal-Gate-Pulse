@@ -1,4 +1,4 @@
-package com.signalgate.multipoint.ui
+ package com.signalgate.multipoint.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -100,8 +100,17 @@ class BlockedNumbersViewModel(private val repository: BlocklistRepository) : Vie
 
     /**
      * Validates and adds a manual rule. [action] must be "BLOCK" or "ALLOW".
-     * Runs the raw input through SanitizationEngine before it ever reaches
-     * the repository — same pattern as SourcesViewModel.addSource().
+     * The phone number is run through SanitizationEngine here (needed for the
+     * digit-count validation below — sanitizePhoneNumber is idempotent, so
+     * BlocklistRepository re-applying it internally is harmless).
+     *
+     * Security fix (audit finding): [reason] is intentionally passed through
+     * RAW, not pre-sanitized here. BlocklistRepository.addBlockRule()/addAllowRule()
+     * now own sanitizeTextField() for this field, since sanitizeTextField() is
+     * NOT idempotent (its SQL quote-escaping doubles up on repeat application) —
+     * sanitizing it both here and in the repository would corrupt any reason
+     * containing a quote. Applying it exactly once, at the repository's entity
+     * write, is the single source of truth.
      */
     fun addRule(rawNumber: String, action: String, reason: String) {
         val cleanNumber = SanitizationEngine.sanitizePhoneNumber(rawNumber)
@@ -116,16 +125,16 @@ class BlockedNumbersViewModel(private val repository: BlocklistRepository) : Vie
             return
         }
 
-        val cleanReason = SanitizationEngine.sanitizeTextField(reason).ifBlank {
+        val reasonOrDefault = reason.ifBlank {
             if (action == "BLOCK") "Manual Block" else "Manual Allow"
         }
 
         viewModelScope.launch {
             try {
                 if (action == "BLOCK") {
-                    repository.addBlockRule(cleanNumber, cleanReason)
+                    repository.addBlockRule(cleanNumber, reasonOrDefault)
                 } else {
-                    repository.addAllowRule(cleanNumber, cleanReason)
+                    repository.addAllowRule(cleanNumber, reasonOrDefault)
                 }
                 _formError.value = null
                 _isAddSheetVisible.value = false

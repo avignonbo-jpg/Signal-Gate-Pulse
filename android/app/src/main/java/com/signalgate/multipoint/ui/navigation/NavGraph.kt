@@ -10,8 +10,8 @@ import androidx.navigation.navDeepLink
 import com.signalgate.multipoint.ui.digest.DigestScreen
 import com.signalgate.multipoint.ui.onboarding.OnboardingWizardScreen
 import com.signalgate.multipoint.ui.screens.CallLogScreen
+import com.signalgate.multipoint.ui.screens.ConsumerDashboardScreen
 import com.signalgate.multipoint.ui.screens.LogcatViewerScreen
-import com.signalgate.multipoint.ui.screens.OperationalDashboard
 import com.signalgate.multipoint.ui.screens.SettingsScreen
 import com.signalgate.multipoint.ui.screens.SourcesScreen
 import com.signalgate.multipoint.ui.screens.BlockAllowListScreen
@@ -28,8 +28,9 @@ fun SignalGateNavGraph(
         modifier = modifier.fillMaxSize()
     ) {
         composable(Screen.Dashboard.route) {
-            OperationalDashboard(
-                onOpenDrawer = onOpenDrawer,
+            ConsumerDashboardScreen(
+                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                onNavigateToActivity = { navController.navigate(Screen.Digest.route) },
                 onLaunchOnboarding = { navController.navigate(Screen.Onboarding.route) }
             )
         }

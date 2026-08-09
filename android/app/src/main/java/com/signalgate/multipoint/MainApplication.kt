@@ -39,6 +39,13 @@ class MainApplication : Application(), Configuration.Provider {
 
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
+        } else {
+            // DebugTree is intentionally debug-only (avoids verbose/info spam in release
+            // logcat), but that meant WARN/ERROR-level events — like a Keystore
+            // invalidation forcing a database reset — went nowhere in release builds.
+            // This minimal tree keeps release logs quiet except for events that actually
+            // matter, so they're still visible in logcat / bug reports.
+            Timber.plant(ReleaseTree())
         }
 
         startKoin {
@@ -70,4 +77,21 @@ class MainApplication : Application(), Configuration.Provider {
         get() = Configuration.Builder()
             .setWorkerFactory(KoinWorkerFactory())
             .build()
+}
+
+/**
+ * Timber tree for release builds: forwards only WARN and above to android.util.Log,
+ * so it stays visible via logcat/bug reports without the verbose/info spam a full
+ * DebugTree would add in production.
+ */
+private class ReleaseTree : Timber.Tree() {
+    override fun isLoggable(tag: String?, priority: Int): Boolean =
+        priority >= android.util.Log.WARN
+
+    override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+        android.util.Log.println(priority, tag ?: "SignalGate", message)
+        if (t != null) {
+            android.util.Log.println(priority, tag ?: "SignalGate", android.util.Log.getStackTraceString(t))
+        }
+    }
 }

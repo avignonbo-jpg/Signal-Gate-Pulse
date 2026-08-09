@@ -4,6 +4,7 @@ import timber.log.Timber
 import com.signalgate.multipoint.CallInfo
 import com.signalgate.multipoint.CallTier
 import com.signalgate.multipoint.SignalGateCallScreeningService
+import com.signalgate.multipoint.data.security.SanitizationEngine
 import com.signalgate.multipoint.database.repositories.DataSourceRepository
 
 /**
@@ -39,20 +40,32 @@ class CallScreeningEngine(
         private const val HEURISTIC_RISK_THRESHOLD = 55
     }
 
+    /**
+     * Security fix (audit finding): [phoneNumber] here is the raw caller-ID string
+     * read straight off android.telecom.Call.Details — the single most externally-
+     * controlled input in this app (caller ID / CLI is attacker-spoofable). It is
+     * now sanitized via SanitizationEngine.sanitizePhoneNumber() immediately, before
+     * being placed into CallInfo.originalPhoneNumber. Previously the raw value was
+     * carried unsanitized all the way into CallLogEntry (an Entity, via
+     * SignalGateCallScreeningService.writeAuditRecords) and into the blocked-call
+     * notification body text — this closes both gaps at the source instead of
+     * patching each downstream consumer individually.
+     */
     suspend fun screenCall(phoneNumber: String, callDetails: android.telecom.Call.Details?): CallInfo {
-        val normalized = normalizePhoneNumber(phoneNumber)
-        Timber.d("Screening call from: $phoneNumber (normalized: $normalized)")
+        val sanitizedOriginal = SanitizationEngine.sanitizePhoneNumber(phoneNumber)
+        val normalized = normalizePhoneNumber(sanitizedOriginal)
+        Timber.d("Screening call from: $sanitizedOriginal (normalized: $normalized)")
 
         return try {
             val decision = repository.getCallDecision(normalized)
             when (decision.action) {
-                "ALLOW" -> buildAllowInfo(phoneNumber, normalized, decision)
-                "BLOCK" -> buildBlockInfo(phoneNumber, normalized, decision)
-                else    -> buildGrayZoneInfo(phoneNumber, normalized, callDetails)
+                "ALLOW" -> buildAllowInfo(sanitizedOriginal, normalized, decision)
+                "BLOCK" -> buildBlockInfo(sanitizedOriginal, normalized, decision)
+                else    -> buildGrayZoneInfo(sanitizedOriginal, normalized, callDetails)
             }
         } catch (e: Exception) {
-            Timber.e(e, "Engine error for $phoneNumber, defaulting to ALLOW")
-            buildDefaultInfo(phoneNumber, normalized)
+            Timber.e(e, "Engine error for $sanitizedOriginal, defaulting to ALLOW")
+            buildDefaultInfo(sanitizedOriginal, normalized)
         }
     }
 
@@ -171,6 +184,12 @@ class CallScreeningEngine(
         )
     }
 
+    /**
+     * Note: [phoneNumber] arrives here already passed through
+     * SanitizationEngine.sanitizePhoneNumber() by screenCall(). This regex further
+     * strips wildcard/extension characters (*, #, x) that sanitizePhoneNumber
+     * intentionally preserves, since exact-match DB lookups need digits/+ only.
+     */
     private fun normalizePhoneNumber(phoneNumber: String): String =
-        phoneNumber.replace(Regex("[^0-9+]"), "")
+        SanitizationEngine.sanitizePhoneNumber(phoneNumber).replace(Regex("[^0-9+]"), "")
 }

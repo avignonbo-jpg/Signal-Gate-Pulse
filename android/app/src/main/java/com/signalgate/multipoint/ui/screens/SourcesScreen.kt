@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,30 +18,33 @@ import org.koin.androidx.compose.koinViewModel
 
 /**
  * SourcesScreen — Phase 3.3/3.4 (Contract §4 L7).
- * Real SourceEntity data via SourcesViewModel -> DataSourceRepository, health
- * status (green/yellow/red), human-readable last-sync timestamp, and a
- * working "Add Source" bottom sheet that inserts through the repository.
+ * Real SourceEntity data via SourcesViewModel -> DataSourceRepository: health
+ * status (green/yellow/red), human-readable last-sync timestamp, manual
+ * sync-now, enable/disable, and removal.
  *
- * Fixed per Production-Readiness Procedure, Phase 0.1 — this file previously
- * referenced a SourcesViewModel class that did not exist anywhere, along
- * with an unimported Color and an undefined Long.humanReadable() extension,
- * and would not compile.
+ * The "Add Source" custom CSV/URL/XLSX flow has been removed — it was a
+ * Multi-Port (prosumer) capability, not part of the Pulse consumer design
+ * (FCC + community blocklist + manual only). See SourcesViewModel for the
+ * full rationale.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SourcesScreen(viewModel: SourcesViewModel = koinViewModel()) {
     val sources by viewModel.sources.collectAsState(initial = emptyList())
     val isSyncing by viewModel.isSyncing.collectAsState()
-    val isAddSheetVisible by viewModel.isAddSheetVisible.collectAsState()
-    val addSourceError by viewModel.addSourceError.collectAsState()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Data Sources") }) },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { viewModel.showAddSheet() },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("Add Source") }
+        topBar = {
+            TopAppBar(
+                title = { Text("Data Sources") },
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.syncAllSources() },
+                        enabled = !isSyncing
+                    ) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Sync all sources")
+                    }
+                }
             )
         }
     ) { padding ->
@@ -55,7 +58,7 @@ fun SourcesScreen(viewModel: SourcesViewModel = koinViewModel()) {
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No sources yet. Tap \"Add Source\" to get started.")
+                    Text("No sources yet.")
                 }
             } else {
                 LazyColumn(
@@ -67,22 +70,13 @@ fun SourcesScreen(viewModel: SourcesViewModel = koinViewModel()) {
                         SourceRow(
                             source = source,
                             onSync = { viewModel.syncSource(source.id) },
-                            onDelete = { viewModel.deleteSource(source) }
+                            onDelete = { viewModel.deleteSource(source) },
+                            onToggleEnabled = { enabled -> viewModel.toggleSourceEnabled(source.id, enabled) }
                         )
                     }
                 }
             }
         }
-    }
-
-    if (isAddSheetVisible) {
-        AddSourceBottomSheet(
-            error = addSourceError,
-            onDismiss = { viewModel.hideAddSheet() },
-            onConfirm = { name, type, pathOrUrl, priority ->
-                viewModel.addSource(name, type, pathOrUrl, priority)
-            }
-        )
     }
 }
 
@@ -90,20 +84,29 @@ fun SourcesScreen(viewModel: SourcesViewModel = koinViewModel()) {
 private fun SourceRow(
     source: SourceEntity,
     onSync: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onToggleEnabled: (Boolean) -> Unit
 ) {
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(source.name, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    text = source.healthStatus,
-                    color = getHealthColor(source.healthStatus),
-                    style = MaterialTheme.typography.labelMedium
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = source.healthStatus,
+                        color = getHealthColor(source.healthStatus),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Switch(
+                        checked = source.isEnabled,
+                        onCheckedChange = onToggleEnabled
+                    )
+                }
             }
             Spacer(Modifier.height(4.dp))
             Text(
@@ -129,84 +132,4 @@ private fun getHealthColor(status: String): Color = when (status.uppercase()) {
     "WARNING" -> Color(0xFFF1C40F)
     "UNKNOWN" -> Color(0xFF95A5A6)
     else -> Color(0xFFE74C3C)
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AddSourceBottomSheet(
-    error: String?,
-    onDismiss: () -> Unit,
-    onConfirm: (name: String, type: String, pathOrUrl: String, priority: Int) -> Unit
-) {
-    var name by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf(SourcesViewModel.ALLOWED_TYPES.first()) }
-    var pathOrUrl by remember { mutableStateOf("") }
-    var priorityText by remember { mutableStateOf("50") }
-
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
-        ) {
-            Text("Add Source", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Name") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(12.dp))
-
-            Text("Type", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SourcesViewModel.ALLOWED_TYPES.forEach { option ->
-                    FilterChip(
-                        selected = type == option,
-                        onClick = { type = option },
-                        label = { Text(option) }
-                    )
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = pathOrUrl,
-                onValueChange = { pathOrUrl = it },
-                label = { Text("Path or URL") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = priorityText,
-                onValueChange = { input -> if (input.all { it.isDigit() }) priorityText = input },
-                label = { Text("Priority (0–99)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            if (error != null) {
-                Spacer(Modifier.height(8.dp))
-                Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
-
-            Spacer(Modifier.height(20.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-                Spacer(Modifier.width(8.dp))
-                Button(onClick = {
-                    onConfirm(name, type, pathOrUrl, priorityText.toIntOrNull() ?: 50)
-                }) { Text("Save") }
-            }
-            Spacer(Modifier.height(12.dp))
-        }
-    }
 }

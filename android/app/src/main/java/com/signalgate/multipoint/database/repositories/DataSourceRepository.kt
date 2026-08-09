@@ -1,5 +1,6 @@
 package com.signalgate.multipoint.database.repositories
 
+import com.signalgate.multipoint.data.security.SanitizationEngine
 import com.signalgate.multipoint.database.daos.SourceDao
 import com.signalgate.multipoint.database.daos.UnifiedEntryDao
 import com.signalgate.multipoint.database.entities.SourceEntity
@@ -73,8 +74,29 @@ class DataSourceRepository(
 
     suspend fun getAllEntries(): List<UnifiedEntryEntity> = entryDao.getAllEntries()
 
+    /**
+     * Security fix (audit finding): this is the single write chokepoint every
+     * UnifiedEntryEntity insert funnels through (federal sync, CSV/XLSX import,
+     * contacts allowlist, manual block/allow via RecentCallsViewModel). It must
+     * never trust the caller to have sanitized first — normalizePhoneNumber()
+     * now routes through SanitizationEngine.sanitizePhoneNumber() (previously a
+     * private duplicate regex that never touched SanitizationEngine at all), and
+     * category/metadata — the only free-text fields on this entity, and the ones
+     * that can carry externally-sourced text such as a Contacts-provider display
+     * name — are run through SanitizationEngine.sanitizeTextField().
+     *
+     * sanitizeTextField() is NOT idempotent (its SQL quote-escaping doubles up
+     * on repeated application), so it must be applied exactly once. No current
+     * caller pre-sanitizes category/metadata before calling insertEntry(), so
+     * sanitizing here — once, centrally — is safe. Do not also sanitize these
+     * fields at call sites that go through this method.
+     */
     suspend fun insertEntry(entry: UnifiedEntryEntity) {
-        val sanitized = entry.copy(phoneNumber = normalizePhoneNumber(entry.phoneNumber))
+        val sanitized = entry.copy(
+            phoneNumber = normalizePhoneNumber(entry.phoneNumber),
+            category = entry.category?.let { SanitizationEngine.sanitizeTextField(it) },
+            metadata = entry.metadata?.let { SanitizationEngine.sanitizeTextField(it) }
+        )
         entryDao.insertEntry(sanitized)
     }
 
@@ -165,9 +187,18 @@ class DataSourceRepository(
         return sourceDao.getSourceById(sourceId)?.priority == 100
     }
 
+    /**
+     * Security fix (audit finding): previously stripped characters with a private
+     * `[^0-9+\s]` regex and never called SanitizationEngine — a second, divergent
+     * sanitizer sitting right next to the canonical one. Now the raw input is
+     * always passed through SanitizationEngine.sanitizePhoneNumber() first (strips
+     * anything outside the audited allowlist and enforces the 30-char cap), and
+     * the E.164 shaping below operates only on that already-sanitized string.
+     */
     private fun normalizePhoneNumber(raw: String): String {
-        if (raw.isBlank()) return ""
-        var cleaned = raw.replace(Regex("[^0-9+\\s]"), "").trim()
+        val safe = SanitizationEngine.sanitizePhoneNumber(raw)
+        if (safe.isBlank()) return ""
+        var cleaned = safe.replace(Regex("[^0-9+]"), "").trim()
         if (cleaned.startsWith("1") && cleaned.length == 11) {
             cleaned = "+$cleaned"
         } else if (!cleaned.startsWith("+")) {

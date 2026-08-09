@@ -37,6 +37,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.signalgate.multipoint.R
 import com.signalgate.multipoint.ui.theme.*
 import com.signalgate.multipoint.ui.viewmodels.ContactItem
@@ -48,6 +49,8 @@ import timber.log.Timber
  * OnboardingWizardScreen — Multi-step setup flow for new users.
  *
  * Steps:
+ * 0a. EULA — binding agreement, must accept to proceed (unnumbered — precedes setup)
+ * 0b. Welcome — confirms Pulse flavor, brief SignalGate Trinity mention (unnumbered)
  * 1. Permissions — Request CALL_SCREENING role and required runtime permissions
  * 2. Contacts — Import and select contacts for auto-allow (whitelist)
  * 3. Sources — Select protection level / data sources
@@ -55,6 +58,11 @@ import timber.log.Timber
  *
  * Step 0.1 (2026-07-02): RiskThresholdStep now persists onboarding_complete flag.
  * Users will not see this wizard on subsequent app launches.
+ *
+ * EULA/Welcome added [current session]: unnumbered preamble ahead of the numbered
+ * "Step X of 3" flow (Permissions/Contacts/Sources) — deliberately excluded from that
+ * counter, same treatment as the unnumbered Completion step, so the count keeps
+ * meaning "configuration steps remaining" rather than "screens remaining."
  */
 
 @Composable
@@ -62,11 +70,245 @@ fun OnboardingWizardScreen(
     navController: NavHostController,
     viewModel: OnboardingViewModel = koinViewModel()
 ) {
-    NavHost(navController = navController, startDestination = "permissions") {
-        composable("permissions") { PermissionsStep(navController, viewModel) }
-        composable("contacts")    { ContactsImportStep(navController) }
-        composable("sources")     { SourcesSelectionStep(navController) }
+    // `navController` here is the OUTER, app-level controller passed down from
+    // SignalGateNavGraph — it's already attached to that outer NavHost. A
+    // NavHostController can only be attached to one NavHost at a time, so
+    // reusing it below for this wizard's own NavHost caused:
+    // "ViewModelStore should be set before setGraph call".
+    //
+    // Fix: give the wizard its own internal controller for step-to-step
+    // navigation, and only hand the outer `navController` to the final step,
+    // which is the one place that needs to navigate OUT to the outer graph's
+    // "consumer_dashboard" destination.
+    val wizardNavController = rememberNavController()
+
+    NavHost(navController = wizardNavController, startDestination = "eula") {
+        composable("eula")        { EulaStep(wizardNavController) }
+        composable("welcome")     { WelcomeStep(wizardNavController) }
+        composable("permissions") { PermissionsStep(wizardNavController, viewModel) }
+        composable("contacts")    { ContactsImportStep(wizardNavController) }
+        composable("sources")     { SourcesSelectionStep(wizardNavController) }
         composable("risk")        { RiskThresholdStep(navController) }
+    }
+}
+
+// ── STEP 0a: EULA ──────────────────────────────────────────────────────────────
+
+/**
+ * EulaStep — Binding agreement gate. First thing any user sees.
+ *
+ * IMPORTANT: the agreement text below is a structural placeholder only — it is
+ * NOT reviewed or approved legal language and must not ship as-is. Get actual
+ * terms from counsel before release. What's real here: the acceptance mechanic
+ * (scroll-then-checkbox, persisted with a version string so a future terms
+ * change can force re-acceptance without re-running the whole wizard).
+ */
+@Composable
+fun EulaStep(navController: NavHostController) {
+    val context = LocalContext.current
+    var agreed by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DeepSpaceBackground)
+            .padding(horizontal = 24.dp)
+    ) {
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Text(
+            text = "License Agreement",
+            color = NeonCyan,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(SurfaceGlass)
+                .border(1.dp, BorderGlass, RoundedCornerShape(16.dp))
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                item {
+                    // PLACEHOLDER — see doc comment above. Not legal-reviewed text.
+                    Text(
+                        text = "SIGNALGATE PULSE — END USER LICENSE AGREEMENT (PLACEHOLDER)\n\n" +
+                            "This placeholder stands in for the binding terms governing use of " +
+                            "SignalGate Pulse, including acceptable use, call-screening data " +
+                            "handling, and limitations of liability. Replace with reviewed legal " +
+                            "text before any release build.\n\n" +
+                            "By continuing, you will confirm your agreement to the final terms " +
+                            "once they are in place.",
+                        color = TextSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Checkbox(
+                checked = agreed,
+                onCheckedChange = { agreed = it },
+                colors = CheckboxDefaults.colors(checkedColor = NeonCyan)
+            )
+            Text(
+                text = "I have read and agree to the terms above.",
+                color = TextPrimary,
+                fontSize = 14.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = {
+                // Persisted separately from onboarding_complete, on purpose: this is a
+                // legal acceptance record (what was agreed to, and when), not a wizard
+                // progress flag. Keeping it distinct means a future terms version bump
+                // can require re-acceptance without forcing a full onboarding re-run.
+                // Same raw-SharedPreferences approach as RiskThresholdStep's
+                // onboarding_complete write — see that step's PULSE-TODO re: migrating
+                // both to SettingEntry together rather than diverging further.
+                try {
+                    val prefs = context.getSharedPreferences(
+                        "${context.packageName}_preferences",
+                        Context.MODE_PRIVATE
+                    )
+                    prefs.edit()
+                        .putBoolean("eula_accepted", true)
+                        .putString("eula_version", "placeholder-v0")
+                        .putLong("eula_accepted_at", System.currentTimeMillis())
+                        .apply()
+                } catch (e: Exception) {
+                    Timber.tag("OnboardingWizard").e(e, "Failed to persist EULA acceptance")
+                }
+                navController.navigate("welcome")
+            },
+            enabled = agreed,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .border(1.5.dp, NeonCyan, RoundedCornerShape(28.dp)),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = NeonCyan.copy(alpha = 0.2f),
+                contentColor = TextPrimary
+            ),
+            shape = RoundedCornerShape(28.dp)
+        ) {
+            Text("I AGREE  ›", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+// ── STEP 0b: Welcome ───────────────────────────────────────────────────────────
+
+/**
+ * WelcomeStep — Introduces the SignalGate suite, confirms the Pulse flavor,
+ * and sets expectations: one-time setup, then the app gets out of the way.
+ *
+ * The Trinity mention here is deliberately one line, not a feature tour of
+ * Multi-Port or the Enterprise edition — this is Pulse's first-run moment,
+ * not a cross-sell. Fuller Trinity detail belongs in Settings → About.
+ */
+@Composable
+fun WelcomeStep(navController: NavHostController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DeepSpaceBackground)
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(48.dp))
+
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.ic_signal_gate_logo),
+            contentDescription = null,
+            modifier = Modifier.size(56.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "WELCOME TO",
+            color = TextSecondary,
+            fontSize = 12.sp,
+            letterSpacing = 2.sp
+        )
+        Text(
+            text = "SIGNALGATE PULSE",
+            color = TextPrimary,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "Pulse is part of the SignalGate Trinity — built for set-and-forget " +
+                "protection that pulses to life exactly when you need it.",
+            color = NeonCyan,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        androidx.compose.foundation.Image(
+            painter = painterResource(R.drawable.shield_logo),
+            contentDescription = "Shield",
+            modifier = Modifier.size(160.dp)
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Text(
+            text = "A one-time setup, then Pulse works quietly in the background — " +
+                "fewer bogus interruptions, without you having to manage a thing.",
+            color = TextSecondary,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Button(
+            onClick = { navController.navigate("permissions") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .border(
+                    width = 1.5.dp,
+                    brush = Brush.horizontalGradient(listOf(NeonCyan, AccentPrimary)),
+                    shape = RoundedCornerShape(28.dp)
+                ),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = NeonCyan.copy(alpha = 0.2f),
+                contentColor = TextPrimary
+            ),
+            shape = RoundedCornerShape(28.dp)
+        ) {
+            Text("BEGIN  ›", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -378,7 +620,12 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
  * - Allows search and filtering
  * - Multi-select with Select All / Clear buttons
  * - Saves selected contacts to UnifiedEntryEntity with action='ALLOW'
- * - Advances to sources step when saved
+ * - "Skip" advances with neither allow nor block entries created — this step
+ *   only ever grants ALLOW, never BLOCK, so there's no bulk-selection path that
+ *   can isolate a user from their own contacts.
+ * - Advances to sources step when saved (including the zero-selected and skip
+ *   cases — previously, selecting zero contacts silently dead-ended the wizard
+ *   with no way to proceed).
  *
  * @param navController Navigation controller for step progression
  */
@@ -393,6 +640,7 @@ fun ContactsImportStep(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isSaved by viewModel.isSaved.collectAsState()
+    val saveError by viewModel.saveError.collectAsState()
     val filteredContacts = viewModel.filteredContacts
 
     LaunchedEffect(Unit) { viewModel.loadContacts(context) }
@@ -486,6 +734,15 @@ fun ContactsImportStep(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        if (saveError != null) {
+            Text(
+                text = saveError ?: "",
+                color = Color(0xFFFF6B6B),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+
         Button(
             onClick = { viewModel.saveSelectedToAllowList() },
             modifier = Modifier
@@ -500,6 +757,18 @@ fun ContactsImportStep(
             enabled = !isLoading
         ) {
             Text("IMPORT & CONTINUE  ›", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        }
+
+        TextButton(
+            onClick = { viewModel.skipContactImport() },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading
+        ) {
+            Text(
+                "Skip — I'll manage this later",
+                color = TextSecondary,
+                fontSize = 13.sp
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))

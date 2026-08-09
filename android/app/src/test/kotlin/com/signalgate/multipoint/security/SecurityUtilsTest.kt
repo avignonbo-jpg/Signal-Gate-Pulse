@@ -8,18 +8,15 @@ import org.junit.Assert.assertTrue
  * SecurityUtilsTest — unit tests for SecurityUtils.
  *
  * Scope: JVM unit tests only (no Android runtime). Keystore-dependent paths
- * (getDatabasePassphrase, clearDatabasePassphrase, envelope round-trip) require
- * an instrumented androidTest runner and a real Android Keystore.
+ * (getDatabasePassphrase, envelope round-trip, recovery from corrupted/missing storage)
+ * require a real Android Keystore and are covered instead by
+ * SecurityUtilsInstrumentedTest.kt in androidTest/.
  *
- * PULSE-TODO: create SecurityUtilsInstrumentedTest.kt in androidTest/ with:
- *   - testGetDatabasePassphrase_returnsDeterministicBytes()
- *   - testGetDatabasePassphrase_afterKeyInvalidation_returnsNewBytes()
- *   - testClearDatabasePassphrase_removesPrefs()
- *   - testEnvelopeRoundTrip_decryptedMatchesOriginal()
- *   - testEnableStrictMode_doesNotThrow() — enableStrictMode() calls real
- *     android.os.StrictMode APIs, which throw "not mocked" on a plain JVM
- *     unit test (no Robolectric runner here). Same category as the
- *     Keystore-dependent methods above — needs a real Android runtime.
+ * enableStrictMode() is intentionally not covered by a dedicated test anywhere: it calls
+ * real android.os.StrictMode APIs (so it can't run here without Robolectric), and an
+ * instrumented test that just calls it again would only confirm "it didn't throw" — a
+ * property already exercised by MainApplication.onCreate() every time the instrumented
+ * test process starts.
  */
 class SecurityUtilsTest {
 

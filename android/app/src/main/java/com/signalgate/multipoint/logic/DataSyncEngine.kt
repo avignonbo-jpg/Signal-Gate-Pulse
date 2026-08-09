@@ -48,6 +48,23 @@ import javax.xml.parsers.SAXParserFactory
  * Parsing stops cleanly at the limit — no wasted CPU continuing to parse XML
  * for rows that will be discarded. Partial result is returned (better than nothing).
  *
+ * BYTE LIMIT (MAX_XLSX_BYTES):
+ * The initial inputStream.readBytes() call has no ceiling of its own — it runs
+ * before MAX_ROWS ever gets a chance to matter, so a compromised or oversized
+ * upstream response could otherwise force a large allocation regardless of what
+ * the file actually contains. MAX_XLSX_BYTES bounds that read directly. The shared
+ * strings table gets its own MAX_SHARED_STRINGS cap for the same reason — it's a
+ * separate, unbounded-by-MAX_ROWS expansion vector (a small compressed file can
+ * still carry a very large shared-string table independent of actual row count).
+ *
+ * CURRENT WIRING STATUS:
+ * As of this writing, nothing in the app calls parseXLSXFile() — SourcesViewModel
+ * exposes an "XLSX" source type in its Add Source sheet, but ReliableSourceManager
+ * (the actual sync engine) works off a hardcoded federal source list and never
+ * reads the sources table at all, so a user-added source of any type (CSV, URL, or
+ * XLSX) is inert today. This parser is hardened regardless, on the assumption that
+ * "unreachable today" is not the same guarantee as "will stay unreachable."
+ *
  * minSdk requirement: API 29+ (confirmed in build.gradle defaultConfig).
  */
 class DataSyncEngine(
@@ -62,6 +79,15 @@ class DataSyncEngine(
         private const val MAX_PHONE_LENGTH = 15
         private const val CHUNK_SIZE = 1_000
         private const val DEFAULT_PHONE_COLUMN = 0 // Column A (0-indexed)
+
+        // Hard ceiling on the raw (compressed) XLSX byte size read into memory before
+        // any row-based limiting applies. ~25MB gives generous headroom over the
+        // documented typical case (500K numbers ≈ 5-15MB compressed).
+        private const val MAX_XLSX_BYTES = 25 * 1024 * 1024
+
+        // Hard ceiling on shared-string table size — independent of MAX_ROWS, since
+        // a small compressed file can still expand into a very large shared-strings.xml.
+        private const val MAX_SHARED_STRINGS = 2_000_000
 
         // Entry paths inside the XLSX ZIP archive
         private const val SHEET1_PATH = "xl/worksheets/sheet1.xml"
@@ -164,10 +190,10 @@ class DataSyncEngine(
         sourceId: Int,
         phoneColumnIndex: Int
     ): List<UnifiedEntryEntity> {
-        // Read entire stream into memory once so we can open it as a ZIP twice.
-        // For a blocklist XLSX the compressed ZIP is much smaller than uncompressed
-        // cell data — typical 500K number file is 5-15MB compressed.
-        val zipBytes = inputStream.readBytes()
+        // Bounded read: MAX_ROWS only protects the parsing pass, which starts after
+        // this point. Without a ceiling here, an oversized upstream response would
+        // still force a large allocation before row-limiting ever applies.
+        val zipBytes = readBytesWithLimit(inputStream, MAX_XLSX_BYTES)
 
         val sharedStrings = parseSharedStrings(zipBytes)
         val entries = parseSheet(zipBytes, sourceId, phoneColumnIndex, sharedStrings)
@@ -176,6 +202,29 @@ class DataSyncEngine(
             "XLSX parse complete — valid=${entries.size} source=$sourceId"
         )
         return entries
+    }
+
+    /**
+     * Reads inputStream into a ByteArray, throwing XlsxParseException if the total
+     * exceeds maxBytes. Reads in fixed-size chunks rather than trusting a
+     * Content-Length header, which chunked transfer encoding won't provide anyway.
+     */
+    private fun readBytesWithLimit(inputStream: InputStream, maxBytes: Int): ByteArray {
+        val buffer = java.io.ByteArrayOutputStream()
+        val chunk = ByteArray(64 * 1024)
+        var total = 0
+        while (true) {
+            val read = inputStream.read(chunk)
+            if (read == -1) break
+            total += read
+            if (total > maxBytes) {
+                throw XlsxParseException(
+                    "XLSX source exceeded $maxBytes byte limit — refusing to buffer further"
+                )
+            }
+            buffer.write(chunk, 0, read)
+        }
+        return buffer.toByteArray()
     }
 
     /**
@@ -190,8 +239,17 @@ class DataSyncEngine(
             while (entry != null) {
                 if (entry.name == SHARED_STRINGS_PATH) {
                     val handler = SharedStringsHandler(sharedStrings)
-                    SAXParserFactory.newInstance().newSAXParser()
-                        .parse(InputSource(zip), handler)
+                    try {
+                        SAXParserFactory.newInstance().newSAXParser()
+                            .parse(InputSource(zip), handler)
+                    } catch (e: SharedStringsLimitExceededException) {
+                        Timber.tag(TAG).w(
+                            "Shared strings limit $MAX_SHARED_STRINGS reached — " +
+                            "${sharedStrings.size} entries collected"
+                        )
+                        // Partial result is acceptable — rows referencing an index
+                        // beyond what was collected resolve to "" in resolveValue().
+                    }
                     break
                 }
                 entry = zip.nextEntry
@@ -279,7 +337,14 @@ class DataSyncEngine(
         override fun endElement(uri: String, localName: String, qName: String) {
             when (qName) {
                 "t"  -> inT = false
-                "si" -> result.add(current.toString())
+                "si" -> {
+                    if (result.size >= MAX_SHARED_STRINGS) {
+                        throw SharedStringsLimitExceededException(
+                            "Shared strings limit $MAX_SHARED_STRINGS reached"
+                        )
+                    }
+                    result.add(current.toString())
+                }
             }
         }
 
@@ -431,4 +496,11 @@ class DataSyncEngine(
      * which returns the entries collected so far. Not surfaced to callers.
      */
     private class RowLimitExceededException(message: String) : Exception(message)
+
+    /**
+     * Thrown internally when MAX_SHARED_STRINGS is reached. Caught by
+     * parseSharedStrings() which returns the entries collected so far.
+     * Not surfaced to callers.
+     */
+    private class SharedStringsLimitExceededException(message: String) : Exception(message)
 }

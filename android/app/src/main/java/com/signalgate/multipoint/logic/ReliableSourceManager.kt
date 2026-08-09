@@ -1,6 +1,7 @@
 package com.signalgate.multipoint.logic
 
 import com.signalgate.multipoint.data.security.SanitizationEngine
+import com.signalgate.multipoint.data.security.SecureCsvParser
 import com.signalgate.multipoint.database.entities.SourceEntity
 import com.signalgate.multipoint.database.entities.UnifiedEntryEntity
 import com.signalgate.multipoint.database.repositories.DataSourceRepository
@@ -47,7 +48,8 @@ import java.util.concurrent.TimeUnit
  */
 class ReliableSourceManager(
     private val dataSourceRepository: DataSourceRepository,
-    private val syncHistoryRepository: SyncHistoryRepository
+    private val syncHistoryRepository: SyncHistoryRepository,
+    private val secureCsvParser: SecureCsvParser
 ) {
 
     companion object {
@@ -160,9 +162,9 @@ class ReliableSourceManager(
                 val numbers = when (source.strategy) {
                     FetchStrategy.FTC_REST_API -> {
                         if (url == FTC_API_BASE) fetchFtcApiNumbers()
-                        else parseCsvBody(fetchRawBody(url, source.name))
+                        else fetchCsvNumbers(url, source.name)
                     }
-                    FetchStrategy.CSV -> parseCsvBody(fetchRawBody(url, source.name))
+                    FetchStrategy.CSV -> fetchCsvNumbers(url, source.name)
                 }
                 if (numbers.isNotEmpty()) {
                     Timber.tag(TAG).i("Fetched ${numbers.size} numbers from $url")
@@ -197,16 +199,34 @@ class ReliableSourceManager(
         return numbers.distinct()
     }
 
-    private fun parseCsvBody(body: String): List<String> {
+    /**
+     * Security fix (audit finding): streams the response body line-by-line through
+     * SecureCsvParser instead of buffering the whole HTTP response into a JVM String
+     * first (the previous parseCsvBody(fetchRawBody(...)) approach). These federal
+     * endpoints are external, unauthenticated-by-us data sources — an oversized,
+     * malformed, or malicious response can no longer force unbounded heap growth,
+     * since SecureCsvParser reads one line at a time under a hard 2,000,000-line cap.
+     *
+     * MIN_NUMBER_LENGTH/MAX_NUMBER_LENGTH filtering happens here rather than inside
+     * SecureCsvParser: the parser's contract is generic streaming + sanitization +
+     * bloom-filter population, not this source's specific length bounds, and a stray
+     * CSV header cell must not reach the DB as a bogus block entry.
+     */
+    private fun fetchCsvNumbers(url: String, label: String): List<String> {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "SignalGate-Pulse/1.0")
+            .header("Accept", "application/json, text/csv, */*")
+            .build()
         val numbers = mutableListOf<String>()
-        var lineNumber = 0
-        body.lineSequence().forEach { line ->
-            if (numbers.size >= MAX_ENTRIES_PER_SOURCE) return@forEach
-            lineNumber++
-            if (lineNumber == 1) return@forEach
-            val rawNumber = line.split(",").firstOrNull()?.trim() ?: return@forEach
-            val sanitized = SanitizationEngine.sanitizePhoneNumber(rawNumber)
-            if (sanitized.length in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH) numbers.add(sanitized)
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("HTTP ${response.code} fetching $label")
+            val stream = response.body?.byteStream() ?: throw Exception("Empty body from $label")
+            secureCsvParser.streamAndPopulate(stream) { number ->
+                if (numbers.size < MAX_ENTRIES_PER_SOURCE && number.length in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH) {
+                    numbers.add(number)
+                }
+            }
         }
         return numbers.distinct()
     }

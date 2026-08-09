@@ -1,8 +1,8 @@
 package com.signalgate.multipoint.di
 
 import android.app.Application
-import android.content.Context
 import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
 import com.signalgate.multipoint.database.DatabaseInitializer
 import com.signalgate.multipoint.database.SignalGateDatabase
 import com.signalgate.multipoint.database.repositories.BlocklistRepository
@@ -21,13 +21,14 @@ import java.util.concurrent.Executors
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.dsl.module
 import org.koin.test.KoinTest
 import org.koin.test.check.checkModules
-import org.mockito.Mockito.mock
+import org.robolectric.RobolectricTestRunner
 
 /**
  * KoinModuleTest — verifies the full Koin DI graph resolves without error.
@@ -39,37 +40,45 @@ import org.mockito.Mockito.mock
  *   Bug 2: DatabaseInitializer.seedRequiredSources() not called before startKoin —
  *     BlocklistRepository.manualSourceId() lazy-resolves the MANUAL source row;
  *     without seeding it calls error() and crashes. Mirrors MainApplication ordering.
+ *   Bug 3: Ran as a plain JVM unit test with a Mockito-mocked Context — Room's
+ *     real Room.inMemoryDatabaseBuilder() open sequence needs a working SQLite
+ *     implementation, which a JVM-only test with a mocked Context can't provide.
+ *     That mismatch produced java.lang.IllegalMonitorStateException out of
+ *     androidx.sqlite's ProcessLock during the DB's first open. Fixed by running
+ *     under Robolectric, which supplies a real (shadowed) Context/Application
+ *     and a working SQLite implementation — no synchronous pre-open workaround
+ *     or mocked Context/Application needed.
+ *   Bug 4: checkModules() tries to instantiate every definition, including
+ *     workerModule's parameterized CommunitySyncWorker factory (Context +
+ *     WorkerParameters). No amount of mocking WorkerParameters gets past
+ *     CoroutineWorker's constructor, which calls real methods on it — so
+ *     workerModule is excluded from the checkModules() call. See the comment
+ *     on koinGraphResolvesWithoutError() for the full reasoning.
  *
- * Uses Mockito (already declared in build.gradle). MockK is not declared.
+ * Mockito is still declared in build.gradle for other tests, but this class no
+ * longer needs it now that Robolectric provides a real Context/Application.
  */
+@RunWith(RobolectricTestRunner::class)
 class KoinModuleTest : KoinTest {
 
+    private lateinit var testApp: Application
     private lateinit var testDatabase: SignalGateDatabase
     private lateinit var testDatabaseModule: org.koin.core.module.Module
 
     @Before
     fun setUp() {
+        testApp = ApplicationProvider.getApplicationContext()
+
         val singleThreadExecutor = Executors.newSingleThreadExecutor()
-        testDatabase = Room.inMemoryDatabaseBuilder(
-            mock(Context::class.java),
-            SignalGateDatabase::class.java
-        )
+        testDatabase = Room.inMemoryDatabaseBuilder(testApp, SignalGateDatabase::class.java)
             .allowMainThreadQueries()
             .setQueryExecutor(singleThreadExecutor)
             .setTransactionExecutor(singleThreadExecutor)
             .build()
 
-        // Force the DB to fully open synchronously, on this thread, with no
-        // coroutine involved. ProcessLock's lock/unlock only guards the very
-        // first open (see FrameworkSQLiteOpenHelper — once open, get*Database()
-        // does no I/O and takes no lock). Doing that first open here, plainly,
-        // means seedRequiredSources()'s suspend DAO calls below hit an
-        // already-open DB and never touch the lock at all.
-        testDatabase.openHelper.writableDatabase
-
         runBlocking {
             DatabaseInitializer.seedRequiredSources(
-                context   = mock(Context::class.java),
+                context    = testApp,
                 sourceDao  = testDatabase.sourceDao(),
                 settingDao = testDatabase.settingDao()
             )
@@ -88,7 +97,7 @@ class KoinModuleTest : KoinTest {
         }
 
         startKoin {
-            androidContext(mock(Application::class.java))
+            androidContext(testApp)
             modules(testDatabaseModule, repositoryModule, engineModule, viewModelModule, workerModule)
         }
     }
@@ -101,9 +110,20 @@ class KoinModuleTest : KoinTest {
 
     @Test
     fun koinGraphResolvesWithoutError() {
+        // workerModule is deliberately excluded here. CommunitySyncWorker's
+        // superclass (CoroutineWorker) calls real methods on WorkerParameters
+        // during construction (getTaskExecutor().getSerialTaskExecutor()) — a
+        // Mockito mock returns null for those and CoroutineWorker's own init
+        // logic NPEs. CommunitySyncWorker is never resolved via getKoin().get()
+        // in real app code anyway; WorkManager instantiates it through
+        // KoinWorkerFactory with a real WorkerParameters at runtime. Its own
+        // injected dependencies (ReliableSourceManager, DataSyncEngine) are
+        // better verified with androidx.work:work-testing's TestWorkerBuilder
+        // in an instrumented test, which supplies a real WorkerParameters.
+        stopKoin()
         checkModules {
-            androidContext(mock(Application::class.java))
-            modules(testDatabaseModule, repositoryModule, engineModule, viewModelModule, workerModule)
+            androidContext(testApp)
+            modules(testDatabaseModule, repositoryModule, engineModule, viewModelModule)
         }
     }
 

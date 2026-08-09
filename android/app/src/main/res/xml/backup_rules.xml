@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Pre-API 31 (Android 6.0-11) Auto Backup exclusion rules.
+    Mirrors data_extraction_rules.xml — see that file for rationale.
+    Required because android:dataExtractionRules is ignored below API 31;
+    allowBackup="true" devices on those versions fall back to this file.
+-->
+<full-backup-content>
+    <exclude domain="database" />
+    <exclude domain="sharedpref" path="signalgate_secure_prefs.xml" />
+</full-backup-content>

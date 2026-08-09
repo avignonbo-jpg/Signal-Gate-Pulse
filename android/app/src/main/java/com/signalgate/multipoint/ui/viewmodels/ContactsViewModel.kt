@@ -37,6 +37,9 @@ class ContactsViewModel(
     private val _isSaved = MutableStateFlow(false)
     val isSaved = _isSaved.asStateFlow()
 
+    private val _saveError = MutableStateFlow<String?>(null)
+    val saveError = _saveError.asStateFlow()
+
     val filteredContacts: List<ContactItem>
         get() {
             val query = _searchQuery.value.trim().lowercase()
@@ -112,11 +115,23 @@ class ContactsViewModel(
      */
     fun saveSelectedToAllowList() {
         viewModelScope.launch {
+            _saveError.value = null
             val selected = _contacts.value.filter { it.isSelected }
-            if (selected.isEmpty()) return@launch
+            if (selected.isEmpty()) {
+                // Nothing selected — treat as an explicit "neither" choice rather
+                // than silently refusing to advance. See skipContactImport() for
+                // the same outcome via a dedicated button.
+                _isSaved.value = true
+                return@launch
+            }
 
             val contactsSourceId = settingRepository.getSettingValue("contacts_source_id")?.toIntOrNull()
-                ?: return@launch // Source not seeded yet — silently bail; seeding happens at app start
+            if (contactsSourceId == null) {
+                // Previously bailed silently here, leaving the user stuck on this
+                // screen with no explanation and no way forward. Surface it instead.
+                _saveError.value = "Couldn't save your selection — please try again."
+                return@launch
+            }
 
             selected.forEach { contact ->
                 repository.insertEntry(
@@ -133,6 +148,18 @@ class ContactsViewModel(
 
             _isSaved.value = true
         }
+    }
+
+    /**
+     * Explicit "neither allow nor block any contacts" path — the third onboarding
+     * option. Distinct function (rather than just relying on saveSelectedToAllowList
+     * with zero selected) so the screen can offer it as its own clearly-labeled
+     * button rather than requiring the user to discover that clearing selection
+     * and hitting "Import" happens to work.
+     */
+    fun skipContactImport() {
+        _saveError.value = null
+        _isSaved.value = true
     }
 
     /**

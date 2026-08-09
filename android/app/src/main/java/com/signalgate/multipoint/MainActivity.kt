@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.signalgate.multipoint.security.DatabaseResetEvent
 import com.signalgate.multipoint.ui.components.GlassmorphicDrawerContent
 import com.signalgate.multipoint.ui.navigation.SignalGateNavGraph
 import com.signalgate.multipoint.ui.theme.SignalGateTheme
@@ -25,6 +26,28 @@ class MainActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
+
+                val wasDatabaseReset by DatabaseResetEvent.wasReset.collectAsState()
+                if (wasDatabaseReset) {
+                    AlertDialog(
+                        onDismissRequest = { DatabaseResetEvent.acknowledge() },
+                        title = { Text("Protection database was reset") },
+                        text = {
+                            Text(
+                                "Your device's secure storage changed in a way that made the " +
+                                "existing call-screening data unreadable (this can happen after " +
+                                "certain lock-screen or security changes). A fresh, empty " +
+                                "database has been created — you may want to re-review your " +
+                                "blocklist and settings."
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { DatabaseResetEvent.acknowledge() }) {
+                                Text("OK")
+                            }
+                        }
+                    )
+                }
 
                 ModalNavigationDrawer(
                     drawerState = drawerState,

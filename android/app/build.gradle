@@ -48,13 +48,34 @@ android {
         }
     }
 
+    // Security fix: the release build type was previously signed with
+    // signingConfigs.debug — the AGP-provided shared debug keystore, never
+    // meant to sign anything distributed to users. This reads real release
+    // credentials from environment variables so they can be injected as CI
+    // secrets and never committed to the repo. Generate an actual release
+    // keystore out-of-band (e.g. `keytool -genkeypair ...`) and store it in
+    // your CI secret manager — this config does not create one for you.
+    // If the env vars are unset, this intentionally fails the release build
+    // loudly rather than silently falling back to debug signing.
+    signingConfigs {
+        release {
+            def storeFilePath = System.getenv("RELEASE_KEYSTORE_PATH")
+            if (storeFilePath) {
+                storeFile file(storeFilePath)
+                storePassword System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
             debuggable true
         }
         release {
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
@@ -176,4 +197,7 @@ dependencies {
     // Requires exportSchema = true in @Database (already set) and the
     // sourceSets.androidTest.assets.srcDirs declaration in android{} above.
     androidTestImplementation "androidx.room:room-testing:$room_version"
+
+    // Robolectric — gives Room a working SQLite shadow on plain JVM unit tests
+    testImplementation 'org.robolectric:robolectric:4.13'
 }
