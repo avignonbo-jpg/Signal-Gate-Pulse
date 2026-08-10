@@ -6,6 +6,9 @@ import com.signalgate.multipoint.CallTier
 import com.signalgate.multipoint.SignalGateCallScreeningService
 import com.signalgate.multipoint.data.security.SanitizationEngine
 import com.signalgate.multipoint.database.repositories.DataSourceRepository
+import com.signalgate.multipoint.database.repositories.HeuristicsMode
+import com.signalgate.multipoint.database.repositories.SettingKeys
+import com.signalgate.multipoint.database.repositories.SettingRepository
 
 /**
  * CallScreeningEngine implements the five-tier Priority Hierarchy.
@@ -21,8 +24,18 @@ import com.signalgate.multipoint.database.repositories.DataSourceRepository
  * Step 1.11 — CallRiskEvaluator wired at gray-zone boundary:
  * When no database rule matches, CallRiskEvaluator.evaluate() provides an advisory
  * risk score from STIR/SHAKEN attestation and source-match count. A score at or
- * above HEURISTIC_RISK_THRESHOLD elevates the call to HEURISTIC_FLAG (rings through
- * + digest entry for user review). Below threshold: CLEAN_UNKNOWN (allow, no card).
+ * above the user's configured heuristics threshold elevates the call to
+ * HEURISTIC_FLAG (rings through + digest entry for user review). Below threshold:
+ * CLEAN_UNKNOWN (allow, no card).
+ *
+ * Onboarding Step 3 — protection level now user-configurable via HeuristicsMode
+ * (SettingKeys.HEURISTICS_MODE), read fresh on every screenCall() rather than a
+ * hardcoded constant. OFF skips CallRiskEvaluator entirely (every gray-zone call
+ * is CLEAN_UNKNOWN); CONSERVATIVE/BALANCED/AGGRESSIVE set the score threshold —
+ * see HeuristicsMode in SettingKeys.kt for the exact numbers. Falls back to
+ * HeuristicsMode.DEFAULT (BALANCED, threshold 55) if the setting is unreadable
+ * or unset, so a DB error here degrades to the old fixed behavior rather than
+ * disabling heuristics silently.
  *
  * Architecture Contract §6 L6 constraint — enforced here:
  * CallRiskEvaluator's score is advisory INPUT into the decision, never the decision
@@ -31,13 +44,13 @@ import com.signalgate.multipoint.database.repositories.DataSourceRepository
  */
 class CallScreeningEngine(
     private val repository: DataSourceRepository,
-    private val riskEvaluator: CallRiskEvaluator = CallRiskEvaluator
+    private val riskEvaluator: CallRiskEvaluator = CallRiskEvaluator,
+    private val settingRepository: SettingRepository? = null
 ) {
 
     companion object {
         private const val TAG = "CallScreeningEngine"
         private const val HIGH_CONFIDENCE_THRESHOLD = 70
-        private const val HEURISTIC_RISK_THRESHOLD = 55
     }
 
     /**
@@ -140,18 +153,36 @@ class CallScreeningEngine(
      * sourcesMatched=0 here because the repository found no hits — the STIR signal
      * alone determines whether this is flagged or allowed through cleanly.
      *
-     * Score >= HEURISTIC_RISK_THRESHOLD → HEURISTIC_FLAG: rings through + digest card.
-     * Score <  HEURISTIC_RISK_THRESHOLD → CLEAN_UNKNOWN: allow, no card.
+     * Score >= threshold (from the user's HeuristicsMode) → HEURISTIC_FLAG: rings through + digest card.
+     * Score <  threshold → CLEAN_UNKNOWN: allow, no card.
      */
-    private fun buildGrayZoneInfo(
+    private suspend fun buildGrayZoneInfo(
         original: String,
         normalized: String,
         callDetails: android.telecom.Call.Details?
     ): CallInfo {
-        val evaluation = riskEvaluator.evaluate(sourcesMatched = 0, callDetails = callDetails)
-        Timber.d("Gray-zone: risk=${evaluation.score} stir=${evaluation.stirLevel}")
+        // Read fresh every call rather than caching in a field: onboarding Step 3
+        // (or a future Settings toggle) can change this mid-session, and this is
+        // cheap — a single indexed key lookup — compared to the cost of a stale
+        // protection level silently persisting until process restart.
+        val mode = try {
+            HeuristicsMode.fromKey(settingRepository?.getSettingValue(SettingKeys.HEURISTICS_MODE))
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to read heuristics_mode, defaulting to ${HeuristicsMode.DEFAULT}")
+            HeuristicsMode.DEFAULT
+        }
 
-        return if (evaluation.score >= HEURISTIC_RISK_THRESHOLD) {
+        val threshold = mode.riskThreshold
+        if (threshold == null) {
+            // OFF — don't even run the evaluator.
+            Timber.d("Heuristics OFF — skipping gray-zone evaluation")
+            return buildDefaultInfo(original, normalized)
+        }
+
+        val evaluation = riskEvaluator.evaluate(sourcesMatched = 0, callDetails = callDetails)
+        Timber.d("Gray-zone: risk=${evaluation.score} stir=${evaluation.stirLevel} mode=$mode threshold=$threshold")
+
+        return if (evaluation.score >= threshold) {
             Timber.d("SCREEN — Tier 4 HEURISTIC_FLAG (gray-zone risk=${evaluation.score})")
             CallInfo(
                 originalPhoneNumber   = original,
