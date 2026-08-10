@@ -42,6 +42,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.signalgate.multipoint.R
+import com.signalgate.multipoint.database.repositories.HeuristicsMode
 import com.signalgate.multipoint.ui.theme.*
 import com.signalgate.multipoint.ui.viewmodels.ContactItem
 import com.signalgate.multipoint.ui.viewmodels.ContactsViewModel
