@@ -83,6 +83,19 @@ class ReliableSourceManager(
             FederalSource(
                 name         = "FTC Do Not Call Registry",
                 primaryUrl   = FTC_API_BASE,
+                // DIR-003 (2026-08-09): liveness of this fallback is unverified and may
+                // already be dead — the FTC is known to embed a publish date into the
+                // real filename, which a static path like this can't track. Left as-is
+                // deliberately, not by oversight: since the mirror architecture above
+                // means this app no longer talks to FTC directly at all, the real
+                // single point of failure is raw.githubusercontent.com availability,
+                // not ftc.gov — and this fallback protects against neither the old
+                // failure mode (may be dead) nor the new one (irrelevant to a GitHub
+                // outage) with any real confidence. A fallback that actually covers a
+                // mirror outage needs genuine infrastructure redundancy, which is
+                // disproportionate to a rare, self-limiting failure (FCC continues
+                // independently; the failure is logged to SyncHistory, not silent).
+                // Revisit only if a real incident shows this gap actually mattering.
                 fallbackUrls = listOf(
                     "https://www.ftc.gov/system/files/ftc_gov/DNC_Complaint_Numbers.csv"
                 ),
