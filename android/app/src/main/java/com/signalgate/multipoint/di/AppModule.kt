@@ -22,6 +22,7 @@ import com.signalgate.multipoint.ui.RecentCallsViewModel
 import com.signalgate.multipoint.ui.dashboard.DashboardViewModel
 import com.signalgate.multipoint.ui.digest.PendingCardViewModel
 import com.signalgate.multipoint.ui.onboarding.OnboardingViewModel
+import com.signalgate.multipoint.ui.screens.SettingsViewModel
 import com.signalgate.multipoint.ui.screens.SourcesViewModel
 import com.signalgate.multipoint.ui.viewmodels.ContactsViewModel
 import com.signalgate.multipoint.ui.viewmodels.LogcatViewModel
@@ -190,14 +191,15 @@ val engineModule = module {
 val viewModelModule = module {
     viewModel { ContactsViewModel(get(), get(), get()) }
     viewModel { TelemetryViewModel(get()) }
-    viewModel { DashboardViewModel(get(), get()) } // Step 0.1: Added CallLogRepository parameter
+    viewModel { DashboardViewModel(get(), get(), get()) } // Step 2.6: added SettingRepository for isOnboardingComplete
     // Phase 4.2: constructor dependency changed from DataSourceRepository to
     // BlocklistRepository (now backs the real BlockAllowListScreen instead of
     // a dead, never-navigated-to class). get() resolves by the new type.
     viewModel { BlockedNumbersViewModel(get()) }
     viewModel { RecentCallsViewModel(get(), get()) }
     viewModel { LogcatViewModel() }
-    viewModel { OnboardingViewModel() }
+    viewModel { OnboardingViewModel(get()) } // Step 2.6: added SettingRepository for markOnboardingComplete
+    viewModel { SettingsViewModel(get()) } // Step 2.6: new — owns shield-color persistence, resolves half of FLAG-1
     viewModel { PendingCardViewModel(get(), get()) }
     viewModel { SourcesViewModel(get()) } // Phase 0.1 fix — was missing entirely
 }
