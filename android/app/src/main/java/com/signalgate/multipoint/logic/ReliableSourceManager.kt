@@ -191,9 +191,12 @@ class ReliableSourceManager(
     /**
      * Fetches the pre-aggregated snapshot published by signalgate-dnc-mirror
      * (see the class doc comment above). One flat file, no pagination needed —
-     * the mirror already did that server-side. Still re-sanitizes and
-     * re-validates length here: this app never trusts an external source
-     * blindly, even a mirror it operates itself.
+     * the mirror already did that server-side. Still re-sanitizes, re-validates
+     * length, AND re-enforces MAX_ENTRIES_PER_SOURCE here — this app never
+     * trusts an external source blindly, even a mirror it operates itself.
+     * The mirror's cumulative merge only ever grows; this cap is what stops
+     * that growth from silently exceeding what the rest of this class assumes
+     * as a hard per-source ceiling.
      */
     private fun fetchFtcApiNumbers(): List<String> {
         val body = fetchRawBody(FTC_API_BASE, "FTC DNC mirror")
@@ -201,6 +204,7 @@ class ReliableSourceManager(
         val dataArray = json.optJSONArray("phone_numbers") ?: return emptyList()
         val numbers = mutableListOf<String>()
         for (i in 0 until dataArray.length()) {
+            if (numbers.size >= MAX_ENTRIES_PER_SOURCE) break
             val rawNumber = dataArray.optString(i, "").trim()
             val sanitized = SanitizationEngine.sanitizePhoneNumber(rawNumber)
             if (sanitized.length in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH) numbers.add(sanitized)
