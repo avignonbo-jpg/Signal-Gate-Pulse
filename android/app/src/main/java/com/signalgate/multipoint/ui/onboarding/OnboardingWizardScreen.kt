@@ -88,7 +88,7 @@ fun OnboardingWizardScreen(
         composable("permissions") { PermissionsStep(wizardNavController, viewModel) }
         composable("contacts")    { ContactsImportStep(wizardNavController) }
         composable("sources")     { SourcesSelectionStep(wizardNavController) }
-        composable("risk")        { RiskThresholdStep(navController) }
+        composable("risk")        { RiskThresholdStep(navController, viewModel) }
     }
 }
 
@@ -867,19 +867,31 @@ fun SourcesSelectionStep(navController: NavHostController) {
 /**
  * RiskThresholdStep — Final step: Confirm setup and navigate to dashboard.
  *
- * Step 0.1 (2026-07-02): Now persists onboarding_complete flag.
- * When user taps "GO TO DASHBOARD", this function:
- * 1. Writes onboarding_complete = true to SharedPreferences
- * 2. Navigates to consumer_dashboard with pop back stack
- * 3. Prevents returning to onboarding wizard on future launches
+ * Step 2.6: onboarding_complete now migrated to SettingEntry via
+ * OnboardingViewModel.markOnboardingComplete(), replacing the direct
+ * SharedPreferences write this step used to make. Follows the same
+ * screen-observes-ViewModel-state pattern as ContactsImportStep's isSaved:
+ * this Composable calls markOnboardingComplete() and reacts to
+ * onboardingCompleted via LaunchedEffect — it never touches SettingRepository,
+ * or persistence of any kind, directly.
  *
- * PULSE-TODO (2026-06): Replace SharedPreferences with SettingEntry — Step 2.6.
- *
- * @param navController Navigation controller for final navigation
+ * @param navController Navigation controller for final navigation — this is
+ *   deliberately the OUTER app-level controller (see OnboardingWizardScreen's
+ *   doc comment), since this is the one step that navigates out of the wizard.
+ * @param viewModel OnboardingViewModel — same instance the rest of the wizard uses.
  */
 @Composable
-fun RiskThresholdStep(navController: NavHostController) {
-    val context = LocalContext.current
+fun RiskThresholdStep(navController: NavHostController, viewModel: OnboardingViewModel) {
+    val onboardingCompleted by viewModel.onboardingCompleted.collectAsState()
+
+    LaunchedEffect(onboardingCompleted) {
+        if (onboardingCompleted) {
+            Timber.tag("OnboardingWizard").i("Onboarding marked complete")
+            navController.navigate("consumer_dashboard") {
+                popUpTo("onboarding_wizard") { inclusive = true }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -904,40 +916,8 @@ fun RiskThresholdStep(navController: NavHostController) {
         )
         Spacer(modifier = Modifier.height(32.dp))
 
-        /**
-         * Step 0.1 (2026-07-02): Persist onboarding_complete flag.
-         *
-         * Behavior:
-         * 1. Mark onboarding as complete in SharedPreferences
-         * 2. Log completion to Timber for debugging
-         * 3. Navigate to dashboard, clearing back stack
-         * 4. User will not see onboarding wizard on subsequent launches
-         *
-         * PULSE-TODO (2026-06): Migrate to SettingEntry.onboarding_complete after Step 2.6.
-         * Current implementation uses SharedPreferences for backward compatibility.
-         */
         Button(
-            onClick = {
-                try {
-                    // Mark onboarding as complete
-                    val prefs = context.getSharedPreferences(
-                        "${context.packageName}_preferences",
-                        Context.MODE_PRIVATE
-                    )
-                    prefs.edit()
-                        .putBoolean("onboarding_complete", true)
-                        .apply()
-
-                    Timber.tag("OnboardingWizard").i("Onboarding marked complete")
-
-                    // Navigate to dashboard, clearing back stack
-                    navController.navigate("consumer_dashboard") {
-                        popUpTo("onboarding_wizard") { inclusive = true }
-                    }
-                } catch (e: Exception) {
-                    Timber.tag("OnboardingWizard").e(e, "Failed to complete onboarding")
-                }
-            },
+            onClick = { viewModel.markOnboardingComplete() },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
