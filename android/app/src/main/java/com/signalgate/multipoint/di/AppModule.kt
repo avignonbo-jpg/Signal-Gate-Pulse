@@ -173,7 +173,7 @@ val engineModule = module {
     // CallRiskEvaluator is a stateless object — registered so CallScreeningEngine
     // receives it via constructor injection for testability.
     single { CallRiskEvaluator }
-    single { CallScreeningEngine(get(), get()) }
+    single { CallScreeningEngine(get(), get(), get()) } // 3rd get() = SettingRepository, for HeuristicsMode (onboarding Step 3)
     single { DataSyncEngine(get(), get()) }
 }
 
