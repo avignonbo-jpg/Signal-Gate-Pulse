@@ -1,5 +1,6 @@
 package com.signalgate.multipoint.ui.onboarding
 
+import android.app.Activity
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.pm.PackageManager
@@ -10,6 +11,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -87,7 +90,7 @@ fun OnboardingWizardScreen(
         composable("welcome")     { WelcomeStep(wizardNavController) }
         composable("permissions") { PermissionsStep(wizardNavController, viewModel) }
         composable("contacts")    { ContactsImportStep(wizardNavController) }
-        composable("sources")     { SourcesSelectionStep(wizardNavController) }
+        composable("sources")     { SourcesSelectionStep(wizardNavController, viewModel) }
         composable("risk")        { RiskThresholdStep(navController, viewModel) }
     }
 }
@@ -235,59 +238,72 @@ fun WelcomeStep(navController: NavHostController) {
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(48.dp))
+        // Scrollable content lives in a weighted Box (same pattern as EulaStep's
+        // LazyColumn) so the CTA button below stays pinned and reachable, while the
+        // content itself can scroll on short screens instead of overflowing.
+        // Note: a verticalScroll Column and a weight(1f) child can't coexist in the
+        // same Column — scroll gives unbounded height, weight needs bounded height —
+        // so the scrollable region has to be isolated in its own weighted Box like this.
+        Box(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(48.dp))
 
-        androidx.compose.foundation.Image(
-            painter = painterResource(R.drawable.ic_signal_gate_logo),
-            contentDescription = null,
-            modifier = Modifier.size(56.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+                androidx.compose.foundation.Image(
+                    painter = painterResource(R.drawable.ic_signal_gate_logo),
+                    contentDescription = null,
+                    modifier = Modifier.size(56.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "WELCOME TO",
-            color = TextSecondary,
-            fontSize = 12.sp,
-            letterSpacing = 2.sp
-        )
-        Text(
-            text = "SIGNALGATE PULSE",
-            color = TextPrimary,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
+                Text(
+                    text = "WELCOME TO",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    letterSpacing = 2.sp
+                )
+                Text(
+                    text = "SIGNALGATE PULSE",
+                    color = TextPrimary,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
 
-        Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-        Text(
-            text = "Pulse is part of the SignalGate Trinity — built for set-and-forget " +
-                "protection that pulses to life exactly when you need it.",
-            color = NeonCyan,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-            fontWeight = FontWeight.Medium
-        )
+                Text(
+                    text = "Pulse is part of the SignalGate Trinity — built for set-and-forget " +
+                        "protection that pulses to life exactly when you need it.",
+                    color = NeonCyan,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Medium
+                )
 
-        Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(32.dp))
 
-        androidx.compose.foundation.Image(
-            painter = painterResource(R.drawable.shield_logo),
-            contentDescription = "Shield",
-            modifier = Modifier.size(160.dp)
-        )
+                androidx.compose.foundation.Image(
+                    painter = painterResource(R.drawable.shield_logo),
+                    contentDescription = "Shield",
+                    modifier = Modifier.size(160.dp)
+                )
 
-        Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(32.dp))
 
-        Text(
-            text = "A one-time setup, then Pulse works quietly in the background — " +
-                "fewer bogus interruptions, without you having to manage a thing.",
-            color = TextSecondary,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "A one-time setup, then Pulse works quietly in the background — " +
+                        "fewer bogus interruptions, without you having to manage a thing.",
+                    color = TextSecondary,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
 
         Button(
             onClick = { navController.navigate("permissions") },
@@ -422,89 +438,98 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
+        // Scrollable content in a weighted Box, CTA pinned below — same reasoning
+        // as WelcomeStep (verticalScroll and weight(1f) can't share a Column).
+        Box(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(24.dp))
 
-        // Wordmark
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            androidx.compose.foundation.Image(
-                painter = painterResource(R.drawable.ic_signal_gate_logo),
-                contentDescription = null,
-                modifier = Modifier.size(32.dp)
-            )
-            Column {
+                // Wordmark
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(R.drawable.ic_signal_gate_logo),
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Column {
+                        Text(
+                            text = "SIGNAL GATE",
+                            color = TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "PULSE",
+                            color = NeonCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = 2.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                StepIndicator(currentStep = 1, totalSteps = 3)
+
+                Spacer(modifier = Modifier.height(20.dp))
+
                 Text(
-                    text = "SIGNAL GATE",
-                    color = TextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    text = "PULSE",
+                    text = "Step 1: Security Foundation",
                     color = NeonCyan,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 2.sp
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        StepIndicator(currentStep = 1, totalSteps = 3)
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Text(
-            text = "Step 1: Security Foundation",
-            color = NeonCyan,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Hero shield — pre-rendered glowing asset
-        androidx.compose.foundation.Image(
-            painter = painterResource(R.drawable.shield_logo),
-            contentDescription = "Shield",
-            modifier = Modifier.size(200.dp)
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Permission label row
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_signal_gate_logo),
-                contentDescription = null,
-                tint = NeonCyan,
-                modifier = Modifier.size(24.dp)
-            )
-            Column {
-                Text(
-                    text = "Permission Request: Call Screening",
-                    color = TextPrimary,
-                    fontSize = 16.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    text = "Grant permission to screen incoming\ncalls for real-time protection.",
-                    color = TextSecondary,
-                    fontSize = 13.sp,
-                    textAlign = TextAlign.Start
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Hero shield — pre-rendered glowing asset
+                androidx.compose.foundation.Image(
+                    painter = painterResource(R.drawable.shield_logo),
+                    contentDescription = "Shield",
+                    modifier = Modifier.size(200.dp)
                 )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Permission label row
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_signal_gate_logo),
+                        contentDescription = null,
+                        tint = NeonCyan,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Column {
+                        Text(
+                            text = "Permission Request: Call Screening",
+                            color = TextPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Grant permission to screen incoming\ncalls for real-time protection.",
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Start
+                        )
+                    }
+                }
             }
         }
-
-        Spacer(modifier = Modifier.weight(1f))
 
         // GRANT ACCESS primary CTA
         val allReady = viewModel.allRequiredGranted() && roleHeld
@@ -641,7 +666,22 @@ fun ContactsImportStep(
     val isLoading by viewModel.isLoading.collectAsState()
     val isSaved by viewModel.isSaved.collectAsState()
     val saveError by viewModel.saveError.collectAsState()
-    val filteredContacts = viewModel.filteredContacts
+    // Bug fix: viewModel.filteredContacts / viewModel.selectedCount are plain getters
+    // that read the raw StateFlow.value directly, bypassing Compose's snapshot-read
+    // tracking entirely. Since `contacts` above is never otherwise read in this
+    // composable, Compose had no dependency to recompose on — so selectAll()/
+    // clearSelection()/toggleContact() updated the ViewModel's data but the LazyColumn
+    // (and the "N selected" count) never redrew, which is why Select All looked like
+    // it did nothing. Deriving both from the already-collected `contacts` state fixes
+    // it: now they're genuine Compose State reads that trigger recomposition.
+    val filteredContacts = remember(contacts, searchQuery) {
+        val query = searchQuery.trim().lowercase()
+        if (query.isEmpty()) contacts
+        else contacts.filter {
+            it.displayName.lowercase().contains(query) || it.phoneNumber.contains(query)
+        }
+    }
+    val selectedCount = remember(contacts) { contacts.count { it.isSelected } }
 
     LaunchedEffect(Unit) { viewModel.loadContacts(context) }
     LaunchedEffect(isSaved) { if (isSaved) navController.navigate("sources") }
@@ -698,7 +738,7 @@ fun ContactsImportStep(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("${viewModel.selectedCount} selected", color = NeonCyan, fontSize = 13.sp)
+            Text("$selectedCount selected", color = NeonCyan, fontSize = 13.sp)
             Row {
                 TextButton(onClick = { viewModel.selectAll() }) {
                     Text("Select All", color = NeonCyan, fontSize = 12.sp)
@@ -815,32 +855,69 @@ fun ContactRow(contact: ContactItem, onToggle: () -> Unit) {
 // ── STEP 3: Sources ────────────────────────────────────────────────────────────
 
 /**
- * SourcesSelectionStep — Third step: Confirm protection level.
- *
- * Placeholder for future expansion into protection mode selection
- * (Conservative, Balanced, Aggressive).
+ * SourcesSelectionStep — Third step: on-device gray-zone heuristics protection
+ * level. This is real, not a placeholder: CallRiskEvaluator (the STIR/SHAKEN +
+ * source-match gray-zone scorer) is already built and already wired into
+ * CallScreeningEngine at the Tier 4/5 boundary — see CallScreeningEngine's doc
+ * comment. What was missing was a user-facing control for it; previously the
+ * risk threshold was a hardcoded constant. This screen sets HeuristicsMode,
+ * persisted immediately (not deferred to wizard completion) via
+ * OnboardingViewModel.setHeuristicsMode(), which CallScreeningEngine now reads
+ * on every call. See SettingKeys.kt's HeuristicsMode enum for exactly what
+ * number backs each level.
  *
  * @param navController Navigation controller for step progression
+ * @param viewModel OnboardingViewModel — same instance the rest of the wizard uses
  */
 @Composable
-fun SourcesSelectionStep(navController: NavHostController) {
+fun SourcesSelectionStep(navController: NavHostController, viewModel: OnboardingViewModel) {
+    val selectedMode by viewModel.heuristicsMode.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(DeepSpaceBackground)
             .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        StepIndicator(currentStep = 3, totalSteps = 3)
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            "Step 3: Protection Level",
-            color = NeonCyan,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        Box(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                StepIndicator(currentStep = 3, totalSteps = 3)
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    "Step 3: Protection Level",
+                    color = NeonCyan,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "On-device heuristics review borderline calls that don't match a " +
+                        "known list — no data ever leaves your phone. Choose how " +
+                        "sensitive that review should be.",
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+
+                HeuristicsMode.entries.forEach { mode ->
+                    ProtectionLevelOption(
+                        mode = mode,
+                        selected = mode == selectedMode,
+                        onSelect = { viewModel.setHeuristicsMode(mode) }
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
         Button(
             onClick = { navController.navigate("risk") },
             modifier = Modifier
@@ -858,6 +935,72 @@ fun SourcesSelectionStep(navController: NavHostController) {
                 letterSpacing = 1.sp,
                 color = TextPrimary
             )
+        }
+    }
+}
+
+/**
+ * ProtectionLevelOption — single selectable protection-level card for Step 3.
+ */
+@Composable
+private fun ProtectionLevelOption(
+    mode: HeuristicsMode,
+    selected: Boolean,
+    onSelect: () -> Unit
+) {
+    val subtitle = when (mode) {
+        HeuristicsMode.OFF ->
+            "Heuristics disabled. Only known allow/block-list matches are screened."
+        HeuristicsMode.CONSERVATIVE ->
+            "Flags only the highest-risk borderline calls. Fewest false positives."
+        HeuristicsMode.BALANCED ->
+            "Recommended default. A reasonable balance of coverage and accuracy."
+        HeuristicsMode.AGGRESSIVE ->
+            "Flags more borderline calls for review. Catches more spam, at the cost of more false positives."
+    }
+    Surface(
+        onClick = onSelect,
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) NeonCyan.copy(alpha = 0.14f) else SurfaceGlass,
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (selected) 1.5.dp else 1.dp,
+            color = if (selected) NeonCyan else BorderGlass
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    mode.label,
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(subtitle, color = TextSecondary, fontSize = 12.sp)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(if (selected) NeonCyan else Color.Transparent)
+                    .border(1.5.dp, if (selected) NeonCyan else TextSecondary, CircleShape)
+            ) {
+                if (selected) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color.Black,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -882,13 +1025,40 @@ fun SourcesSelectionStep(navController: NavHostController) {
  */
 @Composable
 fun RiskThresholdStep(navController: NavHostController, viewModel: OnboardingViewModel) {
+    val context = LocalContext.current
     val onboardingCompleted by viewModel.onboardingCompleted.collectAsState()
+
+    // Both completion buttons persist onboarding_complete the same way — they only
+    // differ in what happens once that's confirmed saved. This flag records which
+    // one the user tapped so the single onboardingCompleted LaunchedEffect below
+    // knows whether to navigate into the dashboard UI or just background the app.
+    var landingAction by remember { mutableStateOf<CompletionAction?>(null) }
 
     LaunchedEffect(onboardingCompleted) {
         if (onboardingCompleted) {
             Timber.tag("OnboardingWizard").i("Onboarding marked complete")
-            navController.navigate("consumer_dashboard") {
-                popUpTo("onboarding_wizard") { inclusive = true }
+            when (landingAction) {
+                CompletionAction.PULSE_MODE -> {
+                    // Pulse Mode: set-and-forget call blocking runs quietly in the
+                    // background; the user is only pulled back in via the pulsed-
+                    // vibration notification when a call needs their input. So this
+                    // doesn't navigate anywhere in-app — it backgrounds the whole
+                    // task, same as pressing Home, leaving the wizard/dashboard UI
+                    // dismissed rather than swapped for another screen.
+                    (context as? Activity)?.moveTaskToBack(true)
+                }
+                else -> {
+                    // Routes must match Screen.kt's registered route strings exactly —
+                    // "dashboard" / "onboarding" (Screen.Dashboard.route / Screen.Onboarding.route),
+                    // NOT "consumer_dashboard" / "onboarding_wizard". Navigating to a route that
+                    // isn't registered in SignalGateNavGraph throws immediately, which is what was
+                    // crashing the app on "Go To Dashboard" — this is the outer app-level
+                    // navController (see OnboardingWizardScreen's doc comment), so it resolves
+                    // against SignalGateNavGraph's routes, not this wizard's internal ones.
+                    navController.navigate("dashboard") {
+                        popUpTo("onboarding") { inclusive = true }
+                    }
+                }
             }
         }
     }
@@ -897,7 +1067,8 @@ fun RiskThresholdStep(navController: NavHostController, viewModel: OnboardingVie
         modifier = Modifier
             .fillMaxSize()
             .background(DeepSpaceBackground)
-            .padding(24.dp),
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -917,7 +1088,10 @@ fun RiskThresholdStep(navController: NavHostController, viewModel: OnboardingVie
         Spacer(modifier = Modifier.height(32.dp))
 
         Button(
-            onClick = { viewModel.markOnboardingComplete() },
+            onClick = {
+                landingAction = CompletionAction.DASHBOARD
+                viewModel.markOnboardingComplete()
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
@@ -934,5 +1108,38 @@ fun RiskThresholdStep(navController: NavHostController, viewModel: OnboardingVie
                 color = TextPrimary
             )
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = {
+                landingAction = CompletionAction.PULSE_MODE
+                viewModel.markOnboardingComplete()
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .border(1.dp, BorderGlass, RoundedCornerShape(28.dp)),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = SurfaceGlass
+            ),
+            shape = RoundedCornerShape(28.dp)
+        ) {
+            Text(
+                "GO TO PULSE MODE  ›",
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                color = TextSecondary
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            "Pulse Mode runs quietly in the background — we'll pulse-alert you only when a call needs your decision.",
+            color = TextSecondary,
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center
+        )
     }
 }
+
+private enum class CompletionAction { DASHBOARD, PULSE_MODE }
