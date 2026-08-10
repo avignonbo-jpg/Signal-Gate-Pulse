@@ -5,8 +5,13 @@ import android.app.role.RoleManager
 import android.content.Context
 import android.os.Build
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.signalgate.multipoint.database.repositories.SettingKeys
+import com.signalgate.multipoint.database.repositories.SettingRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import timber.log.Timber
 
 data class PermissionItem(
     val permission: String,
@@ -17,7 +22,13 @@ data class PermissionItem(
     val isGranted: Boolean = false
 )
 
-class OnboardingViewModel : ViewModel() {
+class OnboardingViewModel(
+    private val settingRepository: SettingRepository
+) : ViewModel() {
+
+    companion object {
+        private const val TAG = "OnboardingViewModel"
+    }
 
     val permissions = mutableListOf(
         PermissionItem(
@@ -101,6 +112,29 @@ class OnboardingViewModel : ViewModel() {
         return permissions
             .filter { it.isRequired }
             .all { _permissionStates.value[it.permission] == true }
+    }
+
+    /**
+     * Onboarding-completion state, migrated off SharedPreferences under Step 2.6.
+     *
+     * Follows the same screen-observes-ViewModel-state pattern ContactsViewModel
+     * already uses for isSaved: the Composable calls markOnboardingComplete() and
+     * observes this flow via LaunchedEffect to trigger navigation once persistence
+     * actually succeeds — it never touches SettingRepository directly, and never
+     * needs its own coroutine scope to do so.
+     */
+    private val _onboardingCompleted = MutableStateFlow(false)
+    val onboardingCompleted = _onboardingCompleted.asStateFlow()
+
+    fun markOnboardingComplete() {
+        viewModelScope.launch {
+            try {
+                settingRepository.setSetting(SettingKeys.ONBOARDING_COMPLETE, "true")
+                _onboardingCompleted.value = true
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Failed to persist onboarding_complete")
+            }
+        }
     }
 
     /**
