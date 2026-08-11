@@ -255,7 +255,7 @@ fun WelcomeStep(navController: NavHostController) {
                 Spacer(modifier = Modifier.height(48.dp))
 
                 androidx.compose.foundation.Image(
-                    painter = painterResource(R.drawable.ic_signal_gate_logo),
+                    painter = painterResource(R.drawable.shield_logo),
                     contentDescription = null,
                     modifier = Modifier.size(56.dp)
                 )
@@ -404,9 +404,21 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
     val roleHeld by viewModel.callScreeningRoleHeld.collectAsState()
     var showLearnMore by remember { mutableStateOf(false) }
 
-    val roleLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
+    val roleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        // Bug fix: this callback was empty ({}), so after the user granted the
+        // call-screening role and the role-picker activity returned, the button
+        // kept showing its pre-grant label until the app happened to go through
+        // ON_RESUME again (e.g. backgrounding and reopening) — the ON_RESUME
+        // DisposableEffect below was the only thing re-checking role state.
+        // Re-checking right here, the moment the role activity result comes
+        // back, makes the button state update immediately.
+        viewModel.checkCallScreeningRole(context)
+    }
 
+    // One launcher, but now invoked per-item (single-permission array) rather
+    // than batched — see the per-row Grant buttons below.
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
@@ -432,6 +444,8 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    val allReady = viewModel.allRequiredGranted() && roleHeld
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -456,7 +470,7 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     androidx.compose.foundation.Image(
-                        painter = painterResource(R.drawable.ic_signal_gate_logo),
+                        painter = painterResource(R.drawable.shield_logo),
                         contentDescription = null,
                         modifier = Modifier.size(32.dp)
                     )
@@ -497,89 +511,106 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
                 androidx.compose.foundation.Image(
                     painter = painterResource(R.drawable.shield_logo),
                     contentDescription = "Shield",
-                    modifier = Modifier.size(200.dp)
+                    modifier = Modifier.size(140.dp)
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-                // Permission label row
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_signal_gate_logo),
-                        contentDescription = null,
-                        tint = NeonCyan,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Column {
-                        Text(
-                            text = "Permission Request: Call Screening",
-                            color = TextPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                Text(
+                    text = "Grant each item below, then tap Continue.",
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // One row per required permission, each with its own status +
+                // its own Grant button, instead of a single combined button
+                // that silently cycled through requesting everything across
+                // multiple taps.
+                val required = viewModel.permissions.filter { it.isRequired }
+                val optional = viewModel.permissions.filter { !it.isRequired }
+
+                if (required.isNotEmpty()) {
+                    SectionLabel("Required")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    required.forEach { item ->
+                        PermissionRow(
+                            title = item.title,
+                            description = item.description,
+                            granted = permissionStates[item.permission] == true,
+                            onGrant = { permissionLauncher.launch(arrayOf(item.permission)) }
                         )
-                        Text(
-                            text = "Grant permission to screen incoming\ncalls for real-time protection.",
-                            color = TextSecondary,
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.Start
-                        )
+                        Spacer(modifier = Modifier.height(10.dp))
                     }
                 }
-            }
-        }
 
-        // GRANT ACCESS primary CTA
-        val allReady = viewModel.allRequiredGranted() && roleHeld
-        Button(
-            onClick = {
-                val ungranted = viewModel.permissions
-                    .filter { permissionStates[it.permission] == false }
-                    .map { it.permission }
-                when {
-                    ungranted.isNotEmpty() ->
-                        permissionLauncher.launch(ungranted.toTypedArray())
-                    !roleHeld -> {
+                // Call Screening role — a system role, not a runtime permission,
+                // so it gets its own row with its own launcher rather than being
+                // folded into the permission array.
+                PermissionRow(
+                    title = "Call Screening",
+                    description = "Set SignalGate Pulse as your call screening app.",
+                    granted = roleHeld,
+                    onGrant = {
                         val roleManager =
                             context.getSystemService(Context.ROLE_SERVICE) as RoleManager
                         roleLauncher.launch(
                             roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
                         )
                     }
-                    else -> navController.navigate("contacts")
+                )
+
+                if (optional.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SectionLabel("Optional")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    optional.forEach { item ->
+                        PermissionRow(
+                            title = item.title,
+                            description = item.description,
+                            granted = permissionStates[item.permission] == true,
+                            onGrant = { permissionLauncher.launch(arrayOf(item.permission)) }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
                 }
-            },
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        Button(
+            onClick = { navController.navigate("contacts") },
+            enabled = allReady,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
                 .border(
                     width = 1.5.dp,
-                    brush = Brush.horizontalGradient(listOf(NeonCyan, AccentPrimary)),
+                    brush = if (allReady) Brush.horizontalGradient(listOf(NeonCyan, AccentPrimary))
+                        else Brush.horizontalGradient(listOf(BorderGlass, BorderGlass)),
                     shape = RoundedCornerShape(28.dp)
                 ),
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (allReady) NeonCyan.copy(alpha = 0.2f)
                 else SurfaceDark.copy(alpha = 0.6f),
-                contentColor = TextPrimary
+                contentColor = TextPrimary,
+                disabledContainerColor = SurfaceDark.copy(alpha = 0.4f),
+                disabledContentColor = TextSecondary
             ),
             shape = RoundedCornerShape(28.dp)
         ) {
             Icon(
                 imageVector = if (allReady) Icons.Default.CheckCircle else Icons.Default.Lock,
                 contentDescription = null,
-                tint = NeonCyan,
+                tint = if (allReady) NeonCyan else TextSecondary,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
             Text(
-                text = when {
-                    allReady -> "CONTINUE  ›"
-                    !viewModel.allRequiredGranted() -> "GRANT ACCESS  ›"
-                    else -> "GRANT CALL SCREENING  ›"
-                },
+                text = "CONTINUE  ›",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp
@@ -633,6 +664,82 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
             },
             containerColor = SurfaceDark
         )
+    }
+}
+
+/**
+ * SectionLabel — small uppercase section header used to separate Required vs
+ * Optional permission groups on Step 1.
+ */
+@Composable
+private fun SectionLabel(text: String) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = text.uppercase(),
+            color = TextSecondary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.5.sp
+        )
+    }
+}
+
+/**
+ * PermissionRow — one item, one button. Replaces the old single combined
+ * "GRANT ACCESS" button that silently cycled through requesting every
+ * ungranted permission array, then the call-screening role, across repeat
+ * taps with no per-item feedback. Each row shows its own granted/not-granted
+ * state and triggers only its own request.
+ */
+@Composable
+private fun PermissionRow(
+    title: String,
+    description: String,
+    granted: Boolean,
+    onGrant: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (granted) NeonCyan.copy(alpha = 0.08f) else SurfaceGlass,
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = if (granted) NeonCyan.copy(alpha = 0.5f) else BorderGlass
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(description, color = TextSecondary, fontSize = 12.sp)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            if (granted) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Granted",
+                    tint = NeonCyan,
+                    modifier = Modifier.size(26.dp)
+                )
+            } else {
+                Button(
+                    onClick = onGrant,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NeonCyan.copy(alpha = 0.18f),
+                        contentColor = NeonCyan
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Grant", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }
 
