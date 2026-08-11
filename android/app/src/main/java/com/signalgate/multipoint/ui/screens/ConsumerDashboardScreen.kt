@@ -105,7 +105,7 @@ fun ConsumerDashboardScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_signal_gate_logo),
+                    painter = painterResource(R.drawable.shield_logo),
                     contentDescription = "SignalGate logo",
                     modifier = Modifier.size(36.dp)
                 )
