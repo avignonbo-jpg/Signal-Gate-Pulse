@@ -255,7 +255,7 @@ fun WelcomeStep(navController: NavHostController) {
                 Spacer(modifier = Modifier.height(48.dp))
 
                 androidx.compose.foundation.Image(
-                    painter = painterResource(R.drawable.shield_logo),
+                    painter = painterResource(R.drawable.ic_signal_gate_logo),
                     contentDescription = null,
                     modifier = Modifier.size(56.dp)
                 )
@@ -464,13 +464,16 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
             ) {
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Wordmark
+                // Wordmark — icon matches the design mockup's 5-bar pulse mark
+                // (ic_signal_gate_logo is now that vector, see drawable comment).
+                // Text styling (letterSpacing, weight) widened to track the
+                // mockup's spaced-out header look.
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     androidx.compose.foundation.Image(
-                        painter = painterResource(R.drawable.shield_logo),
+                        painter = painterResource(R.drawable.ic_signal_gate_logo),
                         contentDescription = null,
                         modifier = Modifier.size(32.dp)
                     )
@@ -480,14 +483,14 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
                             color = TextPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            letterSpacing = 3.sp
                         )
                         Text(
                             text = "PULSE",
                             color = NeonCyan,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            letterSpacing = 2.sp
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 3.sp
                         )
                     }
                 }
