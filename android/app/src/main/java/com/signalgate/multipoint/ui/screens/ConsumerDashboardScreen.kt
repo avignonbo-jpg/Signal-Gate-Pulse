@@ -105,7 +105,7 @@ fun ConsumerDashboardScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Image(
-                    painter = painterResource(R.drawable.shield_logo),
+                    painter = painterResource(R.drawable.ic_signal_gate_logo),
                     contentDescription = "SignalGate logo",
                     modifier = Modifier.size(36.dp)
                 )
@@ -115,14 +115,14 @@ fun ConsumerDashboardScreen(
                         color = TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        letterSpacing = 3.sp
                     )
                     Text(
                         text = "PULSE",
                         color = NeonCyan,
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        letterSpacing = 2.sp
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 3.sp
                     )
                 }
             }
