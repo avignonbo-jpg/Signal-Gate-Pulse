@@ -245,6 +245,10 @@ fun WelcomeStep(navController: NavHostController) {
         // Note: a verticalScroll Column and a weight(1f) child can't coexist in the
         // same Column — scroll gives unbounded height, weight needs bounded height —
         // so the scrollable region has to be isolated in its own weighted Box like this.
+        // This also satisfies "nothing scrolls above/below BEGIN": the Button below
+        // is a sibling of this Box in the outer, non-scrolling Column — it's never
+        // part of the scrollable region, so scrolling only ever happens above it,
+        // and it can never be scrolled out of view or have content stack on top of it.
         Box(modifier = Modifier.weight(1f)) {
             Column(
                 modifier = Modifier
@@ -252,57 +256,69 @@ fun WelcomeStep(navController: NavHostController) {
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(48.dp))
+                // Compact top-to-bottom layout so this fits without scrolling on
+                // most phones: minimal top padding, icon pulled close to the
+                // headline, tightened line-heights, full-width paragraph wrapping
+                // (fewer wrapped lines = shorter block), and a smaller hero shield
+                // — that image was the single biggest space cost on this screen.
+                // verticalScroll above still covers taller/smaller devices.
+                Spacer(modifier = Modifier.height(8.dp))
 
                 androidx.compose.foundation.Image(
                     painter = painterResource(R.drawable.ic_signal_gate_logo),
                     contentDescription = null,
-                    modifier = Modifier.size(56.dp)
+                    modifier = Modifier.size(48.dp)
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
                     text = "WELCOME TO",
                     color = TextSecondary,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     letterSpacing = 2.sp
                 )
                 Text(
                     text = "SIGNALGATE PULSE",
                     color = TextPrimary,
-                    fontSize = 24.sp,
+                    fontSize = 21.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
+                    letterSpacing = 0.5.sp
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
                     text = "Pulse is part of the SignalGate Trinity — built for set-and-forget " +
                         "protection that pulses to life exactly when you need it.",
                     color = NeonCyan,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
+                    lineHeight = 16.sp,
                     textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 androidx.compose.foundation.Image(
                     painter = painterResource(R.drawable.shield_logo),
                     contentDescription = "Shield",
-                    modifier = Modifier.size(160.dp)
+                    modifier = Modifier.size(112.dp)
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
                     text = "A one-time setup, then Pulse works quietly in the background — " +
                         "fewer bogus interruptions, without you having to manage a thing.",
                     color = TextSecondary,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center
+                    fontSize = 13.sp,
+                    lineHeight = 16.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
+
+                Spacer(modifier = Modifier.height(4.dp))
             }
         }
 
@@ -531,7 +547,12 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
                 // One row per required permission, each with its own status +
                 // its own Grant button, instead of a single combined button
                 // that silently cycled through requesting everything across
-                // multiple taps.
+                // multiple taps. Row label is the actual Android permission
+                // constant (e.g. "READ_PHONE_NUMBERS"), not the grouped/
+                // friendly PermissionItem.title — title still names what the
+                // permission is used for underneath it, but the bold header
+                // is now the literal permission being requested, so there's
+                // no ambiguity about what you're granting.
                 val required = viewModel.permissions.filter { it.isRequired }
                 val optional = viewModel.permissions.filter { !it.isRequired }
 
@@ -540,7 +561,7 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
                     Spacer(modifier = Modifier.height(8.dp))
                     required.forEach { item ->
                         PermissionRow(
-                            title = item.title,
+                            title = item.permission.substringAfterLast("."),
                             description = item.description,
                             granted = permissionStates[item.permission] == true,
                             onGrant = { permissionLauncher.launch(arrayOf(item.permission)) }
@@ -550,10 +571,10 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
                 }
 
                 // Call Screening role — a system role, not a runtime permission,
-                // so it gets its own row with its own launcher rather than being
-                // folded into the permission array.
+                // so there's no Manifest.permission constant to show; ROLE_CALL_SCREENING
+                // is the RoleManager identifier actually used below.
                 PermissionRow(
-                    title = "Call Screening",
+                    title = "ROLE_CALL_SCREENING",
                     description = "Set SignalGate Pulse as your call screening app.",
                     granted = roleHeld,
                     onGrant = {
@@ -567,11 +588,18 @@ fun PermissionsStep(navController: NavHostController, viewModel: OnboardingViewM
 
                 if (optional.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    SectionLabel("Optional")
+                    Text(
+                        text = "These permissions are optional for Pulse to properly run, " +
+                            "but recommended for optimal performance:",
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     optional.forEach { item ->
                         PermissionRow(
-                            title = item.title,
+                            title = item.permission.substringAfterLast("."),
                             description = item.description,
                             granted = permissionStates[item.permission] == true,
                             onGrant = { permissionLauncher.launch(arrayOf(item.permission)) }
