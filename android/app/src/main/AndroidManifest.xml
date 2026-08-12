@@ -20,13 +20,31 @@
     <!-- Contacts -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
-    <!-- Foreground service (Layer 1 — platform boundary) -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
-    <!-- Phase 4.9 prereq: required for API 34+ when CommunitySyncWorker runs as a
-         foreground service on Android 14 and above. Silently ignored on earlier APIs. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <!--
+        Removed (verified unused, 2025): FOREGROUND_SERVICE, FOREGROUND_SERVICE_PHONE_CALL,
+        FOREGROUND_SERVICE_DATA_SYNC, MANAGE_OWN_CALLS.
+
+        None of these are exercised anywhere in the codebase:
+          - The app has exactly one Service — SignalGateCallScreeningService — which is a
+            *bound* android.telecom.CallScreeningService (invoked by Telecom via
+            BIND_SCREENING_SERVICE), not something the app starts in the foreground.
+            No startForeground()/setForeground() call exists anywhere in the codebase.
+          - CommunitySyncWorker is a plain background CoroutineWorker (WorkManager
+            schedules it with network+battery constraints); it never calls
+            setForeground()/ForegroundInfo despite the removed FOREGROUND_SERVICE_DATA_SYNC
+            permission's comment claiming a "Phase 4.9 prereq" — that phase reference
+            doesn't correspond to anything in the actual release plan, so there was no
+            tracked work backing it.
+          - MANAGE_OWN_CALLS (self-managed ConnectionService / custom call UI) has zero
+            references — no ConnectionService, PhoneAccount, or TelecomManager usage
+            anywhere. Consistent with this being left over from a removed call-overlay
+            feature.
+
+        If a future feature genuinely needs one of these (e.g. CommunitySyncWorker
+        upgraded to run as an expedited/foreground work request on API 34+), re-add the
+        specific permission alongside the code that actually calls setForeground()/
+        ForegroundInfo — don't restore this whole block speculatively.
+    -->
 
     <!-- Phase 4.11: ensures CommunitySyncWorker is rescheduled after device reboot.
          WorkManager auto-reschedules on boot in most cases, but some OEMs
