@@ -5,8 +5,14 @@ import android.app.role.RoleManager
 import android.content.Context
 import android.os.Build
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.signalgate.multipoint.database.repositories.HeuristicsMode
+import com.signalgate.multipoint.database.repositories.SettingKeys
+import com.signalgate.multipoint.database.repositories.SettingRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import timber.log.Timber
 
 data class PermissionItem(
     val permission: String,
@@ -17,7 +23,13 @@ data class PermissionItem(
     val isGranted: Boolean = false
 )
 
-class OnboardingViewModel : ViewModel() {
+class OnboardingViewModel(
+    private val settingRepository: SettingRepository
+) : ViewModel() {
+
+    companion object {
+        private const val TAG = "OnboardingViewModel"
+    }
 
     val permissions = mutableListOf(
         PermissionItem(
@@ -85,7 +97,26 @@ class OnboardingViewModel : ViewModel() {
     private val _callScreeningRoleHeld = MutableStateFlow(false)
     val callScreeningRoleHeld = _callScreeningRoleHeld.asStateFlow()
 
-    var riskThreshold: String = "Medium"
+    /**
+     * Step 3 protection level. Replaces the old dead `riskThreshold: String`
+     * field (never read or persisted anywhere) with a real, persisted setting.
+     * Defaults to BALANCED and is written to SettingEntry as soon as the user
+     * taps a level, not deferred to the final "GO TO DASHBOARD" tap — so it
+     * takes effect even if they background the app mid-wizard.
+     */
+    private val _heuristicsMode = MutableStateFlow(HeuristicsMode.DEFAULT)
+    val heuristicsMode = _heuristicsMode.asStateFlow()
+
+    fun setHeuristicsMode(mode: HeuristicsMode) {
+        _heuristicsMode.value = mode
+        viewModelScope.launch {
+            try {
+                settingRepository.setSetting(SettingKeys.HEURISTICS_MODE, mode.key)
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Failed to persist heuristics_mode")
+            }
+        }
+    }
 
     fun onPermissionResult(permission: String, granted: Boolean) {
         _permissionStates.value = _permissionStates.value.toMutableMap().apply {
@@ -101,6 +132,29 @@ class OnboardingViewModel : ViewModel() {
         return permissions
             .filter { it.isRequired }
             .all { _permissionStates.value[it.permission] == true }
+    }
+
+    /**
+     * Onboarding-completion state, migrated off SharedPreferences under Step 2.6.
+     *
+     * Follows the same screen-observes-ViewModel-state pattern ContactsViewModel
+     * already uses for isSaved: the Composable calls markOnboardingComplete() and
+     * observes this flow via LaunchedEffect to trigger navigation once persistence
+     * actually succeeds — it never touches SettingRepository directly, and never
+     * needs its own coroutine scope to do so.
+     */
+    private val _onboardingCompleted = MutableStateFlow(false)
+    val onboardingCompleted = _onboardingCompleted.asStateFlow()
+
+    fun markOnboardingComplete() {
+        viewModelScope.launch {
+            try {
+                settingRepository.setSetting(SettingKeys.ONBOARDING_COMPLETE, "true")
+                _onboardingCompleted.value = true
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Failed to persist onboarding_complete")
+            }
+        }
     }
 
     /**

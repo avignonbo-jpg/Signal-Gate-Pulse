@@ -17,11 +17,13 @@ import com.signalgate.pulse.logic.CallRiskEvaluator
 import com.signalgate.pulse.logic.CallScreeningEngine
 import com.signalgate.pulse.logic.DataSyncEngine
 import com.signalgate.pulse.logic.ReliableSourceManager
+import com.signalgate.pulse.logic.SecurityRuleRepository
 import com.signalgate.pulse.ui.BlockedNumbersViewModel
 import com.signalgate.pulse.ui.RecentCallsViewModel
 import com.signalgate.pulse.ui.dashboard.DashboardViewModel
 import com.signalgate.pulse.ui.digest.PendingCardViewModel
 import com.signalgate.pulse.ui.onboarding.OnboardingViewModel
+import com.signalgate.pulse.ui.screens.SettingsViewModel
 import com.signalgate.pulse.ui.screens.SourcesViewModel
 import com.signalgate.pulse.ui.viewmodels.ContactsViewModel
 import com.signalgate.pulse.ui.viewmodels.LogcatViewModel
@@ -32,7 +34,10 @@ import com.signalgate.pulse.data.security.PrecedenceEngine
 import com.signalgate.pulse.data.security.SecureCsvParser
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * AppModule — Koin DI bindings per Architecture Contract §2.
@@ -94,9 +99,15 @@ val databaseModule = module {
  *
  * - DashboardViewModel: Now receives CallLogRepository in addition to DataSourceRepository.
  *   Enables direct access to CallLogDao for call count queries (refreshCounters).
+ *
+ * Bloom fast-pass wiring (this session): DataSourceRepository now also takes the
+ * two BloomFilterEngine singletons from engineModule — the default (unqualified)
+ * instance for exact phone numbers, and the "patternBloom" qualified instance for
+ * block-pattern prefixes. Both are pre-existing engineModule singletons; nothing
+ * new is declared as a dependency here that didn't already exist in the graph.
  */
 val repositoryModule = module {
-    single { DataSourceRepository(get(), get()) }
+    single { DataSourceRepository(get(), get(), get(), get(named("patternBloom"))) }
     single { CallLogRepository(get()) }
     single { SyncHistoryRepository(get()) }
 
@@ -118,8 +129,18 @@ val repositoryModule = module {
      * lazily on first use (see BlocklistRepository.manualSourceId()) — that
      * setting is written synchronously by DatabaseInitializer.seedRequiredSources()
      * before any Koin binding is resolved, so no runBlocking is needed here.
+     *
+     * Phase 0.1 (Security Control-Plane Integrity, §11.7): SecurityRuleRepository
+     * is now the authoritative mutation boundary (§5.2) — it takes
+     * DataSourceRepository (for the Bloom-maintaining insertEntry() chokepoint),
+     * UnifiedEntryDao (for removeRule(), which legitimately bypasses that
+     * chokepoint — see the class doc), and SettingRepository (for the same
+     * manual_source_id lookup BlocklistRepository used to own directly).
+     * BlocklistRepository is now a thin deprecated facade over it — see that
+     * class's doc — so its own binding shrinks to a single dependency.
      */
-    single { BlocklistRepository(get(), get()) }
+    single { SecurityRuleRepository(get(), get(), get()) }
+    single { BlocklistRepository(get()) }
     single { SettingRepository(get()) } // Added for architecture drift fix — Roadmap Step 0.4
 }
 
@@ -137,6 +158,13 @@ val repositoryModule = module {
 val engineModule = module {
     // L4 — input sanitization boundary
     single { BloomFilterEngine() }
+    // Bloom fast-pass wiring (this session): a second, separate BloomFilterEngine
+    // instance dedicated to block-pattern prefixes (see DataSourceRepository's
+    // matchesAnyPatternPrefix()). Kept separate from the exact-number instance
+    // above rather than sharing one bit array — mixing two different string
+    // domains (full numbers vs. short prefixes) into one filter would inflate
+    // the false-positive rate for both without any benefit.
+    single(named("patternBloom")) { BloomFilterEngine() }
     single { SecureCsvParser(get()) }
     single {
         PrecedenceEngine(
@@ -156,7 +184,7 @@ val engineModule = module {
     // CallRiskEvaluator is a stateless object — registered so CallScreeningEngine
     // receives it via constructor injection for testability.
     single { CallRiskEvaluator }
-    single { CallScreeningEngine(get(), get()) }
+    single { CallScreeningEngine(get(), get(), get()) } // 3rd get() = SettingRepository, for HeuristicsMode (onboarding Step 3)
     single { DataSyncEngine(get(), get()) }
 }
 
@@ -174,14 +202,15 @@ val engineModule = module {
 val viewModelModule = module {
     viewModel { ContactsViewModel(get(), get(), get()) }
     viewModel { TelemetryViewModel(get()) }
-    viewModel { DashboardViewModel(get(), get()) } // Step 0.1: Added CallLogRepository parameter
+    viewModel { DashboardViewModel(get(), get(), get()) } // Step 2.6: added SettingRepository for isOnboardingComplete
     // Phase 4.2: constructor dependency changed from DataSourceRepository to
     // BlocklistRepository (now backs the real BlockAllowListScreen instead of
     // a dead, never-navigated-to class). get() resolves by the new type.
     viewModel { BlockedNumbersViewModel(get()) }
     viewModel { RecentCallsViewModel(get(), get()) }
     viewModel { LogcatViewModel() }
-    viewModel { OnboardingViewModel() }
+    viewModel { OnboardingViewModel(get()) } // Step 2.6: added SettingRepository for markOnboardingComplete
+    viewModel { SettingsViewModel(get()) } // Step 2.6: new — owns shield-color persistence, resolves half of FLAG-1
     viewModel { PendingCardViewModel(get(), get()) }
     viewModel { SourcesViewModel(get()) } // Phase 0.1 fix — was missing entirely
 }
@@ -238,10 +267,46 @@ val appModule = listOf(
  *
  * Step 0.1 (2026-07-02): No changes. Still called synchronously.
  * runBlocking was removed from BlocklistRepository binding, not from this function.
+ *
+ * Bloom fast-pass wiring — REVISED this session: rehydrateBloomFilters() used
+ * to be called from here, inside this synchronous startup path. That's been
+ * removed — see rehydrateBloomFiltersInBackground() below and
+ * DataSourceRepository's class doc for why bloom rehydration is NOT binding
+ * the way seedRequiredSources() above it is, and why running it here was a
+ * real risk to the CallScreeningService response window at production scale.
  */
 suspend fun initializeDatabase(context: Context) {
     val koin = org.koin.core.context.GlobalContext.get()
     val sourceDao = koin.get<SourceDao>()
     val settingDao = koin.get<SettingDao>()
     DatabaseInitializer.seedRequiredSources(context, sourceDao, settingDao)
+}
+
+/**
+ * rehydrateBloomFiltersInBackground — kicks off DataSourceRepository's bloom
+ * filter rebuild on [scope], deliberately off the startup-blocking path.
+ *
+ * Call this from MainApplication.onCreate() AFTER the runBlocking block that
+ * calls initializeDatabase() — not inside it, and not in parallel with it,
+ * since rehydration reads via entryDao.getAllEntries() and depends on the
+ * DB actually being open (which SecureDatabase.getDatabase() lazily handles
+ * on first DAO access, but there's no reason to race it against seeding).
+ *
+ * Why this is safe to run unawaited: BloomFilterEngine is a pure read-skip
+ * optimization (see DataSourceRepository class doc) — getCallDecision() is
+ * fully correct with unrehydrated (or partially-rehydrated) filters, it just
+ * doesn't get the fast-pass speedup until this completes. Unlike
+ * seedRequiredSources(), nothing here can throw and crash a caller that
+ * hasn't finished yet — DataSourceRepository's bloomReady flag handles that.
+ *
+ * This does NOT reintroduce the async-seeding pattern the class doc above
+ * calls out as forbidden — that prohibition is specifically about
+ * seedRequiredSources() (the MANUAL source row other bindings structurally
+ * depend on). Bloom rehydration has no such dependency.
+ */
+fun rehydrateBloomFiltersInBackground(scope: CoroutineScope) {
+    val koin = org.koin.core.context.GlobalContext.get()
+    scope.launch {
+        koin.get<DataSourceRepository>().rehydrateBloomFilters()
+    }
 }

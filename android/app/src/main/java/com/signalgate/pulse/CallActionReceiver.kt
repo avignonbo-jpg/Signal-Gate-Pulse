@@ -5,8 +5,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
-import com.signalgate.pulse.database.daos.PendingCardDao
-import com.signalgate.pulse.database.repositories.BlocklistRepository
+import com.signalgate.pulse.database.repositories.PendingCardRepository
+import com.signalgate.pulse.logic.SecurityRuleRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -25,9 +25,17 @@ import org.koin.core.component.inject
  * set, which defaults to 0 — below CallScreeningEngine's 70% high-confidence
  * threshold, so the resulting block would have tiered as HEURISTIC_FLAG
  * (rings through) instead of HEURISTIC_BLOCK (silenced), silently failing to
- * honor the user's explicit block choice. BlocklistRepository.addBlockRule()
- * already does this correctly (confidence=100, proper MANUAL sourceId) — use
- * that going forward for any future manual block/allow UI.
+ * honor the user's explicit block choice.
+ *
+ * Phase 0.1 (Security Control-Plane Integrity, Known Violation §11.10): this
+ * receiver previously injected PendingCardDao directly, violating Layer 1's
+ * "no direct DAO access" rule (Architecture Contract §2/§7) — a
+ * BroadcastReceiver is an ingress point, not a persistence owner. It now
+ * depends on PendingCardRepository (the existing Layer 3 wrapper — already
+ * present in the codebase, just not used here before) and
+ * SecurityRuleRepository (the new Layer 5 mutation boundary, §5.2) instead
+ * of BlocklistRepository, since BlocklistRepository is itself now a
+ * deprecated facade over SecurityRuleRepository (see that class's doc).
  */
 class CallActionReceiver : BroadcastReceiver(), KoinComponent {
 
@@ -38,8 +46,8 @@ class CallActionReceiver : BroadcastReceiver(), KoinComponent {
     }
 
     private val scope = CoroutineScope(Dispatchers.IO)
-    private val blocklistRepository: BlocklistRepository by inject()
-    private val pendingCardDao: PendingCardDao by inject()
+    private val securityRuleRepository: SecurityRuleRepository by inject()
+    private val pendingCardRepository: PendingCardRepository by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val phoneNumber = intent.getStringExtra(EXTRA_PHONE_NUMBER) ?: return
@@ -48,10 +56,10 @@ class CallActionReceiver : BroadcastReceiver(), KoinComponent {
         if (action != ACTION_NOT_SPAM) return
 
         scope.launch {
-            // Allowlist the number via BlocklistRepository (uses correct MANUAL sourceId)
-            blocklistRepository.addAllowRule(phoneNumber, "Not Spam — user overturn")
+            // Allowlist the number via the single mutation boundary (§5.2)
+            securityRuleRepository.addManualAllow(phoneNumber, "Not Spam — user overturn")
             // Dismiss any undismissed cards for this number in the digest queue
-            pendingCardDao.dismissByPhoneNumber(phoneNumber)
+            pendingCardRepository.dismissByPhoneNumber(phoneNumber)
             // Cancel the notification so it disappears immediately
             val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
             if (notificationId != -1) {

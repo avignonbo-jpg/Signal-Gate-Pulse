@@ -43,19 +43,10 @@ jobs:
           disable-animations: true
           script: |
             echo "=== Emulator ready ==="
-            adb logcat -c
             echo "=== Installing APK ==="
             adb install -r android/app/build/outputs/apk/pulse/debug/app-pulse-debug.apk
-            adb logcat -v threadtime > /tmp/full_logcat.txt &
-            LOGCAT_PID=$!
-            echo "=== Launching app ==="
-            adb shell am start -n com.signalgate.multipoint/.MainActivity
-            sleep 15
-            kill $LOGCAT_PID 2>/dev/null || true
-            cp /tmp/full_logcat.txt $GITHUB_WORKSPACE/full_logcat.txt
-            echo "=== CRASH LOG ==="
-            grep -E "AndroidRuntime|FATAL|Exception|Caused by|signalgate|koin" /tmp/full_logcat.txt || echo "No crash lines found"
-            echo "=== END CRASH LOG ==="
+            chmod +x scripts/verify-launch-and-capture.sh
+            scripts/verify-launch-and-capture.sh com.signalgate.multipoint.pulse/com.signalgate.multipoint.MainActivity com.signalgate.multipoint.pulse $GITHUB_WORKSPACE
 
       - name: Upload Full Logcat
         if: always()

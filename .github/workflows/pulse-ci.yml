@@ -23,6 +23,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Check Architecture Drift
+        run: |
+          chmod +x ./scripts/check-architecture-drift.sh
+          ./scripts/check-architecture-drift.sh
+
       - name: Grant execute permission for gradlew
         run: chmod +x ./android/gradlew
 

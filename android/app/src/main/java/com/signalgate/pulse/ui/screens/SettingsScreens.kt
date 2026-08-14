@@ -1,6 +1,5 @@
 package com.signalgate.pulse.ui.screens
 
-import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -10,8 +9,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import org.koin.androidx.compose.koinViewModel
 
 /**
  * SettingsScreen — Application configuration and customization.
@@ -33,45 +32,30 @@ import androidx.compose.ui.unit.dp
  *   notification path that conflicted with SignalGateCallScreeningService's
  *   five-tier system. See PhoneStateReceiver.kt class doc for full context.
  *
- * Step 0.1 (2026-07-02):
- * - Marked shield colors for migration to SettingEntry (Step 2.6)
- * - Still uses SharedPreferences for now (backward compatible)
- * - Will transition to SettingEntry when Step 2.6 is implemented
+ * Step 2.6 (complete): shield colors now owned by SettingsViewModel, backed by
+ * SettingEntry via SettingRepository. This Composable no longer touches
+ * SharedPreferences at all — it only reads SettingsViewModel's state flows and
+ * calls onSliderChange/saveShieldColor. See SettingsViewModel's doc comment
+ * for how this also resolves half of Phase 0's FLAG-1.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onNavigateToLogcat: () -> Unit = {}) {
-    val context = LocalContext.current
-    val sharedPreferences = remember {
-        context.getSharedPreferences("${context.packageName}_preferences", Context.MODE_PRIVATE)
-    }
-
-    /**
-     * Shield color state — RGB values 0-255.
-     * Default: Neon cyan (66, 133, 244)
-     *
-     * Step 0.1 (2026-07-02): Still loaded from SharedPreferences.
-     * PULSE-TODO (2026-06): Migrate to SettingEntry — Step 2.6.
-     * 
-     * Migration path:
-     * 1. Step 2.6: Implement SettingEntry keys for shield_red, shield_green, shield_blue
-     * 2. Step 2.6: Read colors from SettingDao instead of SharedPreferences
-     * 3. Step 2.6: Write colors to SettingDao instead of SharedPreferences
-     * 4. Step 2.6: Remove SharedPreferences fallback
-     */
-    var red by remember { 
-        mutableFloatStateOf(sharedPreferences.getInt("shield_red", 66).toFloat()) 
-    }
-    var green by remember { 
-        mutableFloatStateOf(sharedPreferences.getInt("shield_green", 133).toFloat()) 
-    }
-    var blue by remember { 
-        mutableFloatStateOf(sharedPreferences.getInt("shield_blue", 244).toFloat()) 
-    }
+fun SettingsScreen(
+    onNavigateToLogcat: () -> Unit = {},
+    viewModel: SettingsViewModel = koinViewModel()
+) {
+    val red by viewModel.shieldRed.collectAsState()
+    val green by viewModel.shieldGreen.collectAsState()
+    val blue by viewModel.shieldBlue.collectAsState()
+    val saveConfirmed by viewModel.saveConfirmed.collectAsState()
 
     var showDialog by remember { mutableStateOf(false) }
-    var dialogTitle by remember { mutableStateOf("") }
-    var dialogMessage by remember { mutableStateOf("") }
+
+    LaunchedEffect(saveConfirmed) {
+        if (saveConfirmed) {
+            showDialog = true
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -108,55 +92,36 @@ fun SettingsScreen(onNavigateToLogcat: () -> Unit = {}) {
                     .fillMaxWidth()
                     .height(120.dp)
                     .background(
-                        color = Color(red.toInt(), green.toInt(), blue.toInt()),
+                        color = Color(red, green, blue),
                         shape = MaterialTheme.shapes.medium
                     )
             )
 
             // RGB Sliders
             ColorSlider(
-                label = "Red (${red.toInt()})",
-                value = red,
-                onValueChange = { red = it },
+                label = "Red ($red)",
+                value = red.toFloat(),
+                onValueChange = { viewModel.onSliderChange(it.toInt(), green, blue) },
                 color = Color.Red
             )
             ColorSlider(
-                label = "Green (${green.toInt()})",
-                value = green,
-                onValueChange = { green = it },
+                label = "Green ($green)",
+                value = green.toFloat(),
+                onValueChange = { viewModel.onSliderChange(red, it.toInt(), blue) },
                 color = Color.Green
             )
             ColorSlider(
-                label = "Blue (${blue.toInt()})",
-                value = blue,
-                onValueChange = { blue = it },
+                label = "Blue ($blue)",
+                value = blue.toFloat(),
+                onValueChange = { viewModel.onSliderChange(red, green, it.toInt()) },
                 color = Color.Blue
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             // ── Action: Save Colors ────────────────────────────────────────────
-            /**
-             * Saves the current RGB values to SharedPreferences.
-             * Step 0.1 (2026-07-02): Still uses SharedPreferences.
-             * Will migrate to SettingEntry in Step 2.6.
-             */
             Button(
-                onClick = {
-                    // Write to SharedPreferences
-                    sharedPreferences.edit().apply {
-                        putInt("shield_red", red.toInt())
-                        putInt("shield_green", green.toInt())
-                        putInt("shield_blue", blue.toInt())
-                        apply()
-                    }
-
-                    // Show confirmation dialog
-                    dialogTitle = "Colors Saved"
-                    dialogMessage = "Your shield color has been updated. " +
-                            "Some UI elements may require an app restart to fully reflect the change."
-                    showDialog = true
-                },
+                onClick = { viewModel.saveShieldColor() },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Save Shield Color")
@@ -203,17 +168,30 @@ fun SettingsScreen(onNavigateToLogcat: () -> Unit = {}) {
     // ── Dialogs ───────────────────────────────────────────────────────────────
 
     /**
-     * Generic confirmation dialog for settings changes.
-     * Used for color save confirmation and other actions.
+     * Shield-color save confirmation. Shown reactively via saveConfirmed rather
+     * than set imperatively at the button's onClick — the dialog only appears
+     * once SettingsViewModel confirms the SettingRepository writes actually
+     * completed, not merely that the button was tapped.
      */
     if (showDialog) {
         AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text(dialogTitle) },
-            text = { Text(dialogMessage) },
+            onDismissRequest = {
+                showDialog = false
+                viewModel.acknowledgeSave()
+            },
+            title = { Text("Colors Saved") },
+            text = {
+                Text(
+                    "Your shield color has been updated. Some UI elements may " +
+                        "require an app restart to fully reflect the change."
+                )
+            },
             confirmButton = {
                 Button(
-                    onClick = { showDialog = false }
+                    onClick = {
+                        showDialog = false
+                        viewModel.acknowledgeSave()
+                    }
                 ) {
                     Text("OK")
                 }

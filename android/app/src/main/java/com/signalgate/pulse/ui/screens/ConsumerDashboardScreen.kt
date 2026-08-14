@@ -60,15 +60,16 @@ fun ConsumerDashboardScreen(
     val callsScreened by viewModel.callsScreenedToday.collectAsState(initial = 0)
 
     // First-launch → onboarding routing, ported from the retired OperationalDashboard.
-    // Read-only against the "onboarding_complete" flag: OnboardingWizardScreen owns
-    // writing this key to true on completion (PULSE-TODO: migrate to SettingEntry in
-    // Step 2.6 — both this read and the wizard's write move together at that point).
-    val sharedPreferences = remember {
-        context.getSharedPreferences("${context.packageName}_preferences", Context.MODE_PRIVATE)
-    }
-    LaunchedEffect(Unit) {
-        val isOnboardingComplete = sharedPreferences.getBoolean("onboarding_complete", false)
-        if (!isOnboardingComplete) {
+    // Step 2.6: now reads isOnboardingComplete from DashboardViewModel (backed by
+    // SettingRepository) instead of SharedPreferences directly — this Composable no
+    // longer touches persistence at all. OnboardingViewModel.markOnboardingComplete()
+    // is the write side; both moved to SettingEntry together, as planned.
+    //
+    // Nullable on purpose: null means "still loading," and must never be treated as
+    // "not complete" — see DashboardViewModel's doc comment on this flow.
+    val isOnboardingComplete by viewModel.isOnboardingComplete.collectAsState()
+    LaunchedEffect(isOnboardingComplete) {
+        if (isOnboardingComplete == false) {
             onLaunchOnboarding()
         }
     }
@@ -114,14 +115,14 @@ fun ConsumerDashboardScreen(
                         color = TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        letterSpacing = 3.sp
                     )
                     Text(
                         text = "PULSE",
                         color = NeonCyan,
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        letterSpacing = 2.sp
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 3.sp
                     )
                 }
             }

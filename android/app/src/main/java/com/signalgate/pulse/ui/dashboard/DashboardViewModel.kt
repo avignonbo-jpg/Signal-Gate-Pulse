@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.signalgate.pulse.database.entities.SourceEntity
 import com.signalgate.pulse.database.repositories.CallLogRepository
 import com.signalgate.pulse.database.repositories.DataSourceRepository
+import com.signalgate.pulse.database.repositories.SettingKeys
+import com.signalgate.pulse.database.repositories.SettingRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -28,7 +30,8 @@ import java.util.Calendar
  */
 class DashboardViewModel(
     private val dataSourceRepository: DataSourceRepository,
-    private val callLogRepository: CallLogRepository
+    private val callLogRepository: CallLogRepository,
+    private val settingRepository: SettingRepository
 ) : ViewModel() {
 
     companion object {
@@ -63,8 +66,24 @@ class DashboardViewModel(
     private val _callsScreenedToday = MutableStateFlow(0)
     val callsScreenedToday: StateFlow<Int> = _callsScreenedToday.asStateFlow()
 
+    // Read-only from the dashboard's side — RiskThresholdStep (via OnboardingViewModel)
+    // is the only writer of this key. Nullable and starting at null deliberately: this
+    // must never be mistaken for "onboarding not complete" while the async load below
+    // is still in flight, which would incorrectly re-launch onboarding for a returning
+    // user on every app start during that brief window before the DB read resolves.
+    private val _isOnboardingComplete = MutableStateFlow<Boolean?>(null)
+    val isOnboardingComplete: StateFlow<Boolean?> = _isOnboardingComplete.asStateFlow()
+
     init {
         observeDataSources()
+        loadOnboardingStatus()
+    }
+
+    private fun loadOnboardingStatus() {
+        viewModelScope.launch {
+            val value = settingRepository.getSettingValue(SettingKeys.ONBOARDING_COMPLETE)
+            _isOnboardingComplete.value = value?.toBoolean() ?: false
+        }
     }
 
     private fun observeDataSources() {
