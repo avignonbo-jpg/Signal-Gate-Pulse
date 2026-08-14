@@ -42,7 +42,7 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SRC="$PROJECT_ROOT/android/app/src/main/java/com/signalgate/multipoint"
+SRC="$PROJECT_ROOT/android/app/src/main/java/com/signalgate/pulse"
 
 VIOLATIONS=0
 
@@ -75,7 +75,7 @@ if [ -d "$SRC/ui" ]; then
     while IFS=: read -r file _line content; do
         [ -z "$file" ] && continue
         fail "$RULE" "${file#$PROJECT_ROOT/}" "$content"
-    done < <(grep -rn "^import com\.signalgate\.multipoint\.database\.daos" "$SRC/ui" --include="*.kt" 2>/dev/null)
+    done < <(grep -rn "^import com\.signalgate\.pulse\.database\.daos" "$SRC/ui" --include="*.kt" 2>/dev/null)
 fi
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Splash/starting-window theme. MainActivity is launched with this theme
+         (see AndroidManifest.xml); installSplashScreen() in MainActivity.kt
+         switches to postSplashScreenTheme once the app is ready to draw.
+
+         This covers the wait during MainApplication.onCreate()'s runBlocking
+         DB init (see that class's doc comment) — the system shows this themed
+         starting window for the app's entire cold-start duration, including
+         that blocking period, with zero additional code required for that part.
+         The keepOnScreenCondition in MainActivity is an additional safety net
+         for any residual work after the first Activity frame. -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/background_primary</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/shield_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.SignalGate</item>
+    </style>
+
     <!-- Main App Theme -->
     <style name="Theme.SignalGate" parent="Theme.Material3.DayNight.NoActionBar">
 
