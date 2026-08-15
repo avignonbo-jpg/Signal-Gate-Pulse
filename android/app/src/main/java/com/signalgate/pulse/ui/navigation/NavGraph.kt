@@ -30,7 +30,6 @@ fun SignalGateNavGraph(
         composable(Screen.Dashboard.route) {
             ConsumerDashboardScreen(
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
-                onNavigateToActivity = { navController.navigate(Screen.Digest.route) },
                 onLaunchOnboarding = { navController.navigate(Screen.Onboarding.route) }
             )
         }
@@ -68,7 +67,12 @@ fun SignalGateNavGraph(
          *   1. Deep link: notification tap fires signalgate://digest PendingIntent
          *      → MainActivity receives → NavController routes here automatically.
          *   2. Direct navigation: navController.navigate(Screen.Digest.route)
-         *      from the consumer dashboard "View Recent Activity" link.
+         *      from the nav drawer's "Blocked Calls" item (GlassmorphicDrawerContent.kt).
+         *
+         *      2026-08-15: previously reached via a "View Recent Activity" link on
+         *      the consumer dashboard, which was removed and moved to the drawer —
+         *      it sat directly in the scroll path on dashboard open, in the way of
+         *      just viewing the dashboard. See PROJECT_LEDGER.md, 2026-08-15 entry.
          *
          * The uriPattern must match android:scheme + android:host declared in
          * AndroidManifest.xml MainActivity intent-filter.
