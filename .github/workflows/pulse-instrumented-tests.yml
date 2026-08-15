@@ -1,0 +1,81 @@
+name: Pulse Instrumented Tests
+
+# Mandatory, automatic gate — NOT workflow_dispatch-only like Crash Diagnostic.
+# Phase 5.2 of SECURITY-DEVOPS-BUILD-PLAN.md requires instrumented security
+# tests to run in mandatory CI, not just be available to run manually. This
+# is deliberately its own workflow rather than a step bolted onto
+# pulse-ci.yml: instrumented tests need a booted emulator (several minutes),
+# which would slow down every push's fast build/lint/unit-test feedback loop
+# if merged into that job. Runs in parallel with pulse-ci.yml instead.
+#
+# No continue-on-error anywhere in this workflow, on purpose — per INV-010
+# (Architecture-Contract-v3-DRAFT.md §7), a required security test may not
+# be advisory. pulse-ci.yml's JVM unit-test step still has continue-on-error
+# set (Phase 5.1, tracked as open); this workflow does not repeat that gap.
+
+on:
+  push:
+    branches: [ consumer-v1 ]
+  pull_request:
+    branches: [ consumer-v1 ]
+
+jobs:
+  instrumented-tests:
+    name: Pulse Debug — Instrumented Tests (emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./android/gradlew
+
+      - name: Run Instrumented Tests (Pulse) on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          force-avd-creation: false
+          disable-animations: true
+          working-directory: ./android
+          script: |
+            echo "=== Emulator ready — running connectedPulseDebugAndroidTest ==="
+            # Deliberately no --continue / no swallowing failures here: this
+            # is the mandatory gate for the tests covering Phase 0.2's
+            # Bloom-vs-database authoritative-decision invariant
+            # (BloomAuthoritativeDecisionTest.kt), the Room migration path
+            # (MigrationTest.kt), source deletion cascade behavior
+            # (SourceDeletionCascadeTest.kt), Keystore/SQLCipher behavior
+            # (SecurityUtilsInstrumentedTest.kt), and cold-start ordering
+            # (StartupTimingTest.kt) — a silent failure here is exactly the
+            # class of gap that let the real-device splash icon regression
+            # ship unnoticed by CI (see PROJECT_LEDGER.md, 2026-08-15 entry).
+            ./gradlew :app:connectedPulseDebugAndroidTest --no-daemon --stacktrace
+
+      - name: Upload Instrumented Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-test-results
+          path: |
+            android/app/build/outputs/androidTest-results/**
+            android/app/build/reports/androidTests/**
+          retention-days: 7
