@@ -10,10 +10,29 @@
          starting window for the app's entire cold-start duration, including
          that blocking period, with zero additional code required for that part.
          The keepOnScreenCondition in MainActivity is an additional safety net
-         for any residual work after the first Activity frame. -->
+         for any residual work after the first Activity frame.
+
+         2026-08-15: windowSplashScreenAnimatedIcon REMOVED. It was set to
+         shield_logo.png — 1412x1704px, ~3MB, the full hero-card raster asset —
+         which is far outside what the platform SplashScreen API expects for
+         this slot (roughly an adaptive-icon-sized drawable, ~192dp within a
+         288dp safe zone). On a real device (Motorola, live test) this produced
+         an ~8 second BLANK BLACK screen with no splash visible at all, then
+         the app jumped straight to the EULA screen — the oversized icon likely
+         failed to render on the platform (API 31+) SplashScreen implementation,
+         silently falling back to nothing rather than crashing loudly.
+         windowSplashScreenBackground alone (no icon) is a fully standard,
+         correctly-supported configuration and avoids this failure mode
+         entirely. DO NOT re-add windowSplashScreenAnimatedIcon pointing at
+         shield_logo.png or any other asset without first confirming it's
+         sized correctly for this specific API (not just "looks fine in the
+         app UI at 160dp in a Compose Image()" — that's a completely different
+         rendering path with no such size constraint). Test on a real device
+         before merging any icon addition here, not just emulator — see
+         PROJECT_LEDGER.md, 2026-08-15 entry, for why the emulator-based
+         Crash Diagnostic runs from the prior session did not catch this. -->
     <style name="Theme.App.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/background_primary</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/shield_logo</item>
         <item name="postSplashScreenTheme">@style/Theme.SignalGate</item>
     </style>
 
