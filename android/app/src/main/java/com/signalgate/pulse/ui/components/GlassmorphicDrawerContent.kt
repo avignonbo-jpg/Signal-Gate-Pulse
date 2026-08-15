@@ -22,11 +22,16 @@ fun GlassmorphicDrawerContent(
     currentRoute: String?,
     onDestinationSelected: (Screen) -> Unit
 ) {
+    // Screen.Digest ("Blocked Calls") added 2026-08-15 — moved here from a
+    // dashboard-level "View Recent Activity" link that sat in the way of just
+    // viewing the dashboard on open. This is now the only in-app (non-deep-link)
+    // path to that screen — see Screen.kt's doc comment on Digest before removing.
     val screens = listOf(
         Screen.Dashboard,
         Screen.Sources,
         Screen.CallLog,
         Screen.BlockAllowList,
+        Screen.Digest,
         Screen.Settings
     )
 
