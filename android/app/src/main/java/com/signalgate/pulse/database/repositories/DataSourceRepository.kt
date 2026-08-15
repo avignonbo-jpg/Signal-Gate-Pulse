@@ -67,6 +67,29 @@ class DataSourceRepository(
     private val bloomFilter: BloomFilterEngine,
     private val patternBloomFilter: BloomFilterEngine
 ) {
+    companion object {
+        /**
+         * Phase 0.3 (Security Control-Plane Integrity — source lifecycle
+         * semantics, Architecture Contract §7 / INV-008): source *types* that
+         * may never be deleted via deleteSource(), only their entries.
+         *
+         * "MANUAL" covers BOTH seeded protected sources — DatabaseInitializer
+         * seeds "Manual User Rules" (manual_source_id) and "Contacts Allow
+         * List" (contacts_source_id) with the same type = "MANUAL", distinguished
+         * only by name/pathOrUrl, not by a separate type value. Guarding on
+         * type therefore protects both with one check, and keeps working even
+         * if a source's numeric id changes (e.g. reseeded on a fresh install).
+         *
+         * "FTC" / "FCC" are federal sources (see ReliableSourceManager):
+         * disableable via toggleSourceEnabled(), but never deletable.
+         *
+         * Deliberately NOT included: "CSV", "XLSX", "URL", or any other future
+         * type — those identify user-created sources, which the contract
+         * allows to be either disabled or deleted.
+         */
+        val PROTECTED_SOURCE_TYPES = setOf("MANUAL", "FTC", "FCC")
+    }
+
     @Volatile
     private var bloomReady = false
 
@@ -91,7 +114,27 @@ class DataSourceRepository(
 
     suspend fun updateSource(source: SourceEntity) = sourceDao.updateSource(source)
 
-    suspend fun deleteSource(source: SourceEntity) = sourceDao.deleteSource(source)
+    /**
+     * Phase 0.3: refuses to delete a protected source (see
+     * [PROTECTED_SOURCE_TYPES]). This is the actual chokepoint every current
+     * caller already routes through (SourcesViewModel today; SecurityRuleRepository
+     * for any future decision-affecting caller) — guarding here means the
+     * refusal holds regardless of which layer calls it, rather than relying on
+     * every future caller to remember to check first.
+     *
+     * A source deletion cascades (FK CASCADE) into every unified_entries row
+     * and sync_history row for that source — see SourceDeletionCascadeTest.
+     * For a protected source that cascade would silently erase every manual
+     * rule, every contacts-derived allow entry, or an entire federal dataset,
+     * with no independent confirmation step. Refusing before the DAO call is
+     * reached is what makes that impossible rather than just unlikely.
+     */
+    suspend fun deleteSource(source: SourceEntity) {
+        if (source.type in PROTECTED_SOURCE_TYPES) {
+            throw ProtectedSourceDeletionException(source)
+        }
+        sourceDao.deleteSource(source)
+    }
 
     suspend fun toggleSourceEnabled(sourceId: Int, isEnabled: Boolean) =
         sourceDao.updateSourceEnabled(sourceId, isEnabled)
@@ -357,3 +400,19 @@ class DataSourceRepository(
         val source: String
     )
 }
+
+/**
+ * Thrown by [DataSourceRepository.deleteSource] when the target source's type
+ * is in [DataSourceRepository.PROTECTED_SOURCE_TYPES]. Per Architecture
+ * Contract §7 / INV-008, MANUAL, CONTACTS, and federal (FTC/FCC) sources may
+ * never be deleted — only their entries, or (for federal sources) disabled
+ * via toggleSourceEnabled(). Callers should treat this the same as any other
+ * rejected mutation, not as an unexpected failure: SourcesViewModel already
+ * catches Exception around this call site and logs it rather than crashing.
+ */
+class ProtectedSourceDeletionException(source: SourceEntity) : IllegalStateException(
+    "Source '${source.name}' (id=${source.id}, type=${source.type}) is protected and " +
+        "cannot be deleted. MANUAL/CONTACTS sources may never be deleted (only their " +
+        "entries); federal sources (FTC/FCC) may be disabled but not deleted. " +
+        "See Architecture Contract §7, INV-008."
+)
