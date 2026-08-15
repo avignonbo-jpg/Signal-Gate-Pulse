@@ -68,6 +68,16 @@ Governing document: `Architecture-Contract.md` (v2 — Reconciled). This is now 
 
 *(Newest entry on top.)*
 
+### 2026-08-15 — Moved "Blocked Calls" (Screen.Digest) from dashboard link to nav drawer
+- **Who:** Claude (Sonnet), user edited directly via GitHub web UI (not Termux) this session
+- **What:** The dashboard's "View Recent Activity ›" `TextButton` (in `ConsumerDashboardScreen.kt`, below the SETTINGS button) navigated to `Screen.Digest` ("Blocked Calls" — the swipeable `PendingCardEntity` review queue). User reported it sat directly in the scroll path on dashboard open, in the way of just viewing the dashboard. Removed the button and its `onNavigateToActivity` parameter from `ConsumerDashboardScreen.kt`; added `Screen.Digest` to the nav drawer's screen list in `GlassmorphicDrawerContent.kt` (placed next to `BlockAllowList`, both being blocked/reviewed-call screens) — this reuses the drawer's existing generic `onDestinationSelected` routing, no new wiring needed. Updated the call site in `NavGraph.kt` (removed the now-unused argument) and the doc comments in both `NavGraph.kt` and `Screen.kt` describing `Digest`'s reach paths — both previously claimed "Navigation drawer" as a working access path, which was false until this change (a pre-existing doc/reality mismatch, not introduced this session, now actually true). Deep-link access (`signalgate://digest` notification tap) is unaffected. Guard comments added in all three touched files noting the drawer entry is now the only in-app (non-deep-link) path to `Digest`, so it shouldn't be removed without adding a replacement first.
+- **Files touched:** `ui/screens/ConsumerDashboardScreen.kt`, `ui/components/GlassmorphicDrawerContent.kt`, `ui/navigation/NavGraph.kt`, `ui/navigation/Screen.kt`
+- **Contract consulted:** not directly — this is a Layer 7 (UI) navigation-affordance change, not a security-boundary or layer-ownership change. No `check-architecture-drift.sh` rule governs drawer contents or dashboard button placement.
+- **Follow-up needed:**
+  1. **Not yet CI-verified** — these edits were made directly in GitHub's web editor, not from a local checkout, so no compile/test/drift-check has run against them as of this entry. Run the "Pulse Debug" workflow (or push a trivial commit to trigger it) before trusting this compiles.
+  2. Not tested on-device/emulator — worth confirming the drawer item actually renders and navigates correctly, and that removing the dashboard button didn't affect the dashboard's remaining layout/spacing in an unintended way.
+  3. Noted but explicitly out of scope this session: `GlassmorphicDrawerContent.kt`'s header still hardcodes the literal text "MULTI-PORT" — a pre-existing branding-bleed issue already tracked in the 2026-08-14 reachability-audit entry, not touched here.
+
 ### 2026-08-14/15 — Merged pulse-package-rename into consumer-v1; fixed post-merge compile break and stale crash-diagnostic launch target
 - **Who:** Claude (Sonnet), interactive session with user working from Termux (no local Gradle — all verification done via GitHub Actions CI)
 - **What:**
