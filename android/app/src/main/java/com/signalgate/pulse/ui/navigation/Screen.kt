@@ -17,8 +17,14 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
      * Blocked call digest — swipeable card list backed by PendingCardEntity queue.
      * Reached via:
      *   - Notification content tap (signalgate://digest deep link)
-     *   - "View Recent Activity" on the consumer dashboard
-     *   - Navigation drawer
+     *   - Navigation drawer ("Blocked Calls")
+     *
+     * 2026-08-15: previously also reachable via a "View Recent Activity" link on
+     * the consumer dashboard — removed, since it sat directly in the scroll path
+     * on dashboard open, in the way of just viewing the dashboard. This drawer
+     * entry is now the only in-app (non-deep-link) way to reach this screen —
+     * don't remove it from GlassmorphicDrawerContent.kt without adding another
+     * real access path first. See PROJECT_LEDGER.md, 2026-08-15 entry.
      */
     object Digest        : Screen("digest",     "Blocked Calls",     Icons.Default.Notifications)
 }
