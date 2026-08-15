@@ -46,6 +46,16 @@ jobs:
             echo "=== Installing APK ==="
             adb install -r android/app/build/outputs/apk/pulse/debug/app-pulse-debug.apk
             chmod +x scripts/verify-launch-and-capture.sh
+            # DO NOT "fix" this back to com.signalgate.multipoint.MainActivity.
+            # applicationId (before the slash) is deliberately com.signalgate.multipoint.pulse
+            # — that's the real Play Store/OS package identity, left unchanged by the
+            # 2026-08-14/15 rename on purpose (see PROJECT_LEDGER.md). The activity class
+            # (after the slash) MUST be com.signalgate.pulse.MainActivity — that's where
+            # MainActivity actually lives post-rename. Pointing this at the old multipoint
+            # class launches a component that doesn't exist / silently launches stale code,
+            # which is exactly the bug found and fixed this session (this workflow ran
+            # the pre-rename app for two full sessions without anyone noticing, since it
+            # doesn't fail loudly — it just launches the wrong, stale build).
             scripts/verify-launch-and-capture.sh com.signalgate.multipoint.pulse/com.signalgate.pulse.MainActivity com.signalgate.multipoint.pulse $GITHUB_WORKSPACE
 
       - name: Upload Full Logcat

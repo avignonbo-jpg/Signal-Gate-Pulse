@@ -4,6 +4,8 @@ This document defines the final target architecture for SignalGate Pulse. It is 
 
 **Reconciliation note (this revision, updated 2026-08-13):** §4's Layer 2 now calls out `SecureDatabase`/`SecurityUtils` (the Keystore-wrapped passphrase) as an explicit "root of trust" sub-item rather than one bullet of equal visual weight among six — a deliberate, small borrow from Track 1's "Physical" framing, adopted without re-flipping this document's overall numbering (see discussion below for why a full renumbering isn't worth it).
 
+**Session note (2026-08-14/15):** the `pulse-package-rename` branch (Java/Kotlin package rename `com.signalgate.multipoint` → `com.signalgate.pulse`, splash screen, Phase 0.1 reconciliation from a prior session) was merged into `consumer-v1` this session, following a real merge conflict against this repo's own concurrent work and a post-merge compile break (both found and fixed — see `PROJECT_LEDGER.md`). **This was a rename/merge/CI-tooling session only — no class ownership, layer assignment, or architectural rule in this document changed.** §9/§10 items below now carry explicit Status tags; all were confirmed untouched by this session and remain exactly as previously logged.
+
 Two independent Architecture Contract lineages existed for this project simultaneously — one from a Perplexity-originated session (this document's direct ancestor, enforced in CI by `check-architecture-drift.sh`), and one from a separate session lineage (`SignalGate-Pulse-Architecture-Contract.md`, prose-only, no CI enforcement, opposite layer-numbering direction: Layer 7 = Application/Layer 1 = Physical, versus this document's Layer 7 = UI/Layer 1 = Platform-Edge). **This document's numbering is adopted as canonical going forward**, because it is the one an actual machine check enforces — a contract nobody's CI reads is a suggestion, not a contract. All class-ownership content from both lineages is merged below against the verified real source tree (`Signal-Gate-Pulse-consumer-v1`, 77 Kotlin files, cross-checked against `SignalGate-Pulse-Source-of-Truth-Audit.md`). The other lineage's Contract/Roadmap/Audit set should be treated as superseded by this document for architecture-ownership purposes; its phased release-roadmap content is retained separately (§10) since this lineage never had an equivalent.
 
 ## 1. Scope
@@ -162,21 +164,35 @@ Every third-party import used in `src/main/java` must correspond to a declared d
 
 **9.1 — `PermissionSettingsScreen` unreachable.** Listed in §4's Layer 7 map and compiles, but has no `Screen` entry and no `NavGraph.kt` `composable(...)` registration. Per §1/§2 this is dead code as shipped. Resolution: add a route + nav entry + Koin ViewModel binding, or delete the file.
 
+**Status: ⏸ Not started.** Untouched by the 2026-08-14/15 rename/merge session (that session was package-rename and CI-tooling only — no architectural changes). See `PROJECT_LEDGER.md`.
+
 **9.2 — `TelemetryViewModel` orphaned.** Registered in Koin's `viewModelModule` (§4, Layer 6) but consumed by no screen, violating §5's one-ViewModel-per-screen pillar in the "no orphan" direction. Resolution: wire into `CallLogScreen` (it already maps `CallLogRepository` → `CallLogItem`, the natural fit) or delete the class and its Koin binding.
+
+**Status: ⏸ Not started.** Untouched by the 2026-08-14/15 session.
 
 **9.3 — `app/build.gradle` doc-comment mismatch.** The comment above the `ksp { room.schemaLocation }` block states `exportSchema = false`; `SignalGateDatabase.kt`'s actual `@Database` annotation has `exportSchema = true` (deliberate). The comment misdocuments the schema-export contract for anyone auditing migrations.
 
+**Status: ⏸ Not started.** Untouched by the 2026-08-14/15 session.
+
 **9.4 — `ShieldStatusGlow.kt` uses `Color.hashCode()` for `Paint` color.** `.hashCode()` is not a defined ARGB packed-int conversion; must use `.toArgb()`. A Layer 7 (UI) correctness bug, not a security-boundary issue.
+
+**Status: ⏸ Not started.** Untouched by the 2026-08-14/15 session — note `ShieldStatusGlow.kt` did move package (`multipoint` → `pulse`) during the rename, but its content/logic, including this bug, was not touched.
 
 **9.5 — `HEURISTIC_FLAG` (gray-zone) calls never produce a `PendingCardEntity`.** `CallScreeningEngine.kt`'s own doc comment states gray-zone calls "are never silently blocked — the user always gets to review them via the digest." The actual write path in `SignalGateCallScreeningService`'s audit-recording function gates `PendingCardEntity` creation on `CallTier.HEURISTIC_BLOCK` only. Tier 4 calls get a `CallLogEntry` and nothing else — the digest review the Domain layer's own documented contract promises never happens. This is a Layer 4-vs-Layer 1 contract mismatch: the domain decision says "reviewable," the edge-layer write path disagrees. **Blocks any UI/notification work built on top of gray-zone review until fixed** — see §10.
 
+**Status: ⏸ Not started.** Untouched by the 2026-08-14/15 session. This remains the top-priority code item per `PROJECT_LEDGER.md` Open Items.
+
 **9.6 — `check-architecture-drift.sh` Rule 6 does not scan `ui/theme/`.** §4's Cross-Cutting list claims `Color`/`Theme`/`SignalGateTheme`/`Effects` as pure, but the enforcement script's `CROSS_CUTTING_DIRS` array only contains `data/models` and `utils`. The claim in this document is currently unverified by the one thing that's supposed to verify it.
+
+**Status: ⏸ Not started.** `check-architecture-drift.sh`'s scan path was updated during the 2026-08-14/15 rename (to point at `com/signalgate/pulse`), but Rule 6's `CROSS_CUTTING_DIRS` gap itself was not addressed — confirmed still open.
 
 ## 10. Feature Completion & Test Coverage (net-new, not yet built)
 
 *(This lineage previously had no phased roadmap. The sibling lineage's roadmap phases are adopted here, scoped down to what's still outstanding and cross-referenced against this document's §9 violations.)*
 
 **10.1 — Fix 9.5 first, before any gray-zone UI work.** A prior session built a gray-zone review notification, a Compose-independent haptic controller (`PulseHapticsController`/`PulseVibration`, Layer 1 — hardware/vibrator I/O triggered from a Service context), extended `CallActionReceiver` (Layer 1) with Block/Allow/Skip actions, and a `PulseTriggerLimiter` rate limiter (Layer 5 — Application: it orchestrates and persists throttling state via `SettingRepository` but does not itself decide allow/block, so it does not belong in Layer 4). **That work is held, not merged** — it was built without a §7 change-control citation, and it assumes a `PendingCardEntity` exists for gray-zone calls, which 9.5 shows is false. Sequence: fix 9.5 → re-verify the digest surface actually shows gray-zone cards → only then reintroduce the notification/haptic layer on top of a working foundation → then the rate limiter, re-checked against §6 Layer 4's "advisory-only" boundary to confirm it only gates the *notification*, never the tier decision or the `CallLogEntry` audit write.
+
+**Status: ⏸ Not started (blocked on 9.5).** Untouched by the 2026-08-14/15 session. `CallActionReceiver.kt` was touched during that session's merge-conflict resolution, but only to correct its package/imports — no behavioral change, so this held feature's assumptions about `CallActionReceiver` are unaffected either way.
 
 **10.2 — Test coverage gaps, by layer:**
 - Layer 4 (Domain): `CallScreeningEngine`/`CallRiskEvaluator` need a test matrix covering all five tiers independently, including the gray-zone path — currently unverified that 9.5's fix doesn't regress tier-selection logic itself.
@@ -185,7 +201,11 @@ Every third-party import used in `src/main/java` must correspond to a declared d
 - Layer 1 (Platform/Edge): `SecurityUtilsTest.kt` is currently a placeholder stub per the project ledger, not real test coverage — needs actual implementation.
 - Cross-cutting: extend `check-architecture-drift.sh` Rule 6 to scan `ui/theme/` (closes 9.6) as a same-day, low-risk fix alongside any other script change.
 
+**Status: ⏸ Not started.** Untouched by the 2026-08-14/15 session — that session ran the existing test suite (7/7 passed) as CI verification of its own changes, but added no new tests and closed none of these gaps.
+
 **10.3 — Dependency/CVE scanning is not currently a CI gate.** Given SQLCipher, OkHttp, Koin, and Room are all real attack surface, a dependency-vulnerability scan blocking on high/critical CVEs should be added to CI, not left as a manual periodic check.
+
+**Status: ⏸ Not started.** Untouched by the 2026-08-14/15 session.
 
 ---
 
