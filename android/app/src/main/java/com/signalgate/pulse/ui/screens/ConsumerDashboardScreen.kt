@@ -41,15 +41,20 @@ import org.koin.androidx.compose.koinViewModel
  *           subtitle "Your protection is running in the background."
  *   - Two stat cards: Calls Screened Today + Threats Blocked with cyan counts
  *   - SETTINGS pill button with cyan border glow
- *   - "View Recent Activity ›" text link → Screen.Digest
  *
  * Phase 2 Step 2.2. wired to real DashboardViewModel state (Steps 2.3–2.5).
  * startDestination in NavGraph replaces OperationalDashboard for Pulse users.
+ *
+ * 2026-08-15: the "View Recent Activity ›" text link → Screen.Digest that used
+ * to sit below the SETTINGS button was removed and moved to the nav drawer
+ * ("Blocked Calls" — see GlassmorphicDrawerContent.kt). It sat directly in the
+ * scroll path on dashboard open, in the way of just viewing the dashboard.
+ * Screen.Digest is still reachable — via the drawer, and via the existing
+ * signalgate://digest notification deep link — just no longer from here.
  */
 @Composable
 fun ConsumerDashboardScreen(
     onNavigateToSettings: () -> Unit = {},
-    onNavigateToActivity: () -> Unit = {},
     onLaunchOnboarding: () -> Unit = {},
     viewModel: DashboardViewModel = koinViewModel()
 ) {
@@ -242,18 +247,14 @@ fun ConsumerDashboardScreen(
                 )
             }
 
-            // ── View Recent Activity link ────────────────────────────────────
-            TextButton(
-                onClick = onNavigateToActivity,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "View Recent Activity  ›",
-                    color = NeonCyan,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+            // "View Recent Activity" link REMOVED (2026-08-15) — moved to the nav
+            // drawer as "Blocked Calls" (Screen.Digest). It sat directly in the
+            // scroll path between the SETTINGS button and the bottom of the
+            // dashboard, in the way of just viewing the dashboard on open. Do not
+            // re-add a dashboard-level shortcut to Screen.Digest without checking
+            // whether the drawer entry (GlassmorphicDrawerContent.kt) already
+            // covers the need — duplicating both would reintroduce the crowding
+            // this fixed. See PROJECT_LEDGER.md, 2026-08-15 entry.
 
             Spacer(modifier = Modifier.height(8.dp))
         }
