@@ -15,6 +15,18 @@ android {
         versionCode 1
         versionName "1.0.0"
         vectorDrawables.useSupportLibrary = true
+
+        // Was missing entirely — AGP silently fell back to the legacy
+        // android.test.InstrumentationTestRunner (JUnit3-era), which cannot
+        // discover @RunWith(AndroidJUnit4::class)/@Test JUnit4 methods at
+        // all. Every instrumented test in this project (Bloom, migration,
+        // source-deletion-cascade, Keystore, startup-timing) uses JUnit4 —
+        // without this line, connectedPulseDebugAndroidTest runs, finds
+        // nothing recognizable, and reports "OK (0 tests)" — a clean exit
+        // that looks like success but tested nothing. Confirmed root cause
+        // 2026-08-15 from a real CI run's utp.0.log
+        // (test_runner_class: "android.test.InstrumentationTestRunner").
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
