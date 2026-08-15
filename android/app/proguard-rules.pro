@@ -3,8 +3,8 @@
 # =============================================
 
 # Keep everything in our package (important for CallScreeningService)
--keep class com.signalgate.multipoint.** { *; }
--keepclassmembers class com.signalgate.multipoint.** { *; }
+-keep class com.signalgate.pulse.** { *; }
+-keepclassmembers class com.signalgate.pulse.** { *; }
 
 # Keep Room Database, Entities, and DAOs
 -keep class * extends androidx.room.RoomDatabase
@@ -19,10 +19,10 @@
 -keep class kotlinx.coroutines.** { *; }
 
 # Keep CallScreeningService (critical - must not be obfuscated)
--keep public class com.signalgate.multipoint.CallScreeningService { *; }
+-keep public class com.signalgate.pulse.CallScreeningService { *; }
 
 # Keep SettingsFragment and anything using SharedPreferences
--keep class com.signalgate.multipoint.ui.SettingsFragment { *; }
+-keep class com.signalgate.pulse.ui.SettingsFragment { *; }
 
 # Suppress common warnings
 -dontwarn org.jetbrains.annotations.**

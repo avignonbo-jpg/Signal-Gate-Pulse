@@ -46,7 +46,7 @@ jobs:
             echo "=== Installing APK ==="
             adb install -r android/app/build/outputs/apk/pulse/debug/app-pulse-debug.apk
             chmod +x scripts/verify-launch-and-capture.sh
-            scripts/verify-launch-and-capture.sh com.signalgate.multipoint.pulse/com.signalgate.multipoint.MainActivity com.signalgate.multipoint.pulse $GITHUB_WORKSPACE
+            scripts/verify-launch-and-capture.sh com.signalgate.multipoint.pulse/com.signalgate.pulse.MainActivity com.signalgate.multipoint.pulse $GITHUB_WORKSPACE
 
       - name: Upload Full Logcat
         if: always()

@@ -25,10 +25,10 @@ jobs:
           git rev-parse HEAD
 
           echo "=== SignalGateDatabase.kt version check ==="
-          grep -n "version =" android/app/src/main/java/com/signalgate/multipoint/database/SignalGateDatabase.kt
+          grep -n "version =" android/app/src/main/java/com/signalgate/pulse/database/SignalGateDatabase.kt
 
           echo "=== PendingCardEntity check ==="
-          grep -n "PendingCardEntity" android/app/src/main/java/com/signalgate/multipoint/database/SignalGateDatabase.kt
+          grep -n "PendingCardEntity" android/app/src/main/java/com/signalgate/pulse/database/SignalGateDatabase.kt
 
       - name: Generate Room schema
         working-directory: android
