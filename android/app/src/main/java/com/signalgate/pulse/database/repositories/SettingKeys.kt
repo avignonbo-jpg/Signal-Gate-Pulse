@@ -1,4 +1,4 @@
-package com.signalgate.multipoint.database.repositories
+package com.signalgate.pulse.database.repositories
 
 /**
  * SettingKeys — centralizes the SettingEntry key strings for values migrated

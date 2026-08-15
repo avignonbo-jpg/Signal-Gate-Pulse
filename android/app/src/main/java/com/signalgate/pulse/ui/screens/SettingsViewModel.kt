@@ -1,9 +1,9 @@
-package com.signalgate.multipoint.ui.screens
+package com.signalgate.pulse.ui.screens
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.signalgate.multipoint.database.repositories.SettingKeys
-import com.signalgate.multipoint.database.repositories.SettingRepository
+import com.signalgate.pulse.database.repositories.SettingKeys
+import com.signalgate.pulse.database.repositories.SettingRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch

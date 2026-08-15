@@ -6,9 +6,9 @@ import android.content.Context
 import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.signalgate.multipoint.database.repositories.HeuristicsMode
-import com.signalgate.multipoint.database.repositories.SettingKeys
-import com.signalgate.multipoint.database.repositories.SettingRepository
+import com.signalgate.pulse.database.repositories.HeuristicsMode
+import com.signalgate.pulse.database.repositories.SettingKeys
+import com.signalgate.pulse.database.repositories.SettingRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch

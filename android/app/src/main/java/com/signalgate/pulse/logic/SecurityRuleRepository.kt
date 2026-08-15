@@ -1,10 +1,10 @@
-package com.signalgate.multipoint.logic
+package com.signalgate.pulse.logic
 
-import com.signalgate.multipoint.data.security.SanitizationEngine
-import com.signalgate.multipoint.database.daos.UnifiedEntryDao
-import com.signalgate.multipoint.database.entities.UnifiedEntryEntity
-import com.signalgate.multipoint.database.repositories.DataSourceRepository
-import com.signalgate.multipoint.database.repositories.SettingRepository
+import com.signalgate.pulse.data.security.SanitizationEngine
+import com.signalgate.pulse.database.daos.UnifiedEntryDao
+import com.signalgate.pulse.database.entities.UnifiedEntryEntity
+import com.signalgate.pulse.database.repositories.DataSourceRepository
+import com.signalgate.pulse.database.repositories.SettingRepository
 
 /**
  * SecurityRuleRepository — Layer 5 (Application). The single authoritative
