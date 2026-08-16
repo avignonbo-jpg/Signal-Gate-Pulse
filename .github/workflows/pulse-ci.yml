@@ -37,7 +37,6 @@ jobs:
 
       - name: Run Unit Tests (Pulse)
         working-directory: ./android
-        continue-on-error: true
         run: ./gradlew :app:testPulseDebugUnitTest --stacktrace
 
       - name: Run Lint Check (Pulse)
