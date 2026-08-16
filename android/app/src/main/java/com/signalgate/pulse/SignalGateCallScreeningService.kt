@@ -16,6 +16,7 @@ import com.signalgate.pulse.database.entities.PendingCardEntity
 import com.signalgate.pulse.database.repositories.CallLogRepository
 import com.signalgate.pulse.database.repositories.PendingCardRepository
 import com.signalgate.pulse.logic.CallScreeningEngine
+import com.signalgate.pulse.logic.ScreeningAction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -27,8 +28,6 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
     private val screeningEngine: CallScreeningEngine by inject()
     private val callLogRepository: CallLogRepository by inject()
     private val pendingCardRepository: PendingCardRepository by inject()
-
-    enum class CallDecision { ALLOW, BLOCK, SCREEN }
 
     companion object {
         private const val TAG = "SignalGateScreening"
@@ -42,41 +41,83 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
 
         CoroutineScope(Dispatchers.Default).launch {
             try {
+                // screeningEngine.screenCall() catches its own internal errors and
+                // returns a typed ScreeningAction.SECURITY_FAILURE CallInfo rather
+                // than throwing (§0.6) — so a thrown exception reaching this catch
+                // means failure in the code around the engine (response mapping,
+                // audit write, notification), not in decisioning itself. Both paths
+                // are handled the same way below: fail safe, never as a disguised
+                // ALLOW/CLEAN_UNKNOWN.
                 val callInfo = screeningEngine.screenCall(phoneNumber, details)
-                applyCallDecision(details, callInfo)
+                respondToCall(details, toCallResponse(callInfo.callDecision))
                 writeAuditRecords(callInfo)
                 if (callInfo.tier == CallTier.HEURISTIC_BLOCK) {
                     fireBlockedCallNotification(callInfo)
                 }
             } catch (e: Exception) {
-                Timber.e(e, "Error screening call — defaulting to allow")
-                respondToCall(
-                    details,
-                    CallResponse.Builder()
-                        .setDisallowCall(false)
-                        .setSkipCallLog(false)
-                        .setSkipNotification(false)
-                        .build()
-                )
+                Timber.e(e, "SECURITY_FAILURE — unhandled error screening $phoneNumber")
+                handleSecurityFailure(details, phoneNumber)
             }
         }
     }
 
-    private fun applyCallDecision(details: Call.Details, callInfo: CallInfo) {
-        val response = when (callInfo.callDecision) {
-            CallDecision.ALLOW, CallDecision.SCREEN -> CallResponse.Builder()
+    /**
+     * §0.6 — the Android `CallResponse` policy, defined separately from the
+     * domain decision ([ScreeningAction]). This is the only function in the
+     * app permitted to translate a domain outcome into telecom framework
+     * semantics.
+     *
+     * SECURITY_FAILURE is handled explicitly rather than falling through to
+     * the ALLOW/SCREEN branch: it rings through today (blocking on an
+     * unverified failure risks silencing legitimate calls with no recourse),
+     * but that is a deliberate, visible policy choice made here — not an
+     * accidental byproduct of SECURITY_FAILURE aliasing ALLOW.
+     */
+    private fun toCallResponse(action: ScreeningAction): CallResponse = when (action) {
+        ScreeningAction.ALLOW, ScreeningAction.SCREEN, ScreeningAction.SECURITY_FAILURE ->
+            CallResponse.Builder()
                 .setDisallowCall(false)
                 .setSkipCallLog(false)
                 .setSkipNotification(false)
                 .build()
 
-            CallDecision.BLOCK -> CallResponse.Builder()
-                .setSilenceCall(true)
-                .setSkipCallLog(true)
-                .setSkipNotification(true)
-                .build()
+        ScreeningAction.BLOCK -> CallResponse.Builder()
+            .setSilenceCall(true)
+            .setSkipCallLog(true)
+            .setSkipNotification(true)
+            .build()
+    }
+
+    /**
+     * Reached only when an exception escapes CallScreeningEngine's own
+     * SECURITY_FAILURE handling (e.g. response mapping or the audit write
+     * itself throws). Applies the same fail-safe CallResponse policy and
+     * makes a best-effort attempt to still leave an auditable
+     * SECURITY_FAILURE trail — an untyped, silent allow with no log entry
+     * would satisfy neither §0.6 invariant.
+     */
+    private fun handleSecurityFailure(details: Call.Details, phoneNumber: String) {
+        respondToCall(details, toCallResponse(ScreeningAction.SECURITY_FAILURE))
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                callLogRepository.insertCallLog(
+                    CallLogEntry(
+                        phoneNumber = phoneNumber,
+                        normalizedPhoneNumber = phoneNumber,
+                        timestamp = System.currentTimeMillis(),
+                        decision = ScreeningAction.SECURITY_FAILURE.name,
+                        spamStatus = "SECURITY_FAILURE",
+                        spamCategory = null,
+                        confidence = null,
+                        riskLevel = null,
+                        matchedSources = null,
+                        notes = CallTier.SECURITY_FAILURE.name
+                    )
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to write SECURITY_FAILURE audit record for $phoneNumber")
+            }
         }
-        respondToCall(details, response)
     }
 
     private fun writeAuditRecords(callInfo: CallInfo) {
