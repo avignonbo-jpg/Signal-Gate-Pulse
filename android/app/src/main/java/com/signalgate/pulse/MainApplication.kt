@@ -42,6 +42,15 @@ import org.koin.core.context.startKoin
  * getCallDecision() is fully correct while it's still running, just not yet
  * fast. Do not add anything else to applicationScope without checking whether
  * it has the same binding-free property seedRequiredSources() does not.
+ *
+ * 2026-08-15 — DIAGNOSTIC TIMING added throughout onCreate(), tagged
+ * "SignalGate" (matches LogcatViewerScreen's capture filter). Added to
+ * investigate a reported ~8s blank-black-screen on first-ever app launch
+ * only (subsequent launches show the splash correctly) — see
+ * PROJECT_LEDGER.md 2026-08-15 entry. These are Timber.i() calls, dropped
+ * entirely in release builds by ReleaseTree's WARN-and-above filter — zero
+ * behavior or performance impact either way. Safe to remove once the
+ * first-run slowdown is diagnosed and fixed, but harmless to leave in.
  */
 class MainApplication : Application(), Configuration.Provider {
 
@@ -49,6 +58,9 @@ class MainApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+
+        val startupBeginMs = System.currentTimeMillis()
+        fun elapsed() = System.currentTimeMillis() - startupBeginMs
 
         SecurityUtils.enableStrictMode()
 
@@ -63,15 +75,21 @@ class MainApplication : Application(), Configuration.Provider {
             Timber.plant(ReleaseTree())
         }
 
+        Timber.tag("SignalGate").i("STARTUP: onCreate begin, elapsed=0ms")
+
         startKoin {
             androidLogger()
             androidContext(this@MainApplication)
             modules(appModule)
         }
 
+        Timber.tag("SignalGate").i("STARTUP: Koin started, elapsed=${elapsed()}ms")
+
         runBlocking {
             try {
+                Timber.tag("SignalGate").i("STARTUP: DB init begin, elapsed=${elapsed()}ms")
                 initializeDatabase(this@MainApplication)
+                Timber.tag("SignalGate").i("STARTUP: DB init end, elapsed=${elapsed()}ms")
             } catch (e: Exception) {
                 Timber.e(
                     e,
@@ -101,6 +119,8 @@ class MainApplication : Application(), Configuration.Provider {
         // in case a future change adds real post-Activity-launch async work, not
         // because anything today needs the extra wait.
         AppReadiness.isReady.value = true
+
+        Timber.tag("SignalGate").i("STARTUP: AppReadiness=true, total elapsed=${elapsed()}ms")
     }
 
     override val workManagerConfiguration: Configuration
