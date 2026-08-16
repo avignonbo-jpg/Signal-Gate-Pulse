@@ -1,8 +1,8 @@
 SignalGate Pulse — Security & DevOps Build Plan
 Status: Active build authority
-Date: 2026-08-14 (extracted and updated from Architecture-Contract-v3-DRAFT.md §11)
+Date: 2026-08-14 (extracted and updated from the adopted Architecture-Contract.md §11)
 Branch: consumer-v1
-Governing contract: Architecture-Contract-v3-DRAFT.md (reconciled draft — v2 Architecture-Contract.md remains formally canonical until this draft is adopted)
+Governing contract: Architecture-Contract.md (v3 — Security Integrity Gate, adopted)
 This document exists for one reason: the phase list inside the contract is correct but dense — a 430-line governance document isn't what you want open while you're actually doing the work. This is the same plan, same phase numbering, but written to be worked from directly, with status markers kept current as of each session.
 Executive direction
 SignalGate Pulse is not to be advanced by feature count alone. The release objective is a security system whose guarantees survive component interaction: authoritative persistence, derived indexes, external data synchronization, domain decisions, Android ingress, notifications, and release infrastructure must all preserve the same security invariants.
@@ -165,4 +165,4 @@ Do not make a failed security operation indistinguishable from a legitimate allo
 Do not revert MainApplication's blocking DB init in the name of startup UX — cover the wait (done, 4.6), don't remove the guarantee it provides.
 Final engineering principle
 The release bar is not "the app builds." The release bar is "the security properties remain true when the system is under failure, stale data, cold start, concurrent mutation, malformed input, dependency change, and release optimization."
-This document is a working extraction of Architecture-Contract-v3-DRAFT.md §11, kept current as a separate reference file. If the two ever visibly disagree, the contract's §11 is the source of truth for the invariant-level requirements — update this file to match, the same governance rule §13 of the contract already establishes for reconciling any other documentation/reality mismatch.
+This document is a working extraction of the adopted Architecture-Contract.md §11, kept current as a separate reference file. If the two ever visibly disagree, the contract's §11 is the source of truth for the invariant-level requirements — update this file to match, under the same governance rule §13 of the contract for reconciling any other documentation/reality mismatch.

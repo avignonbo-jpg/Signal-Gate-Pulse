@@ -1,6 +1,6 @@
 SignalGate Pulse — Project Ledger
 This is the single authoritative log of project state. Every AI session (any model, any tool) reads this file first and appends to it last. This replaces ad hoc tracking across chat history, memory, and scattered procedure docs — if it isn't in here, it didn't happen as far as the project is concerned.
-Governing document: Architecture-Contract.md (v2 — Reconciled). This is now the only Architecture Contract for this project — see that document's top-of-file reconciliation note for why a second, competing lineage previously existed and why it's superseded.
+Governing document: Architecture-Contract.md (v3 — Security Integrity Gate, adopted). This is the only binding Architecture Contract for this project; the reconciled v3 content was committed under this canonical filename and no separate Architecture-Contract-v3-DRAFT.md remains.
 How to use this file (read this first, every session)
 At the start of any session working on this codebase:
 Read the "Current State" section below before writing or suggesting any code.
@@ -20,12 +20,11 @@ HEURISTIC_FLAG (gray-zone) calls never produce a PendingCardEntity, despite Call
 check-architecture-drift.sh Rule 6 doesn't scan ui/theme/, so the Cross-Cutting purity claim for Color/Theme/SignalGateTheme/Effects is currently unenforced. See Contract §9.6. Still open — untouched this session.
 NEW this session: check-architecture-drift.sh existed but was never invoked by any CI workflow — the Contract's claim of automatic enforcement was false until this session. Fixed in pulse-ci.yml; not yet confirmed green (see Session Log 2026-08-12).
 A gray-zone notification/haptic/rate-limiter feature (PulseHapticsController, PulseVibration, PulseTriggerLimiter, extended CallActionReceiver actions) was built in a prior session but never merged, and is held pending the §9.5 fix — see Contract §10.1. CallActionReceiver itself was edited this session (§11.10 fix) — if/when the held feature is merged, re-check it against the current receiver, not the version it was originally written against.
-Architecture Contract version: v2 — Reconciled is still the canonical, adopted document. A reconciled v3 draft exists (Architecture-Contract-v3-DRAFT.md, updated 2026-08-13) merging this session's original v3 draft with a second, independently-produced v3 lineage (10 invariants, Phase 0–7 roadmap, Definition of Done) — corrected against actual CI-verified source where the two disagreed. Still not adopted — treat v2 as governing until a session explicitly merges it in and logs that here.
+Architecture Contract version: v3 — Reconciled and adopted. The committed Architecture-Contract.md contains the reconciled v3 structure, 10 security invariants, Phase 0–7 roadmap, Definition of Done, and corrections against CI-verified source where the two prior lineages disagreed. The former draft-status wording was stale and has been removed from Architecture-Contract.md in this session.
 Security control-plane status: Phase 0.1 of the v3 draft roadmap is closed and CI-verified (2026-08-13) — SecurityRuleRepository exists, is registered in Koin, resolves cleanly in the full dependency graph, and passes architecture-drift checks. BlocklistRepository and CallActionReceiver no longer write to a DAO directly. Phases 0.2–0.8 (explicit failure state, protected source lifecycle, real source sync, transactional replacement, signed snapshots) are all still open.
 Unverified note carried over from a parallel session's ledger entry, not yet confirmed: that entry stated "Architecture Contract version: v2 — Reconciled (this entry). Amendments 0–5 are applied, not pending — see correction below; the Amendments Log in this file previously said otherwise and was wrong." This has NOT been verified against the actual Amendments Log in this file. Check the Amendments Log section before treating this as settled.
 Open Items
 [ ] Delete 3 orphaned legacy XML layouts + 26 unused view IDs (call_shield_overlay_enhanced.xml, dialog_add_blocked_number.xml, overlay_call_blocked.xml) — carried over, not yet independently re-verified this session
-[ ] NEW: Decide whether to adopt Architecture-Contract-v3-DRAFT.md as canonical (replacing v2) — review its new §5 Security Invariants and re-sequenced §12 Phase 0 roadmap first
 [ ] NEW: Continue v3 draft Phase 0: 0.2 explicit SECURITY_FAILURE decision state, 0.3 protected source lifecycle (MANUAL/CONTACTS/federal never-delete), 0.4 real SourcesViewModel sync (currently fakes HEALTHY), 0.5–0.6 transactional source replacement + hard-reject on parser limit violation, 0.7 signed source snapshots
 [ ] NEW: Migrate remaining BlocklistRepository callers (BlockedNumbersViewModel, ContactsViewModel, PendingCardViewModel) directly onto SecurityRuleRepository, per that class's own deprecation note — not urgent, opportunistic
 [ ] Set up pre-push / CI-side YAML and whitespace validation filters — carried over from prior session, still not done
@@ -46,6 +45,17 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top.)
+
+2026-08-16 — Architecture Contract v3 adoption status corrected and signed
+Who: Manus AI, following explicit user confirmation
+What: Confirmed against the live consumer-v1 branch that Architecture-Contract-v3-DRAFT.md is absent and the committed Architecture-Contract.md contains the reconciled v3 contract. Per user direction, Architecture-Contract.md is now treated as the adopted binding contract. Removed obsolete draft-status language from the contract’s revision note, §13 governance text, and the supersession statement in §13. Updated this ledger’s governing-document and Current State records and removed the obsolete open item asking whether to adopt the draft.
+Files touched: Architecture-Contract.md, PROJECT_LEDGER.md
+Layers touched: Cross-cutting governance/documentation only; no application layer, dependency, persistence, security, or UI code changed.
+Contract consulted: yes — full contract reviewed before editing.
+Security impact: documentation/governance correction only; no runtime behavior changed and no Phase 0 gate was marked complete.
+Handoff to next developer: continue from Phase 0 as the sole active gate. Treat Architecture-Contract.md and SECURITY-DEVOPS-BUILD-PLAN.md as aligned operational authority; verify each Phase 0 checkbox against live source and mandatory test evidence before marking it complete. Do not infer completion from stale ledger wording.
+Signature: Manus AI — 2026-08-16
+
 2026-08-15 — Real-device splash icon failure found; interim mitigation applied, full fix still in progress (entry themes.xml references but which was missing until now)
 Who: user, via real-device testing (Motorola) — not from this chat session; reconstructed and logged here from the themes.xml comment left in place, since no session log entry was written at the time it happened.
 Correction (same day, from the user directly): the prior version of this entry described this as "fixed." It is not. The icon-removal change stops the specific blank-screen symptom that was observed, but the user is still actively working on the cold-start/splash item as a whole — it is in progress, not closed. This is also the actual reason no session log entry existed yet when this was first noticed: an in-progress item correctly has no closing entry. Do not mark an item "done"/"fixed" in this ledger, or imply closure via status language, until the person doing the work confirms it's actually closed — a plausible-looking interim state is not the same claim.
