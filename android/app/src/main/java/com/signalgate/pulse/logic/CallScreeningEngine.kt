@@ -11,7 +11,8 @@ import com.signalgate.pulse.database.repositories.SettingKeys
 import com.signalgate.pulse.database.repositories.SettingRepository
 
 /**
- * CallScreeningEngine implements the five-tier Priority Hierarchy.
+ * CallScreeningEngine implements the five-tier Priority Hierarchy plus the explicit
+ * SECURITY_FAILURE state for subsystem failures.
  *
  * Decision sources from DataSourceRepository.getCallDecision():
  *   "manual_allow"  → Tier 1 ALLOWLISTED  — ALLOW, no further analysis
@@ -77,8 +78,12 @@ class CallScreeningEngine(
                 else    -> buildGrayZoneInfo(sanitizedOriginal, normalized, callDetails)
             }
         } catch (e: Exception) {
-            Timber.e(e, "Engine error for $sanitizedOriginal, defaulting to ALLOW")
-            buildDefaultInfo(sanitizedOriginal, normalized)
+            // INV-003 / Phase 0.6: an engine failure is not evidence that the
+            // number is clean. Preserve the failure as a typed domain result so
+            // SignalGateCallScreeningService can apply its separately documented
+            // Android CallResponse policy and write an auditable failure record.
+            Timber.e(e, "Engine failure; returning explicit SECURITY_FAILURE")
+            buildSecurityFailureInfo(sanitizedOriginal, normalized)
         }
     }
 
@@ -208,6 +213,20 @@ class CallScreeningEngine(
         } else {
             buildDefaultInfo(original, normalized)
         }
+    }
+
+    private fun buildSecurityFailureInfo(original: String, normalized: String): CallInfo {
+        return CallInfo(
+            originalPhoneNumber   = original,
+            normalizedPhoneNumber = normalized,
+            spamStatus            = "SECURITY_FAILURE",
+            spamCategory          = null,
+            confidence            = null,
+            riskLevel             = null,
+            matchedSources        = emptyList(),
+            callDecision          = SignalGateCallScreeningService.CallDecision.SECURITY_FAILURE,
+            tier                  = CallTier.SECURITY_FAILURE
+        )
     }
 
     private fun buildDefaultInfo(original: String, normalized: String): CallInfo {

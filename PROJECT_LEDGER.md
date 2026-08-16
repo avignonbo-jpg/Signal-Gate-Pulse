@@ -46,6 +46,17 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top.)
 
+2026-08-16 — Phase 0.6 explicit SECURITY_FAILURE path implemented; mandatory execution pending
+Who: Manus AI
+What: Re-read Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md, and PROJECT_LEDGER.md before changing source. Updated CallScreeningEngine so an outer repository/decision-engine exception returns a typed CallInfo with CallTier.SECURITY_FAILURE and ScreeningAction.SECURITY_FAILURE instead of buildDefaultInfo() / CLEAN_UNKNOWN / ALLOW. Preserved the existing SignalGateCallScreeningService boundary: its explicit Android CallResponse policy remains separate and currently rings through for SECURITY_FAILURE while writing a failure audit record. Added a focused JVM regression test asserting the tier, domain action, and SECURITY_FAILURE status.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/CallScreeningEngine.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineSecurityFailureTest.kt; SECURITY-DEVOPS-BUILD-PLAN.md
+Layers touched: Layer 4 Domain (failure semantics), test source, and governance documentation. No new dependency or layer reassignment.
+Contract consulted: yes — full relevant source files and governing documents were read before editing.
+Validation: check-architecture-drift.sh passed and git diff --check passed. Local Gradle/JVM execution could not start because this sandbox has no Android SDK configured; mandatory CI execution is therefore still required. No Phase 0 exit gate was closed solely on static inspection.
+Build-sheet status: 0.6 implementation marked complete with regression execution pending; 0.2 and 0.3 recorded as implemented with mandatory execution evidence pending; 0.4, 0.5, and 0.8 remain open.
+To-do / heads-up: run the mandatory instrumented workflow and unit test in CI; do not mark 0.2, 0.3, 0.6, or Phase 0 fully complete until required behavioral evidence is green. Continue auditing 0.4 last-known-good transactional activation and 0.5 hard rejection of parser/resource-limit violations. Do not resume Phase 1 or broad UI work.
+Signature: Manus AI — 2026-08-16
+
 2026-08-16 — Architecture Contract v3 adoption status corrected and signed
 Who: Manus AI, following explicit user confirmation
 What: Confirmed against the live consumer-v1 branch that Architecture-Contract-v3-DRAFT.md is absent and the committed Architecture-Contract.md contains the reconciled v3 contract. Per user direction, Architecture-Contract.md is now treated as the adopted binding contract. Removed obsolete draft-status language from the contract’s revision note, §13 governance text, and the supersession statement in §13. Updated this ledger’s governing-document and Current State records and removed the obsolete open item asking whether to adopt the draft.
