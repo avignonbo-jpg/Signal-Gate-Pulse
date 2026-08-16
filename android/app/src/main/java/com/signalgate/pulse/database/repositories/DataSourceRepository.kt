@@ -181,16 +181,31 @@ class DataSourceRepository(
      * filters stay comprehensive automatically as new rules arrive.
      */
     suspend fun insertEntry(entry: UnifiedEntryEntity) {
-        val sanitized = entry.copy(
-            phoneNumber = normalizePhoneNumber(entry.phoneNumber),
-            category = entry.category?.let { SanitizationEngine.sanitizeTextField(it) },
-            metadata = entry.metadata?.let { SanitizationEngine.sanitizeTextField(it) }
-        )
-        entryDao.insertEntry(sanitized)
-        if (sanitized.isPattern) {
-            patternBloomFilter.insert(sanitized.phoneNumber)
-        } else {
-            bloomFilter.insert(sanitized.phoneNumber)
+        insertEntries(listOf(entry))
+    }
+
+    /**
+     * Inserts a batch in one Room transaction while preserving the same
+     * sanitization and Bloom-filter invariants as insertEntry().
+     */
+    suspend fun insertEntries(entries: List<UnifiedEntryEntity>) {
+        if (entries.isEmpty()) return
+
+        val sanitizedEntries = entries.map { entry ->
+            entry.copy(
+                phoneNumber = normalizePhoneNumber(entry.phoneNumber),
+                category = entry.category?.let { SanitizationEngine.sanitizeTextField(it) },
+                metadata = entry.metadata?.let { SanitizationEngine.sanitizeTextField(it) }
+            )
+        }
+
+        entryDao.insertEntries(sanitizedEntries)
+        sanitizedEntries.forEach { sanitized ->
+            if (sanitized.isPattern) {
+                patternBloomFilter.insert(sanitized.phoneNumber)
+            } else {
+                bloomFilter.insert(sanitized.phoneNumber)
+            }
         }
     }
 
