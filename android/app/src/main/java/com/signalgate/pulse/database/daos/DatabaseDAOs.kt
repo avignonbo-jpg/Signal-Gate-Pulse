@@ -45,8 +45,11 @@ interface SourceDao {
     @Query("UPDATE sources SET isEnabled = :isEnabled WHERE id = :id")
     suspend fun updateSourceEnabled(id: Int, isEnabled: Boolean)
 
-    @Query("UPDATE sources SET lastSynced = :timestamp, entriesCount = :entriesCount, healthStatus = :healthStatus WHERE id = :id")
-    suspend fun updateSourceSyncStatus(id: Int, timestamp: Long, entriesCount: Int, healthStatus: String)
+    @Query("UPDATE sources SET last_attempted_sync = :timestamp, updatedAt = :timestamp WHERE id = :id")
+    suspend fun recordSyncAttempt(id: Int, timestamp: Long)
+
+    @Query("UPDATE sources SET last_accepted_snapshot = :timestamp, lastSynced = :timestamp, entriesCount = :entriesCount, healthStatus = 'HEALTHY', updatedAt = :timestamp WHERE id = :id")
+    suspend fun recordSnapshotAccepted(id: Int, timestamp: Long, entriesCount: Int)
 }
 
 /**

@@ -32,7 +32,11 @@ import com.signalgate.pulse.database.entities.UnifiedEntryEntity
  * ksp arg room.schemaLocation). They should be committed to version control —
  * they are the ground truth for what each version's schema looked like.
  *
- * Schema version 2: PendingCardEntity added (Step 1.6).
+ * Schema version 3: Phase 0.4 source activation timestamps added.
+ *
+ * Version 2 remains the PendingCardEntity schema; version 3 adds only the
+ * nullable last-attempted and last-accepted snapshot timestamps required to
+ * distinguish a sync attempt from an accepted active snapshot.
  */
 @Database(
     entities = [
@@ -43,7 +47,7 @@ import com.signalgate.pulse.database.entities.UnifiedEntryEntity
         SyncHistoryEntry::class,
         PendingCardEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class SignalGateDatabase : RoomDatabase() {
@@ -84,5 +88,17 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL(
             "CREATE INDEX IF NOT EXISTS index_pending_cards_timestamp ON pending_cards (timestamp)"
         )
+    }
+}
+
+/**
+ * Migration 2 -> 3: adds the minimum Phase 0.4 last-known-good metadata.
+ * Existing sources receive NULL for both fields, correctly representing that
+ * no attempt or accepted snapshot has occurred since this migration.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE sources ADD COLUMN last_attempted_sync INTEGER")
+        db.execSQL("ALTER TABLE sources ADD COLUMN last_accepted_snapshot INTEGER")
     }
 }

@@ -9,13 +9,13 @@ SignalGate Pulse is not to be advanced by feature count alone. The release objec
 The build order is therefore:
 Security control-plane integrity → decision integrity → gray-zone foundation → source reliability → UI/product completion → mandatory CI/security gates → release hardening.
 The previous roadmap's assumption that gray-zone UI could proceed once PendingCardEntity existed is replaced by a stronger gate: the application must first prove that security state and derived decision state cannot diverge.
-Do not resume broad UI/gray-zone feature work until Phase 0 exits. As of 2026-08-16, 0.1 and 0.7 are CI-verified complete; 0.2 and 0.3 have live implementations and regression-test sources but still require mandatory execution evidence; 0.5 and 0.6 now have their hard-failure implementations and regression-test sources, but local execution is blocked by the sandbox's missing Android SDK; 0.4 and 0.8 remain open. Phase 0's own exit criteria (§ below) are the actual gate — not a vibe check.
+Do not resume broad UI/gray-zone feature work until Phase 0 exits. As of 2026-08-16, 0.1 and 0.7 are CI-verified complete; 0.2 and 0.3 have live implementations and regression-test sources but still require mandatory execution evidence; 0.4, 0.5, and 0.6 have implementation and regression-test sources, but local execution is blocked by the sandbox's missing Android SDK; 0.8 remains open for complete mandatory coverage. Phase 0's own exit criteria (§ below) are the actual gate — not a vibe check.
 Phase 0 — Security Control-Plane Integrity Gate
 Objective: prove that security state cannot diverge between authoritative persistence, derived indexes, external source data, and edge behavior.
 0.1 Establish one authoritative security-rule mutation boundary — ✅ COMPLETE, CI-verified 2026-08-13
 What this means in practice: every piece of code that can change what a future call-screening decision returns — manual allow, manual block, contact-derived rules, imported source rules, source snapshot replacement, rule removal, derived-index invalidation/rebuild — must go through exactly one class. No feature repository gets to create its own second UnifiedEntryDao mutation path with its own synchronization responsibilities, because that's exactly how a manual block and the Bloom filter's view of the world silently drift apart.
 What was actually built: SecurityRuleRepository (Layer 5, logic/ package). It wraps DataSourceRepository.insertEntry() — the class that already pairs the DB write with the Bloom-index insert — for addManualBlock(), addManualAllow(), removeRule(), getAllUserRules(). BlocklistRepository (the old direct-DAO-writer) is now a thin 4-method facade delegating to SecurityRuleRepository, kept only so existing ViewModel callers didn't need to change in the same commit.
-Still open within this item: importSourceSnapshot(), replaceSourceRules(), and rebuildDerivedIndexes() — the source-replacement and Bloom-invalidation methods — are not built yet. Those land with 0.4/0.5/0.7 below, not here. 0.1 only covers the manual rule path.
+Still open within this item: manual mutation and source-snapshot replacement now share the SecurityRuleRepository boundary, but mandatory behavioral evidence remains tracked under 0.2, 0.4, and 0.8. 0.1 itself remains the manual-rule boundary gate.
 Verified how: Koin's KoinModuleTest.koinGraphResolvesWithoutError passed with SecurityRuleRepository confirmed registered in the resolved dependency graph; check-architecture-drift.sh reported clean; lint reported 0 errors.
 0.2 Make the database authoritative — ◐ IMPLEMENTED; mandatory execution evidence pending
 Formalize the rule: Database = security truth. Bloom/index/cache = derived acceleration.
@@ -30,12 +30,9 @@ database reset followed by rebuild
 optimized decision equals authoritative decision, for the same underlying state, in every one of the above conditions
 0.3 Define source lifecycle semantics — ◐ IMPLEMENTED; mandatory execution evidence pending
 Explicitly define allowed operations for MANUAL, CONTACTS, FTC, FCC, and any future user-created source. The live DataSourceRepository protects MANUAL, FTC, and FCC source types from deletion; MANUAL covers both seeded Manual User Rules and Contacts Allow List semantics, while federal sources remain disableable. DataSourceRepositoryDeletionTest.kt proves protected refusal and the non-protected deletion path. This item is not closed until the test passes in mandatory CI.
-0.4 Implement last-known-good source activation — ☐ OPEN
-Required workflow:
-Code
-Any failure results in:
-Code
-Never activate a partial source. This is the single biggest gap between what ReliableSourceManager.syncSource() does today (per-record insertEntry() calls followed by a separate, disconnected status update — no atomicity, no rollback) and what it needs to do. This matters specifically because the FTC mirror is cumulative by design: without atomic replacement, "current source dataset" risks silently becoming "every number this source has ever published."
+0.4 Implement last-known-good source activation — ✅ IMPLEMENTATION COMPLETE; migration and behavioral execution pending
+Minimum approved scope: SourceEntity now has nullable lastAttemptedSync and lastAcceptedSnapshot fields; Room version 2→3 migration adds them without backfill; SecurityRuleRepository records attempts outside the transaction and replaces a source’s entries plus accepted timestamp atomically. Any failure rolls back the candidate replacement and preserves the prior active set. Bloom rebuild occurs only after commit, with safe Room-read fallback if rebuild cannot complete.
+ReliableSourceManager now routes federal snapshots through this boundary, and SourceSyncUseCase replaces the fabricated HEALTHY status paths in SourcesViewModel and DashboardViewModel. SourceActivationTransactionTest.kt and MigrationTest’s 2→3 case provide regression sources. This item remains open until mandatory CI executes the migration and rollback tests and the generated version-3 Room schema artifact is committed. No Phase 3 snapshot hash/version/count fields or state enum were added.
 0.5 Treat parser/resource limits as security failures — ✅ IMPLEMENTATION COMPLETE; regression execution pending
 Record, byte, field, shared-string, and parsing limits must be hard boundaries. The live SecureCsvParser now throws CsvResourceLimitExceededException when a valid-row limit is exceeded, and DataSyncEngine now propagates CSV, XLSX row, and XLSX shared-string limit failures instead of returning partial results. SecureCsvParserLimitTest.kt covers the CSV hard-failure path. Local execution and mandatory CI evidence remain pending; the XLSX limit paths still require dedicated regression coverage before this item can be closed.
 0.6 Establish explicit security failure semantics — ✅ IMPLEMENTATION COMPLETE; regression execution pending
@@ -46,14 +43,14 @@ The live branch now has the sixth CallTier/ScreeningAction state, explicit servi
 CallActionReceiver must validate the intent, then invoke an application service/repository operation. It must not inject PendingCardDao or any other feature DAO directly.
 What was actually built: CallActionReceiver now depends on PendingCardRepository (which already existed — it just wasn't being used here before) and SecurityRuleRepository (the new Layer 5 boundary from 0.1) instead of the direct PendingCardDao injection it had before. Verified via the same CI evidence as 0.1 — Koin graph resolution, drift check.
 0.8 Add regression tests for all Phase 0 invariants — ☐ OPEN (partial sources now present)
-Phase 0 only actually exits once tests exist and pass in mandatory CI — not when the code merely compiles and looks right on read-through. The live branch now contains Phase 0.2 Bloom-authority coverage, Phase 0.3 protected-source deletion coverage, Phase 0.5 CSV-limit and parser hard-failure sources, and a Phase 0.6 explicit-failure regression source. Mandatory CI execution and any remaining mutation-boundary/edge-action behavioral coverage still need to be confirmed before this gate can close.
+Phase 0 only actually exits once tests exist and pass in mandatory CI — not when the code merely compiles and looks right on read-through. The live branch now contains Phase 0.2 Bloom-authority coverage, Phase 0.3 protected-source deletion coverage, Phase 0.4 migration/rollback coverage sources, Phase 0.5 CSV-limit and parser hard-failure sources, and a Phase 0.6 explicit-failure regression source. Mandatory CI execution, generated schema version 3, and any remaining mutation-boundary/edge-action behavioral coverage still need to be confirmed before this gate can close.
 Phase 0 exit criteria (all eight required before Phase 1 starts)
-[x] One approved rule mutation boundary exists (manual rules only — source-replacement path still open)
-[x] Direct feature-level DAO mutation from Layer 1/6 is removed (for CallActionReceiver specifically; SourcesViewModel still has a related but separate issue — see 3.5 below)
+[x] One approved rule mutation boundary exists for manual and source-snapshot mutations (mandatory behavioral execution pending)
+[x] Direct feature-level DAO mutation from Layer 1/6 is removed for the audited edge paths; source sync status writes are now confined to the accepted-snapshot boundary
 [ ] Database is documented and tested as authoritative (test source present; mandatory execution pending)
 [ ] Bloom state is derived/rebuildable (implementation and test source present; mandatory execution pending)
-[ ] Source activation is transactional
-[ ] Last-known-good behavior is tested
+[x] Source activation is transactional in implementation (mandatory migration/rollback execution pending)
+[x] Last-known-good preservation is covered by a regression source (mandatory execution pending)
 [x] Parser partial-result paths now reject hard-limit violations in implementation (CSV regression execution and XLSX regression coverage pending)
 [x] Security failure is explicit in the domain/service implementation (regression execution pending)
 [x] Mandatory CI runs the Phase 0 tests that exist (the drift-check gate itself is now mandatory CI — see Phase 5 note below — but there's nothing yet in CI specifically testing Phase 0's behavioral invariants, since 0.8's tests don't exist)
@@ -91,7 +88,7 @@ Where operationally supported, publish signed source snapshots/manifests. The ap
 3.4 Source lifecycle
 Use explicit states: ENABLED, SYNCING, HEALTHY, STALE, FAILED, REJECTED, DISABLED. Track at least: last attempted sync, last accepted snapshot, snapshot version, snapshot hash, accepted record count, rejection/failure reason.
 3.5 The SourcesViewModel fake-sync problem
-Worth calling out on its own even though it's really part of 3.4: SourcesViewModel.syncSource() and syncAllSources() currently just count existing entries and set status to HEALTHY — they never actually call ReliableSourceManager. The UI can report a successful sync when no network synchronization happened at all. For a security application that's not a cosmetic bug. Fix: introduce SourceSyncUseCase wrapping ReliableSourceManager, so the ViewModel reports SYNCING/SUCCESS/STALE/FAILED/REJECTED_SNAPSHOT instead of a fabricated HEALTHY.
+Resolved in Phase 0.4 foundation: SourcesViewModel and DashboardViewModel now route sync requests through SourceSyncUseCase and ReliableSourceManager, so they no longer fabricate HEALTHY from the existing entry count. The full Phase 3.4 state machine remains intentionally out of scope; current UI reporting is still limited to logging accepted/failed outcomes.
 Phase 3 exit criteria
 [ ] A bad source cannot replace a good source
 [ ] A partial source cannot become active

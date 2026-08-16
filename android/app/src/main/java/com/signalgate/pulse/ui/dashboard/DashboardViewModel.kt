@@ -9,6 +9,7 @@ import com.signalgate.pulse.database.repositories.CallLogRepository
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.database.repositories.SettingKeys
 import com.signalgate.pulse.database.repositories.SettingRepository
+import com.signalgate.pulse.logic.SourceSyncUseCase
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -31,7 +32,8 @@ import java.util.Calendar
 class DashboardViewModel(
     private val dataSourceRepository: DataSourceRepository,
     private val callLogRepository: CallLogRepository,
-    private val settingRepository: SettingRepository
+    private val settingRepository: SettingRepository,
+    private val sourceSyncUseCase: SourceSyncUseCase
 ) : ViewModel() {
 
     companion object {
@@ -175,14 +177,12 @@ class DashboardViewModel(
         viewModelScope.launch {
             _isSyncing.value = true
             try {
-                val entriesCount = dataSourceRepository.getEntryCountBySourceId(sourceId)
-                dataSourceRepository.updateSourceSyncStatus(
-                    sourceId = sourceId,
-                    timestamp = System.currentTimeMillis(),
-                    entriesCount = entriesCount,
-                    healthStatus = "HEALTHY"
-                )
-                Timber.tag(TAG).i("Source $sourceId synced: $entriesCount entries")
+                val result = sourceSyncUseCase.syncSource(sourceId)
+                if (result.success) {
+                    Timber.tag(TAG).i("Source $sourceId accepted: ${result.entriesAdded} entries")
+                } else {
+                    Timber.tag(TAG).w("Source $sourceId sync failed: ${result.errorMessage}")
+                }
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to sync source $sourceId")
             } finally {
@@ -195,19 +195,12 @@ class DashboardViewModel(
         viewModelScope.launch {
             _isSyncing.value = true
             try {
-                dataSources.first().forEach { source ->
-                    if (source.isEnabled) {
-                        val entriesCount = dataSourceRepository.getEntryCountBySourceId(source.id)
-                        dataSourceRepository.updateSourceSyncStatus(
-                            sourceId = source.id,
-                            timestamp = System.currentTimeMillis(),
-                            entriesCount = entriesCount,
-                            healthStatus = "HEALTHY"
-                        )
-                        Timber.tag(TAG).d("${source.name} synced: $entriesCount entries")
-                    }
-                }
-                Timber.tag(TAG).i("All sources synced successfully")
+                val enabledSourceIds = dataSources.first()
+                    .filter { it.isEnabled }
+                    .map { it.id }
+                val results = sourceSyncUseCase.syncSources(enabledSourceIds)
+                val accepted = results.count { it.success }
+                Timber.tag(TAG).i("Enabled source sync complete: $accepted/${results.size} accepted")
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to sync all sources")
             } finally {

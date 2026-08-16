@@ -58,7 +58,7 @@ object SecureDatabase {
 
         return Room.databaseBuilder(context, SignalGateDatabase::class.java, DB_NAME)
             .openHelperFactory(factory)
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .setQueryExecutor(singleThreadExecutor)
             .setTransactionExecutor(singleThreadExecutor)
             .build()

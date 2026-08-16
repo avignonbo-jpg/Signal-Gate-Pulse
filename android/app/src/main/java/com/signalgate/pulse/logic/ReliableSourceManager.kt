@@ -59,6 +59,7 @@ import java.util.concurrent.TimeUnit
  */
 class ReliableSourceManager(
     private val dataSourceRepository: DataSourceRepository,
+    private val securityRuleRepository: SecurityRuleRepository,
     private val syncHistoryRepository: SyncHistoryRepository,
     private val secureCsvParser: SecureCsvParser
 ) {
@@ -141,11 +142,19 @@ class ReliableSourceManager(
         SOURCES.map { syncSource(it) }
     }
 
-    private suspend fun syncSource(source: FederalSource): SyncResult {
+    suspend fun syncSource(sourceId: Int): SyncResult = withContext(Dispatchers.IO) {
+        val source = dataSourceRepository.getSourceById(sourceId)
+            ?: return@withContext SyncResult("source:$sourceId", 0, false, "Source not found")
+        val federalSource = SOURCES.firstOrNull { it.sourceType == source.type && it.name == source.name }
+            ?: return@withContext SyncResult(source.name, 0, false, "Source is not a managed federal source")
+        syncSource(federalSource, sourceId)
+    }
+
+    private suspend fun syncSource(source: FederalSource, knownSourceId: Int? = null): SyncResult {
         val syncStartMs = System.currentTimeMillis()
         Timber.tag(TAG).i("Starting sync: ${source.name} (strategy=${source.strategy})")
         return try {
-            val sourceId = ensureSourceRow(source)
+            val sourceId = knownSourceId ?: ensureSourceRow(source)
             val fetchStartMs = System.currentTimeMillis()
             val numbers = fetchWithFallback(source)
             val fetchDurationMs = System.currentTimeMillis() - fetchStartMs
@@ -164,22 +173,15 @@ class ReliableSourceManager(
                 )
             }
 
-            val persistStartMs = System.currentTimeMillis()
-            entries.chunked(1_000).forEach { chunk ->
-                dataSourceRepository.insertEntries(chunk)
+            val activation = securityRuleRepository.replaceSourceSnapshot(sourceId, entries)
+            val inserted = when (activation) {
+                SnapshotActivationResult.Accepted -> entries.size
+                is SnapshotActivationResult.Failed -> throw activation.cause
             }
-            val persistDurationMs = System.currentTimeMillis() - persistStartMs
-            val inserted = entries.size
             Timber.tag(TAG).i(
-                "Persisted ${source.name}: entries=$inserted, duration_ms=$persistDurationMs"
+                "Accepted snapshot for ${source.name}: entries=$inserted"
             )
 
-            dataSourceRepository.updateSourceSyncStatus(
-                sourceId     = sourceId,
-                timestamp    = System.currentTimeMillis(),
-                entriesCount = inserted,
-                healthStatus = "HEALTHY"
-            )
             val totalDurationMs = System.currentTimeMillis() - syncStartMs
             Timber.tag(TAG).i(
                 "Sync complete: ${source.name} — $inserted entries, total_duration_ms=$totalDurationMs"

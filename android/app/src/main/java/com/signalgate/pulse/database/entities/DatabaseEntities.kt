@@ -1,5 +1,6 @@
 package com.signalgate.pulse.database.entities
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -23,6 +24,10 @@ data class SourceEntity(
     val pathOrUrl: String,
     val isEnabled: Boolean = true,
     val lastSynced: Long = 0,
+    @ColumnInfo(name = "last_attempted_sync")
+    val lastAttemptedSync: Long? = null,
+    @ColumnInfo(name = "last_accepted_snapshot")
+    val lastAcceptedSnapshot: Long? = null,
     val priority: Int = 0,
     val entriesCount: Int = 0,
     val healthStatus: String = "UNKNOWN",

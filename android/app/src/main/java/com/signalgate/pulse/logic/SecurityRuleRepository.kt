@@ -10,11 +10,15 @@
 // "correct," as this incident showed.
 package com.signalgate.pulse.logic
 
+import androidx.room.withTransaction
 import com.signalgate.pulse.data.security.SanitizationEngine
+import com.signalgate.pulse.database.SignalGateDatabase
 import com.signalgate.pulse.database.daos.UnifiedEntryDao
 import com.signalgate.pulse.database.entities.UnifiedEntryEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.database.repositories.SettingRepository
+import kotlinx.coroutines.CancellationException
+import timber.log.Timber
 
 /**
  * SecurityRuleRepository — Layer 5 (Application). The single authoritative
@@ -43,6 +47,7 @@ import com.signalgate.pulse.database.repositories.SettingRepository
  */
 class SecurityRuleRepository(
     private val dataSourceRepository: DataSourceRepository,
+    private val database: SignalGateDatabase,
     private val unifiedEntryDao: UnifiedEntryDao,
     private val settingRepository: SettingRepository
 ) {
@@ -119,6 +124,50 @@ class SecurityRuleRepository(
         unifiedEntryDao.getAllBySource(manualSourceId())
 
     /**
+     * Phase 0.4 / INV-002: replace one external source as an atomic snapshot.
+     *
+     * The attempt timestamp is deliberately recorded before the transaction so
+     * a failed candidate is observable as attempted. The active entries and
+     * accepted timestamp change only inside the Room transaction; any failure
+     * rolls the replacement back and preserves the last-known-good entry set.
+     * Bloom filters are rebuilt only after commit, so a failed transaction never
+     * replaces the derived view of the prior active snapshot.
+     */
+    suspend fun replaceSourceSnapshot(
+        sourceId: Int,
+        entries: List<UnifiedEntryEntity>
+    ): SnapshotActivationResult {
+        val attemptTime = System.currentTimeMillis()
+        database.sourceDao().recordSyncAttempt(sourceId, attemptTime)
+        return try {
+            database.withTransaction {
+                unifiedEntryDao.deleteEntriesBySourceId(sourceId)
+                dataSourceRepository.insertEntries(entries)
+                database.sourceDao().recordSnapshotAccepted(
+                    id = sourceId,
+                    timestamp = attemptTime,
+                    entriesCount = entries.size
+                )
+            }
+
+            // A Bloom rebuild is derived state. If it cannot complete, the DB
+            // remains authoritative and bloomReady stays false, forcing safe
+            // Room reads rather than changing a decision.
+            try {
+                dataSourceRepository.rehydrateBloomFilters()
+            } catch (e: Exception) {
+                Timber.e(e, "Snapshot accepted but Bloom rebuild deferred for source $sourceId")
+            }
+            SnapshotActivationResult.Accepted
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.e(e, "Snapshot replace failed for source $sourceId — last-known-good preserved")
+            SnapshotActivationResult.Failed(e)
+        }
+    }
+
+    /**
      * Mirrors DataSourceRepository's private normalizePhoneNumber() exactly,
      * so a removeRule() lookup matches whatever insertEntry() actually
      * stored. Duplicated rather than exposed from DataSourceRepository
@@ -133,4 +182,9 @@ class SecurityRuleRepository(
         else if (!cleaned.startsWith("+")) cleaned = "+1$cleaned"
         return cleaned
     }
+}
+
+sealed interface SnapshotActivationResult {
+    data object Accepted : SnapshotActivationResult
+    data class Failed(val cause: Exception) : SnapshotActivationResult
 }

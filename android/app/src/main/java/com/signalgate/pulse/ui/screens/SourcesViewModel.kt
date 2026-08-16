@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.signalgate.pulse.database.entities.SourceEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
+import com.signalgate.pulse.logic.SourceSyncUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +30,8 @@ import timber.log.Timber
  * something else later, that's a fresh design, not a repurposed dialog.
  */
 class SourcesViewModel(
-    private val dataSourceRepository: DataSourceRepository
+    private val dataSourceRepository: DataSourceRepository,
+    private val sourceSyncUseCase: SourceSyncUseCase
 ) : ViewModel() {
 
     companion object {
@@ -42,22 +44,19 @@ class SourcesViewModel(
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
     /**
-     * Manual "sync now" for a single source. Mirrors the counting logic
-     * DashboardViewModel already uses for its own sync actions, scoped here
-     * to a single sourceId instead of all sources.
+     * Manual "sync now" for a single source. The result comes from the real
+     * fetch-and-atomic-activation path; this method never fabricates HEALTHY.
      */
     fun syncSource(sourceId: Int) {
         viewModelScope.launch {
             _isSyncing.value = true
             try {
-                val entriesCount = dataSourceRepository.getEntryCountBySourceId(sourceId)
-                dataSourceRepository.updateSourceSyncStatus(
-                    sourceId = sourceId,
-                    timestamp = System.currentTimeMillis(),
-                    entriesCount = entriesCount,
-                    healthStatus = "HEALTHY"
-                )
-                Timber.tag(TAG).i("Source $sourceId synced: $entriesCount entries")
+                val result = sourceSyncUseCase.syncSource(sourceId)
+                if (result.success) {
+                    Timber.tag(TAG).i("Source $sourceId accepted: ${result.entriesAdded} entries")
+                } else {
+                    Timber.tag(TAG).w("Source $sourceId sync failed: ${result.errorMessage}")
+                }
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to sync source $sourceId")
             } finally {
@@ -83,27 +82,19 @@ class SourcesViewModel(
     }
 
     /**
-     * Ported from DashboardViewModel (backed OperationalDashboard, now retired).
-     * Syncs every enabled source in one pass; per-row "Sync now" already covers
-     * the single-source case via syncSource().
+     * Syncs through the same real application boundary as the worker. The
+     * manager returns accepted/failed outcomes; no UI path writes HEALTHY.
      */
     fun syncAllSources() {
         viewModelScope.launch {
             _isSyncing.value = true
             try {
-                sources.first().forEach { source ->
-                    if (source.isEnabled) {
-                        val entriesCount = dataSourceRepository.getEntryCountBySourceId(source.id)
-                        dataSourceRepository.updateSourceSyncStatus(
-                            sourceId = source.id,
-                            timestamp = System.currentTimeMillis(),
-                            entriesCount = entriesCount,
-                            healthStatus = "HEALTHY"
-                        )
-                        Timber.tag(TAG).d("${source.name} synced: $entriesCount entries")
-                    }
-                }
-                Timber.tag(TAG).i("All sources synced successfully")
+                val enabledSourceIds = sources.first()
+                    .filter { it.isEnabled }
+                    .map { it.id }
+                val results = sourceSyncUseCase.syncSources(enabledSourceIds)
+                val accepted = results.count { it.success }
+                Timber.tag(TAG).i("Enabled source sync complete: $accepted/${results.size} accepted")
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to sync all sources")
             } finally {

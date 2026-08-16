@@ -32,6 +32,7 @@ import java.io.IOException
  * Place schema files committed to version control:
  *   schemas/com.signalgate.pulse.database.SignalGateDatabase/1.json
  *   schemas/com.signalgate.pulse.database.SignalGateDatabase/2.json
+ *   schemas/com.signalgate.pulse.database.SignalGateDatabase/3.json
  * These are generated automatically by Room's KSP processor when exportSchema = true
  * and room.schemaLocation points to the schemas/ directory.
  */
@@ -125,6 +126,42 @@ class MigrationTest {
         )
         entriesCursor.close()
 
+        db.close()
+    }
+
+    /**
+     * Validates the Phase 0.4 migration adds only nullable attempted/accepted
+     * timestamps and preserves existing source rows without backfill.
+     */
+    @Test
+    @Throws(IOException::class)
+    fun migrate2To3_addsNullableSourceActivationTimestamps() {
+        helper.createDatabase(TEST_DB, 2).apply {
+            execSQL(
+                """INSERT INTO sources
+                   (name, type, pathOrUrl, isEnabled, lastSynced, priority,
+                    entriesCount, healthStatus, createdAt, updatedAt)
+                   VALUES ('Existing Source', 'FTC', 'remote', 1, 0, 90, 12,
+                           'HEALTHY', 1000, 1000)"""
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_2_3)
+        val cursor = db.query("SELECT * FROM sources WHERE name = 'Existing Source'")
+        assertEquals("existing source must survive 2→3 migration", 1, cursor.count)
+        cursor.moveToFirst()
+        assertEquals(
+            "last_attempted_sync must be NULL for pre-migration sources",
+            0,
+            cursor.getColumnIndexOrThrow("last_attempted_sync").let { cursor.getType(it) }
+        )
+        assertEquals(
+            "last_accepted_snapshot must be NULL for pre-migration sources",
+            0,
+            cursor.getColumnIndexOrThrow("last_accepted_snapshot").let { cursor.getType(it) }
+        )
+        cursor.close()
         db.close()
     }
 

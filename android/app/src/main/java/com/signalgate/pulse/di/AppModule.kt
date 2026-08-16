@@ -18,6 +18,7 @@ import com.signalgate.pulse.logic.CallScreeningEngine
 import com.signalgate.pulse.logic.DataSyncEngine
 import com.signalgate.pulse.logic.ReliableSourceManager
 import com.signalgate.pulse.logic.SecurityRuleRepository
+import com.signalgate.pulse.logic.SourceSyncUseCase
 import com.signalgate.pulse.ui.BlockedNumbersViewModel
 import com.signalgate.pulse.ui.RecentCallsViewModel
 import com.signalgate.pulse.ui.dashboard.DashboardViewModel
@@ -139,7 +140,7 @@ val repositoryModule = module {
      * BlocklistRepository is now a thin deprecated facade over it — see that
      * class's doc — so its own binding shrinks to a single dependency.
      */
-    single { SecurityRuleRepository(get(), get(), get()) }
+    single { SecurityRuleRepository(get(), get(), get(), get()) }
     single { BlocklistRepository(get()) }
     single { SettingRepository(get()) } // Added for architecture drift fix — Roadmap Step 0.4
 }
@@ -178,7 +179,8 @@ val engineModule = module {
     // Security fix (audit finding): third get() resolves the SecureCsvParser
     // singleton registered above — ReliableSourceManager now streams federal CSV
     // feeds through it instead of a hand-rolled parser. See ReliableSourceManager.
-    single { ReliableSourceManager(get(), get(), get()) }
+    single { ReliableSourceManager(get(), get(), get(), get()) }
+    single { SourceSyncUseCase(get()) }
 
     // L6 — decision boundary
     // CallRiskEvaluator is a stateless object — registered so CallScreeningEngine
@@ -202,7 +204,8 @@ val engineModule = module {
 val viewModelModule = module {
     viewModel { ContactsViewModel(get(), get(), get()) }
     viewModel { TelemetryViewModel(get()) }
-    viewModel { DashboardViewModel(get(), get(), get()) } // Step 2.6: added SettingRepository for isOnboardingComplete
+    viewModel { DashboardViewModel(get(), get(), get(), get()) } // Phase 0.4: real source sync boundary added
+
     // Phase 4.2: constructor dependency changed from DataSourceRepository to
     // BlocklistRepository (now backs the real BlockAllowListScreen instead of
     // a dead, never-navigated-to class). get() resolves by the new type.
@@ -212,7 +215,7 @@ val viewModelModule = module {
     viewModel { OnboardingViewModel(get()) } // Step 2.6: added SettingRepository for markOnboardingComplete
     viewModel { SettingsViewModel(get()) } // Step 2.6: new — owns shield-color persistence, resolves half of FLAG-1
     viewModel { PendingCardViewModel(get(), get()) }
-    viewModel { SourcesViewModel(get()) } // Phase 0.1 fix — was missing entirely
+    viewModel { SourcesViewModel(get(), get()) } // Phase 0.4: real source sync boundary added
 }
 
 /**

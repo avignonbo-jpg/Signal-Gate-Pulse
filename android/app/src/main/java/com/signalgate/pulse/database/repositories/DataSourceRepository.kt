@@ -139,13 +139,6 @@ class DataSourceRepository(
     suspend fun toggleSourceEnabled(sourceId: Int, isEnabled: Boolean) =
         sourceDao.updateSourceEnabled(sourceId, isEnabled)
 
-    suspend fun updateSourceSyncStatus(
-        sourceId: Int,
-        timestamp: Long,
-        entriesCount: Int,
-        healthStatus: String
-    ) = sourceDao.updateSourceSyncStatus(sourceId, timestamp, entriesCount, healthStatus)
-
     suspend fun getEntryCountBySourceId(sourceId: Int): Int =
         entryDao.getEntryCountBySourceId(sourceId)
 
