@@ -3,7 +3,6 @@ package com.signalgate.pulse.logic
 import timber.log.Timber
 import com.signalgate.pulse.CallInfo
 import com.signalgate.pulse.CallTier
-import com.signalgate.pulse.SignalGateCallScreeningService
 import com.signalgate.pulse.data.security.SanitizationEngine
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.database.repositories.HeuristicsMode
@@ -41,6 +40,19 @@ import com.signalgate.pulse.database.repositories.SettingRepository
  * CallRiskEvaluator's score is advisory INPUT into the decision, never the decision
  * itself. Gray-zone calls are never silently blocked — the user always gets to review
  * them via the digest. Only Tiers 2 and 3 block calls outright.
+ *
+ * Build plan §0.6 — security failure semantics:
+ * A failure of this engine (an uncaught exception from the repository, Bloom
+ * filter, or risk evaluator) is not a decision outcome. It must never be
+ * represented as [ScreeningAction.ALLOW] or [CallTier.CLEAN_UNKNOWN] — both
+ * of those specifically mean "evaluated, no risk found," which is not true
+ * of a call the engine failed to evaluate at all. The catch block below
+ * returns [ScreeningAction.SECURITY_FAILURE] / [CallTier.SECURITY_FAILURE]
+ * instead, so downstream layers (CallScreeningService, CallLogEntry,
+ * digest UI) can tell the two states apart and never silently launder a
+ * subsystem failure into a clean call. The required invariants are:
+ *   exception ≠ ALLOW
+ *   security failure ≠ CLEAN_UNKNOWN
  */
 class CallScreeningEngine(
     private val repository: DataSourceRepository,
@@ -77,8 +89,8 @@ class CallScreeningEngine(
                 else    -> buildGrayZoneInfo(sanitizedOriginal, normalized, callDetails)
             }
         } catch (e: Exception) {
-            Timber.e(e, "Engine error for $sanitizedOriginal, defaulting to ALLOW")
-            buildDefaultInfo(sanitizedOriginal, normalized)
+            Timber.e(e, "SECURITY_FAILURE — decision subsystem error for $sanitizedOriginal")
+            buildSecurityFailureInfo(sanitizedOriginal, normalized)
         }
     }
 
@@ -102,7 +114,7 @@ class CallScreeningEngine(
             confidence            = decision.confidence,
             riskLevel             = "LOW",
             matchedSources        = listOf(decision.reason),
-            callDecision          = SignalGateCallScreeningService.CallDecision.ALLOW,
+            callDecision          = ScreeningAction.ALLOW,
             tier                  = tier
         )
     }
@@ -122,9 +134,9 @@ class CallScreeningEngine(
         }
 
         val callDecision = if (tier == CallTier.HEURISTIC_FLAG) {
-            SignalGateCallScreeningService.CallDecision.SCREEN
+            ScreeningAction.SCREEN
         } else {
-            SignalGateCallScreeningService.CallDecision.BLOCK
+            ScreeningAction.BLOCK
         }
 
         Timber.d("$callDecision — tier=$tier source=${decision.source} confidence=${decision.confidence}")
@@ -192,7 +204,7 @@ class CallScreeningEngine(
                 confidence            = evaluation.score,
                 riskLevel             = evaluation.riskLevel,
                 matchedSources        = listOf("Gray-zone heuristics (STIR: ${evaluation.stirLevel})"),
-                callDecision          = SignalGateCallScreeningService.CallDecision.SCREEN,
+                callDecision          = ScreeningAction.SCREEN,
                 tier                  = CallTier.HEURISTIC_FLAG
             )
         } else {
@@ -210,10 +222,34 @@ class CallScreeningEngine(
             confidence            = null,
             riskLevel             = null,
             matchedSources        = emptyList(),
-            callDecision          = SignalGateCallScreeningService.CallDecision.ALLOW,
+            callDecision          = ScreeningAction.ALLOW,
             tier                  = CallTier.CLEAN_UNKNOWN
         )
     }
+
+    /**
+     * §0.6 typed failure path. Returned only when the decision/security
+     * subsystem itself errors — never as a substitute for a real decision.
+     * Deliberately distinct from [buildDefaultInfo]/CLEAN_UNKNOWN: this call
+     * was never evaluated, so it must not be recorded, logged, or displayed
+     * as though it was checked and found clean. Rings through (never
+     * silently disallowed on an unverified failure path — see
+     * SignalGateCallScreeningService.toCallResponse()), but is tagged
+     * SECURITY_FAILURE end to end so it stays auditable and distinguishable
+     * from every real tier.
+     */
+    private fun buildSecurityFailureInfo(original: String, normalized: String): CallInfo =
+        CallInfo(
+            originalPhoneNumber   = original,
+            normalizedPhoneNumber = normalized,
+            spamStatus            = "SECURITY_FAILURE",
+            spamCategory          = null,
+            confidence            = null,
+            riskLevel             = null,
+            matchedSources        = emptyList(),
+            callDecision          = ScreeningAction.SECURITY_FAILURE,
+            tier                  = CallTier.SECURITY_FAILURE
+        )
 
     /**
      * Note: [phoneNumber] arrives here already passed through
