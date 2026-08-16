@@ -10,6 +10,7 @@ import com.signalgate.pulse.database.entities.UnifiedEntryEntity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -96,16 +97,37 @@ class BloomAuthoritativeDecisionTest {
         db.close()
     }
 
-    /** Shared assertion: both repos must agree, for the same number, every time. */
+    /**
+     * Shared assertion: both repos must agree on the actual DECISION, every
+     * time. Deliberately does NOT require the full CallDecision (including
+     * `reason`) to match verbatim — DataSourceRepository.getCallDecision()
+     * intentionally annotates `reason` with "(bloom fast-pass)" when the
+     * Bloom-filter early-exit path fires (line ~205) vs. the plain "No rule
+     * matched" from a full Room fallthrough (line ~248). That's useful,
+     * intentional observability, not a decision divergence — INV-001 is
+     * about whether the same ALLOW/BLOCK/confidence/source comes out, not
+     * whether the diagnostic breadcrumb text matches. Confirmed via a real
+     * CI run 2026-08-15: the first version of this test asserted full
+     * struct equality and produced 4 false failures, all with identical
+     * action/confidence/source and only the reason annotation differing.
+     */
     private suspend fun assertDecisionsMatch(number: String, context: String) {
         val optimized = optimizedRepo.getCallDecision(number)
         val authoritative = authoritativeRepo.getCallDecision(number)
-        assertEquals(
-            "[$context] optimized (bloom fast-pass) decision must equal " +
-                "authoritative (bloom-disabled, Room-only) decision for $number — " +
-                "optimized=$optimized authoritative=$authoritative",
-            authoritative,
-            optimized
+        assertEquals("[$context] action must match for $number", authoritative.action, optimized.action)
+        assertEquals("[$context] confidence must match for $number", authoritative.confidence, optimized.confidence)
+        assertEquals("[$context] source must match for $number", authoritative.source, optimized.source)
+        // Soft/documentary check, not a hard assertion: the optimized reason
+        // is allowed to be the authoritative reason plus the fast-pass
+        // annotation, or identical to it — but nothing else. This still
+        // catches a genuinely wrong/unexpected reason string without
+        // requiring verbatim equality.
+        val reasonIsExpected = optimized.reason == authoritative.reason ||
+            optimized.reason == "${authoritative.reason} (bloom fast-pass)"
+        assertTrue(
+            "[$context] optimized reason '${optimized.reason}' was neither equal to nor a " +
+                "recognized fast-pass annotation of authoritative reason '${authoritative.reason}'",
+            reasonIsExpected
         )
     }
 
