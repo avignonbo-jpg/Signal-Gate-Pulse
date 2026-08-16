@@ -9,7 +9,7 @@ SignalGate Pulse is not to be advanced by feature count alone. The release objec
 The build order is therefore:
 Security control-plane integrity → decision integrity → gray-zone foundation → source reliability → UI/product completion → mandatory CI/security gates → release hardening.
 The previous roadmap's assumption that gray-zone UI could proceed once PendingCardEntity existed is replaced by a stronger gate: the application must first prove that security state and derived decision state cannot diverge.
-Do not resume broad UI/gray-zone feature work until Phase 0 exits. As of 2026-08-16, 0.1 and 0.7 are CI-verified complete; 0.2 and 0.3 have live implementations and regression-test sources but still require mandatory execution evidence; 0.6 now has its explicit failure implementation and regression-test source, but its local execution is blocked by the sandbox's missing Android SDK. 0.4, 0.5, and 0.8 remain open. Phase 0's own exit criteria (§ below) are the actual gate — not a vibe check.
+Do not resume broad UI/gray-zone feature work until Phase 0 exits. As of 2026-08-16, 0.1 and 0.7 are CI-verified complete; 0.2 and 0.3 have live implementations and regression-test sources but still require mandatory execution evidence; 0.5 and 0.6 now have their hard-failure implementations and regression-test sources, but local execution is blocked by the sandbox's missing Android SDK; 0.4 and 0.8 remain open. Phase 0's own exit criteria (§ below) are the actual gate — not a vibe check.
 Phase 0 — Security Control-Plane Integrity Gate
 Objective: prove that security state cannot diverge between authoritative persistence, derived indexes, external source data, and edge behavior.
 0.1 Establish one authoritative security-rule mutation boundary — ✅ COMPLETE, CI-verified 2026-08-13
@@ -36,8 +36,8 @@ Code
 Any failure results in:
 Code
 Never activate a partial source. This is the single biggest gap between what ReliableSourceManager.syncSource() does today (per-record insertEntry() calls followed by a separate, disconnected status update — no atomicity, no rollback) and what it needs to do. This matters specifically because the FTC mirror is cumulative by design: without atomic replacement, "current source dataset" risks silently becoming "every number this source has ever published."
-0.5 Treat parser/resource limits as security failures — ☐ OPEN
-Record, byte, field, shared-string, and parsing limits must be hard boundaries. Reaching a limit must reject the candidate snapshot rather than returning a partial security dataset. DataSyncEngine currently does the opposite — its own doc comments describe accepting a partial result as acceptable behavior when a limit is hit. For a general-purpose parser that's a reasonable tradeoff. For a security dataset it's backwards: an attacker (or just a corrupted upstream file) can intentionally or accidentally cause a truncated security dataset to become active. This is also where BoundedXlsxParser gets extracted as its own class, separating "parse" from "decide this data is trustworthy" — right now DataSyncEngine does both in the same function, which is part of why the limit-violation-as-success behavior slipped in unnoticed.
+0.5 Treat parser/resource limits as security failures — ✅ IMPLEMENTATION COMPLETE; regression execution pending
+Record, byte, field, shared-string, and parsing limits must be hard boundaries. The live SecureCsvParser now throws CsvResourceLimitExceededException when a valid-row limit is exceeded, and DataSyncEngine now propagates CSV, XLSX row, and XLSX shared-string limit failures instead of returning partial results. SecureCsvParserLimitTest.kt covers the CSV hard-failure path. Local execution and mandatory CI evidence remain pending; the XLSX limit paths still require dedicated regression coverage before this item can be closed.
 0.6 Establish explicit security failure semantics — ✅ IMPLEMENTATION COMPLETE; regression execution pending
 Add a typed decision state representing failure of the decision/security subsystem. Define the Android CallResponse policy separately from the domain decision.
 Required invariant: exception ≠ ALLOW, and security failure ≠ CLEAN_UNKNOWN.
@@ -46,7 +46,7 @@ The live branch now has the sixth CallTier/ScreeningAction state, explicit servi
 CallActionReceiver must validate the intent, then invoke an application service/repository operation. It must not inject PendingCardDao or any other feature DAO directly.
 What was actually built: CallActionReceiver now depends on PendingCardRepository (which already existed — it just wasn't being used here before) and SecurityRuleRepository (the new Layer 5 boundary from 0.1) instead of the direct PendingCardDao injection it had before. Verified via the same CI evidence as 0.1 — Koin graph resolution, drift check.
 0.8 Add regression tests for all Phase 0 invariants — ☐ OPEN (partial sources now present)
-Phase 0 only actually exits once tests exist and pass in mandatory CI — not when the code merely compiles and looks right on read-through. The live branch now contains Phase 0.2 Bloom-authority coverage, Phase 0.3 protected-source deletion coverage, and a Phase 0.6 explicit-failure regression source. Mandatory CI execution and any remaining mutation-boundary/edge-action behavioral coverage still need to be confirmed before this gate can close.
+Phase 0 only actually exits once tests exist and pass in mandatory CI — not when the code merely compiles and looks right on read-through. The live branch now contains Phase 0.2 Bloom-authority coverage, Phase 0.3 protected-source deletion coverage, Phase 0.5 CSV-limit and parser hard-failure sources, and a Phase 0.6 explicit-failure regression source. Mandatory CI execution and any remaining mutation-boundary/edge-action behavioral coverage still need to be confirmed before this gate can close.
 Phase 0 exit criteria (all eight required before Phase 1 starts)
 [x] One approved rule mutation boundary exists (manual rules only — source-replacement path still open)
 [x] Direct feature-level DAO mutation from Layer 1/6 is removed (for CallActionReceiver specifically; SourcesViewModel still has a related but separate issue — see 3.5 below)
@@ -54,7 +54,7 @@ Phase 0 exit criteria (all eight required before Phase 1 starts)
 [ ] Bloom state is derived/rebuildable (implementation and test source present; mandatory execution pending)
 [ ] Source activation is transactional
 [ ] Last-known-good behavior is tested
-[ ] Partial source data is rejected
+[x] Parser partial-result paths now reject hard-limit violations in implementation (CSV regression execution and XLSX regression coverage pending)
 [x] Security failure is explicit in the domain/service implementation (regression execution pending)
 [x] Mandatory CI runs the Phase 0 tests that exist (the drift-check gate itself is now mandatory CI — see Phase 5 note below — but there's nothing yet in CI specifically testing Phase 0's behavioral invariants, since 0.8's tests don't exist)
 Phase 1 — Decision Engine Integrity

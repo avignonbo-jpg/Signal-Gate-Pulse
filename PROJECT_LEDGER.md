@@ -21,11 +21,11 @@ check-architecture-drift.sh Rule 6 doesn't scan ui/theme/, so the Cross-Cutting 
 NEW this session: check-architecture-drift.sh existed but was never invoked by any CI workflow — the Contract's claim of automatic enforcement was false until this session. Fixed in pulse-ci.yml; not yet confirmed green (see Session Log 2026-08-12).
 A gray-zone notification/haptic/rate-limiter feature (PulseHapticsController, PulseVibration, PulseTriggerLimiter, extended CallActionReceiver actions) was built in a prior session but never merged, and is held pending the §9.5 fix — see Contract §10.1. CallActionReceiver itself was edited this session (§11.10 fix) — if/when the held feature is merged, re-check it against the current receiver, not the version it was originally written against.
 Architecture Contract version: v3 — Reconciled and adopted. The committed Architecture-Contract.md contains the reconciled v3 structure, 10 security invariants, Phase 0–7 roadmap, Definition of Done, and corrections against CI-verified source where the two prior lineages disagreed. The former draft-status wording was stale and has been removed from Architecture-Contract.md in this session.
-Security control-plane status: Phase 0.1 of the v3 draft roadmap is closed and CI-verified (2026-08-13) — SecurityRuleRepository exists, is registered in Koin, resolves cleanly in the full dependency graph, and passes architecture-drift checks. BlocklistRepository and CallActionReceiver no longer write to a DAO directly. Phases 0.2–0.8 (explicit failure state, protected source lifecycle, real source sync, transactional replacement, signed snapshots) are all still open.
+Security control-plane status: Phase 0.1 and 0.7 are CI-verified complete. Phase 0.2 and 0.3 have live implementations and regression-test sources pending mandatory execution evidence. Phase 0.5 and 0.6 have hard-failure implementations and regression-test sources pending execution evidence. Phase 0.4 and 0.8 remain open; the Phase 0 gate remains closed.
 Unverified note carried over from a parallel session's ledger entry, not yet confirmed: that entry stated "Architecture Contract version: v2 — Reconciled (this entry). Amendments 0–5 are applied, not pending — see correction below; the Amendments Log in this file previously said otherwise and was wrong." This has NOT been verified against the actual Amendments Log in this file. Check the Amendments Log section before treating this as settled.
 Open Items
 [ ] Delete 3 orphaned legacy XML layouts + 26 unused view IDs (call_shield_overlay_enhanced.xml, dialog_add_blocked_number.xml, overlay_call_blocked.xml) — carried over, not yet independently re-verified this session
-[ ] NEW: Continue v3 draft Phase 0: 0.2 explicit SECURITY_FAILURE decision state, 0.3 protected source lifecycle (MANUAL/CONTACTS/federal never-delete), 0.4 real SourcesViewModel sync (currently fakes HEALTHY), 0.5–0.6 transactional source replacement + hard-reject on parser limit violation, 0.7 signed source snapshots
+[ ] Continue adopted v3 Phase 0: mandatory execution evidence for 0.2/0.3/0.5/0.6; 0.4 last-known-good transactional source activation; and 0.8 complete regression coverage. Parser XLSX-limit coverage and source-activation tests remain to be added.
 [ ] NEW: Migrate remaining BlocklistRepository callers (BlockedNumbersViewModel, ContactsViewModel, PendingCardViewModel) directly onto SecurityRuleRepository, per that class's own deprecation note — not urgent, opportunistic
 [ ] Set up pre-push / CI-side YAML and whitespace validation filters — carried over from prior session, still not done
 [ ] SecurityUtilsTest.kt is a placeholder stub, not real test code — needs actual implementation or removal (see Contract §10.2)
@@ -45,6 +45,17 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top.)
+
+2026-08-16 — Phase 0.5 parser limits hardened; mandatory execution and XLSX coverage pending
+Who: Manus AI
+What: Re-read the current Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md, PROJECT_LEDGER.md, DataSyncEngine.kt, and SecureCsvParser.kt before editing. Changed SecureCsvParser so exceeding the valid-row limit throws CsvResourceLimitExceededException instead of silently stopping at two million rows. Changed DataSyncEngine so CSV limit failures, XLSX row-limit failures, and XLSX shared-string-limit failures propagate to the caller rather than returning partial candidate datasets. Added SecureCsvParserLimitTest.kt with a generated streaming input to prove the CSV hard-failure path without constructing the full input in memory.
+Files touched: android/app/src/main/java/com/signalgate/pulse/data/security/SecureCsvParser.kt; android/app/src/main/java/com/signalgate/pulse/logic/DataSyncEngine.kt; android/app/src/test/kotlin/com/signalgate/pulse/data/security/SecureCsvParserLimitTest.kt; SECURITY-DEVOPS-BUILD-PLAN.md
+Layers touched: Layer 2 Security/Parsing, test source, and governance documentation. No new dependency or layer reassignment.
+Contract consulted: yes — full relevant files and governing documents were read before editing.
+Validation: architecture-drift and git diff --check passed. Local Gradle execution could not start because this sandbox has no Android SDK configured; mandatory CI execution is still required. XLSX limit paths do not yet have dedicated regression tests, so this item is implementation-complete but not gate-complete.
+Build-sheet status: 0.5 implementation marked complete with regression execution pending; partial-result exit criterion marked implemented but not fully evidenced. Phase 0 remains gated.
+To-do / heads-up: add XLSX row-limit and shared-string-limit regression coverage, run JVM and instrumented CI, and ensure no sync path persists callback-emitted partial rows after an exception. Continue 0.4 audit; do not resume Phase 1 or broad UI work.
+Signature: Manus AI — 2026-08-16
 
 2026-08-16 — Phase 0.6 explicit SECURITY_FAILURE path implemented; mandatory execution pending
 Who: Manus AI

@@ -45,8 +45,8 @@ import javax.xml.parsers.SAXParserFactory
  *
  * ROW LIMIT:
  * MAX_ROWS is enforced inside the SAX handler via RowLimitExceededException.
- * Parsing stops cleanly at the limit — no wasted CPU continuing to parse XML
- * for rows that will be discarded. Partial result is returned (better than nothing).
+ * Reaching the limit is a hard security failure: parsing stops immediately and
+ * the exception propagates so callers cannot activate a partial result.
  *
  * BYTE LIMIT (MAX_XLSX_BYTES):
  * The initial inputStream.readBytes() call has no ceiling of its own — it runs
@@ -138,18 +138,16 @@ class DataSyncEngine(
         Timber.tag(TAG).i("CSV parse started — source=$sourceId")
         val entries = mutableListOf<UnifiedEntryEntity>()
         csvParser.streamAndPopulate(inputStream) { phoneNumber ->
-            if (entries.size < MAX_ROWS) {
-                entries.add(
-                    UnifiedEntryEntity(
-                        phoneNumber = phoneNumber,
-                        action = "BLOCK",
-                        sourceId = sourceId,
-                        category = "CSV Import",
-                        confidence = 75,
-                        metadata = "DataSyncEngine batch"
-                    )
+            entries.add(
+                UnifiedEntryEntity(
+                    phoneNumber = phoneNumber,
+                    action = "BLOCK",
+                    sourceId = sourceId,
+                    category = "CSV Import",
+                    confidence = 75,
+                    metadata = "DataSyncEngine batch"
                 )
-            }
+            )
         }
         Timber.tag(TAG).i("CSV parse complete — valid=${entries.size} source=$sourceId")
         entries
@@ -247,8 +245,10 @@ class DataSyncEngine(
                             "Shared strings limit $MAX_SHARED_STRINGS reached — " +
                             "${sharedStrings.size} entries collected"
                         )
-                        // Partial result is acceptable — rows referencing an index
-                        // beyond what was collected resolve to "" in resolveValue().
+                        // A shared-string limit is a hard security failure. Do not
+                        // return a partial table whose unresolved references could
+                        // silently remove security rules from the candidate dataset.
+                        throw e
                     }
                     break
                 }
@@ -292,7 +292,9 @@ class DataSyncEngine(
                         Timber.tag(TAG).w(
                             "Row limit $MAX_ROWS reached — ${entries.size} entries collected"
                         )
-                        // Partial result is acceptable
+                        // A row limit is a hard security failure. Do not return
+                        // a truncated candidate dataset as if parsing succeeded.
+                        throw e
                     }
                     break
                 }
@@ -492,15 +494,15 @@ class DataSyncEngine(
         Exception(message, cause)
 
     /**
-     * Thrown internally when MAX_ROWS is reached. Caught by parseSheet()
-     * which returns the entries collected so far. Not surfaced to callers.
+     * Thrown internally when MAX_ROWS is reached. Propagates to callers so a
+     * truncated candidate dataset cannot be treated as a successful parse.
      */
     private class RowLimitExceededException(message: String) : Exception(message)
 
     /**
-     * Thrown internally when MAX_SHARED_STRINGS is reached. Caught by
-     * parseSharedStrings() which returns the entries collected so far.
-     * Not surfaced to callers.
+     * Thrown internally when MAX_SHARED_STRINGS is reached. Propagates to
+     * callers so unresolved shared-string references cannot create a partial
+     * candidate dataset that looks valid.
      */
     private class SharedStringsLimitExceededException(message: String) : Exception(message)
 }
