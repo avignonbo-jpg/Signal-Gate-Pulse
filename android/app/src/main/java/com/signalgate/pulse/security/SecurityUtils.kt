@@ -167,10 +167,18 @@ object SecurityUtils {
         return newPassphrase
     }
 
+    // 2026-08-15 — DIAGNOSTIC TIMING added around the key-generation branch
+    // specifically (not the retrieval branch), tagged "SignalGate" — isolates
+    // whether first-run-only Android Keystore key generation is the cause of
+    // a reported ~8s blank screen on first app launch. See MainApplication.kt
+    // and PROJECT_LEDGER.md 2026-08-15 entry. No behavior change.
     private fun getOrCreateKeystoreKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
 
         return if (!keyStore.containsAlias(KEY_ALIAS)) {
+            val genStartMs = System.currentTimeMillis()
+            timber.log.Timber.tag("SignalGate").i("STARTUP: Keystore key GENERATION begin (first run)")
+
             val keyGenerator = KeyGenerator.getInstance(
                 KeyProperties.KEY_ALGORITHM_AES,
                 ANDROID_KEYSTORE
@@ -188,11 +196,20 @@ object SecurityUtils {
                 .build()
 
             keyGenerator.init(spec)
-            keyGenerator.generateKey()
+            val key = keyGenerator.generateKey()
+
+            timber.log.Timber.tag("SignalGate").i(
+                "STARTUP: Keystore key GENERATION end, took ${System.currentTimeMillis() - genStartMs}ms"
+            )
+            key
         } else {
-            (keyStore.getEntry(KEY_ALIAS, null) as KeyStore.SecretKeyEntry).secretKey
+            val retrieveStartMs = System.currentTimeMillis()
+            val key = (keyStore.getEntry(KEY_ALIAS, null) as KeyStore.SecretKeyEntry).secretKey
+            timber.log.Timber.tag("SignalGate").i(
+                "STARTUP: Keystore key retrieval (existing), took ${System.currentTimeMillis() - retrieveStartMs}ms"
+            )
+            key
         }
-    }
 
     private fun encrypt(key: SecretKey, plaintext: ByteArray): Pair<ByteArray, ByteArray> {
         val cipher = Cipher.getInstance(TRANSFORMATION)
