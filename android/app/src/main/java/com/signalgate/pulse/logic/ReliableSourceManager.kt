@@ -142,36 +142,55 @@ class ReliableSourceManager(
     }
 
     private suspend fun syncSource(source: FederalSource): SyncResult {
+        val syncStartMs = System.currentTimeMillis()
         Timber.tag(TAG).i("Starting sync: ${source.name} (strategy=${source.strategy})")
         return try {
             val sourceId = ensureSourceRow(source)
-            val numbers  = fetchWithFallback(source)
-            var inserted = 0
-            numbers.chunked(1_000).forEach { chunk ->
-                chunk.forEach { number ->
-                    dataSourceRepository.insertEntry(
-                        UnifiedEntryEntity(
-                            phoneNumber = number,
-                            action      = "BLOCK",
-                            sourceId    = sourceId,
-                            category    = source.sourceType,
-                            confidence  = if (source.strategy == FetchStrategy.FTC_REST_API) 85 else 70,
-                            metadata    = source.name
-                        )
-                    )
-                    inserted++
-                }
+            val fetchStartMs = System.currentTimeMillis()
+            val numbers = fetchWithFallback(source)
+            val fetchDurationMs = System.currentTimeMillis() - fetchStartMs
+            Timber.tag(TAG).i(
+                "Fetched ${source.name}: numbers=${numbers.size}, duration_ms=$fetchDurationMs"
+            )
+
+            val entries = numbers.map { number ->
+                UnifiedEntryEntity(
+                    phoneNumber = number,
+                    action      = "BLOCK",
+                    sourceId    = sourceId,
+                    category    = source.sourceType,
+                    confidence  = if (source.strategy == FetchStrategy.FTC_REST_API) 85 else 70,
+                    metadata    = source.name
+                )
             }
+
+            val persistStartMs = System.currentTimeMillis()
+            entries.chunked(1_000).forEach { chunk ->
+                dataSourceRepository.insertEntries(chunk)
+            }
+            val persistDurationMs = System.currentTimeMillis() - persistStartMs
+            val inserted = entries.size
+            Timber.tag(TAG).i(
+                "Persisted ${source.name}: entries=$inserted, duration_ms=$persistDurationMs"
+            )
+
             dataSourceRepository.updateSourceSyncStatus(
                 sourceId     = sourceId,
                 timestamp    = System.currentTimeMillis(),
                 entriesCount = inserted,
                 healthStatus = "HEALTHY"
             )
-            Timber.tag(TAG).i("Sync complete: ${source.name} — $inserted entries")
+            val totalDurationMs = System.currentTimeMillis() - syncStartMs
+            Timber.tag(TAG).i(
+                "Sync complete: ${source.name} — $inserted entries, total_duration_ms=$totalDurationMs"
+            )
             SyncResult(source.name, inserted, true)
         } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "Sync failed: ${source.name}")
+            val totalDurationMs = System.currentTimeMillis() - syncStartMs
+            Timber.tag(TAG).e(
+                e,
+                "Sync failed: ${source.name}, total_duration_ms=$totalDurationMs"
+            )
             SyncResult(source.name, 0, false, e.message)
         }
     }
@@ -240,6 +259,7 @@ class ReliableSourceManager(
      * CSV header cell must not reach the DB as a bogus block entry.
      */
     private fun fetchCsvNumbers(url: String, label: String): List<String> {
+        val parseStartMs = System.currentTimeMillis()
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "SignalGate-Pulse/1.0")
@@ -255,7 +275,11 @@ class ReliableSourceManager(
                 }
             }
         }
-        return numbers.distinct()
+        val distinctNumbers = numbers.distinct()
+        Timber.tag(TAG).d(
+            "Parsed $label: raw_numbers=${numbers.size}, distinct_numbers=${distinctNumbers.size}, duration_ms=${System.currentTimeMillis() - parseStartMs}"
+        )
+        return distinctNumbers
     }
 
     private fun fetchRawBody(url: String, label: String): String {
