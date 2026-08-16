@@ -195,4 +195,33 @@ object SecurityUtils {
                 .setUserAuthenticationRequired(false)
                 .build()
 
-            keyGenerat
+            keyGenerator.init(spec)
+            val key = keyGenerator.generateKey()
+
+            Timber.tag("SignalGate").i(
+                "STARTUP: Keystore key GENERATION end, took ${System.currentTimeMillis() - genStartMs}ms"
+            )
+            key
+        } else {
+            val retrieveStartMs = System.currentTimeMillis()
+            val key = (keyStore.getEntry(KEY_ALIAS, null) as KeyStore.SecretKeyEntry).secretKey
+            Timber.tag("SignalGate").i(
+                "STARTUP: Keystore key retrieval (existing), took ${System.currentTimeMillis() - retrieveStartMs}ms"
+            )
+            key
+        }
+    }
+
+    private fun encrypt(key: SecretKey, plaintext: ByteArray): Pair<ByteArray, ByteArray> {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, key)
+        val ciphertext = cipher.doFinal(plaintext)
+        return ciphertext to cipher.iv
+    }
+
+    private fun decrypt(key: SecretKey, ciphertext: ByteArray, iv: ByteArray): ByteArray {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv))
+        return cipher.doFinal(ciphertext)
+    }
+}
