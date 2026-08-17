@@ -45,6 +45,17 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top.)
 
+2026-08-17 — CI gate reconciliation; stale continue-on-error note closed
+Who: Manus AI, following user clarification
+What: Re-read the complete live `pulse-ci.yml` and `pulse-instrumented-tests.yml` at consumer-v1 commit 36f56fe. Prior session notes incorrectly carried `continue-on-error: true` as an open item against the JVM unit-test step, based on an older ZIP rather than the live branch. A full search confirms there is no active `continue-on-error` key in either workflow; only comments reference its prior existence. `pulse-ci.yml` runs `:app:testPulseDebugUnitTest --stacktrace` as a hard-failing step, and `pulse-instrumented-tests.yml` runs `:app:connectedPulseDebugAndroidTest --no-daemon --stacktrace` as a hard-failing step.
+Files touched: PROJECT_LEDGER.md
+Layers touched: CI governance documentation only. No code, workflow, dependency, schema, or Phase 0 implementation changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, and both live workflow files were reviewed.
+Validation: exact workflow read and full `continue-on-error` search passed. No code change was needed. Both unit-test and instrumented-test gates are hard-gated on the live branch.
+Build-sheet status: no Phase 0 checkbox changed; this stale-note reconciliation removes a false blocker, while behavioral execution and Room schema evidence remain separately open.
+To-do / heads-up: do not reintroduce the older ZIP’s advisory-gate assumption; use consumer-v1 at 36f56fe or later as the source of truth.
+Signature: Manus AI — 2026-08-17
+
 2026-08-17 — Crash Diagnostic Google/system log ownership investigated; no Pulse remediation justified
 Who: Manus AI
 What: Read the complete live Crash Diagnostic workflow and launch/capture script, inspected the Pulse manifest/build/resource references, and cross-checked AGSA, Chimera, and Android font-loading terminology. Confirmed the supplied log came from the GitHub Actions API 33 Google APIs emulator, not the user's physical device. The ChimeraModuleSetList.pb and AGSA AssistantConnector messages belong to Google/Play-services subsystems; FontLog/Bugle belongs to Google/system font/message activity; BlockstoreStorage is a system reaction to the Pulse package installation/update. No Pulse source reference to Blockstore, downloadable fonts, AGSA/Assistant, or Chimera was found. Added an auditable trace artifact with ownership classification and device-troubleshooting commands.
