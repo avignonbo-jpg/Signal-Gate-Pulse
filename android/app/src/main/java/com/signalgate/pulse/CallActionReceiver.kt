@@ -50,25 +50,43 @@ class CallActionReceiver : BroadcastReceiver(), KoinComponent {
     private val pendingCardRepository: PendingCardRepository by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
-        val phoneNumber = intent.getStringExtra(EXTRA_PHONE_NUMBER) ?: return
-        val action = intent.action ?: return
-
-        if (action != ACTION_NOT_SPAM) return
+        val phoneNumber = intent.getStringExtra(EXTRA_PHONE_NUMBER)
+        val action = intent.action
+        val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
 
         scope.launch {
-            // Allowlist the number via the single mutation boundary (§5.2)
-            securityRuleRepository.addManualAllow(phoneNumber, "Not Spam — user overturn")
-            // Dismiss any undismissed cards for this number in the digest queue
-            pendingCardRepository.dismissByPhoneNumber(phoneNumber)
-            // Cancel the notification so it disappears immediately
-            val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
-            if (notificationId != -1) {
-                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE)
-                        as NotificationManager
-                nm.cancel(notificationId)
-            }
-            showToast(context, "Number added to allow list")
+            handleAction(context, phoneNumber, action, notificationId)
         }
+    }
+
+    /**
+     * Same-file test seam for the receiver's behavioral gate. This is deliberately
+     * not a new application service or interface: CallActionReceiver remains the
+     * Layer 1 ingress owner, while the delegate makes its existing validation and
+     * repository calls testable without Koin or an Android runner.
+     */
+    internal suspend fun handleAction(
+        context: Context,
+        phoneNumber: String?,
+        action: String?,
+        notificationId: Int = -1,
+        securityRules: SecurityRuleRepository = securityRuleRepository,
+        pendingCards: PendingCardRepository = pendingCardRepository,
+        toast: (Context, String) -> Unit = ::showToast
+    ) {
+        if (phoneNumber == null || action != ACTION_NOT_SPAM) return
+
+        // Allowlist the number via the single mutation boundary (§5.2)
+        securityRules.addManualAllow(phoneNumber, "Not Spam — user overturn")
+        // Dismiss any undismissed cards for this number in the digest queue
+        pendingCards.dismissByPhoneNumber(phoneNumber)
+        // Cancel the notification so it disappears immediately
+        if (notificationId != -1) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE)
+                    as NotificationManager
+            nm.cancel(notificationId)
+        }
+        toast(context, "Number added to allow list")
     }
 
     private fun showToast(context: Context, message: String) {
