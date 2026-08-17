@@ -69,8 +69,19 @@ import javax.xml.parsers.SAXParserFactory
  */
 class DataSyncEngine(
     private val dataSourceRepository: DataSourceRepository,
-    private val csvParser: SecureCsvParser
+    private val csvParser: SecureCsvParser,
+    private val parserLimits: ParserLimits = ParserLimits()
 ) {
+    /**
+     * Hard parser boundaries. Production uses the documented defaults; tests may
+     * inject smaller limits so failure paths are exercised without generating
+     * multi-million-row candidates.
+     */
+    data class ParserLimits(
+        val maxRows: Int = 2_000_000,
+        val maxXlsxBytes: Int = 25 * 1024 * 1024,
+        val maxSharedStrings: Int = 2_000_000
+    )
 
     companion object {
         private const val TAG = "DataSyncEngine"
@@ -191,10 +202,16 @@ class DataSyncEngine(
         // Bounded read: MAX_ROWS only protects the parsing pass, which starts after
         // this point. Without a ceiling here, an oversized upstream response would
         // still force a large allocation before row-limiting ever applies.
-        val zipBytes = readBytesWithLimit(inputStream, MAX_XLSX_BYTES)
+        val zipBytes = readBytesWithLimit(inputStream, parserLimits.maxXlsxBytes)
 
-        val sharedStrings = parseSharedStrings(zipBytes)
-        val entries = parseSheet(zipBytes, sourceId, phoneColumnIndex, sharedStrings)
+        val sharedStrings = parseSharedStrings(zipBytes, parserLimits.maxSharedStrings)
+        val entries = parseSheet(
+            zipBytes,
+            sourceId,
+            phoneColumnIndex,
+            sharedStrings,
+            parserLimits.maxRows
+        )
 
         Timber.tag(TAG).i(
             "XLSX parse complete — valid=${entries.size} source=$sourceId"
@@ -230,19 +247,19 @@ class DataSyncEngine(
      * Returns an indexed list of shared string values.
      * Returns empty list if the entry is absent (all strings may be inline).
      */
-    private fun parseSharedStrings(zipBytes: ByteArray): List<String> {
+    private fun parseSharedStrings(zipBytes: ByteArray, maxSharedStrings: Int): List<String> {
         val sharedStrings = mutableListOf<String>()
         ZipInputStream(zipBytes.inputStream()).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
                 if (entry.name == SHARED_STRINGS_PATH) {
-                    val handler = SharedStringsHandler(sharedStrings)
+                    val handler = SharedStringsHandler(sharedStrings, maxSharedStrings)
                     try {
                         SAXParserFactory.newInstance().newSAXParser()
                             .parse(InputSource(zip), handler)
                     } catch (e: SharedStringsLimitExceededException) {
                         Timber.tag(TAG).w(
-                            "Shared strings limit $MAX_SHARED_STRINGS reached — " +
+                            "Shared strings limit $maxSharedStrings reached — " +
                             "${sharedStrings.size} entries collected"
                         )
                         // A shared-string limit is a hard security failure. Do not
@@ -268,7 +285,8 @@ class DataSyncEngine(
         zipBytes: ByteArray,
         sourceId: Int,
         phoneColumnIndex: Int,
-        sharedStrings: List<String>
+        sharedStrings: List<String>,
+        maxRows: Int
     ): List<UnifiedEntryEntity> {
         val entries = mutableListOf<UnifiedEntryEntity>()
         var sheetFound = false
@@ -282,7 +300,7 @@ class DataSyncEngine(
                         sourceId = sourceId,
                         phoneColumnIndex = phoneColumnIndex,
                         sharedStrings = sharedStrings,
-                        maxRows = MAX_ROWS,
+                        maxRows = maxRows,
                         onEntry = { e -> entries.add(e) }
                     )
                     try {
@@ -290,7 +308,7 @@ class DataSyncEngine(
                             .parse(InputSource(zip), handler)
                     } catch (e: RowLimitExceededException) {
                         Timber.tag(TAG).w(
-                            "Row limit $MAX_ROWS reached — ${entries.size} entries collected"
+                            "Row limit $maxRows reached — ${entries.size} entries collected"
                         )
                         // A row limit is a hard security failure. Do not return
                         // a truncated candidate dataset as if parsing succeeded.
@@ -323,7 +341,8 @@ class DataSyncEngine(
      *   </sst>
      */
     private class SharedStringsHandler(
-        private val result: MutableList<String>
+        private val result: MutableList<String>,
+        private val maxSharedStrings: Int
     ) : DefaultHandler() {
 
         private var inT = false
@@ -340,9 +359,9 @@ class DataSyncEngine(
             when (qName) {
                 "t"  -> inT = false
                 "si" -> {
-                    if (result.size >= MAX_SHARED_STRINGS) {
+                    if (result.size >= maxSharedStrings) {
                         throw SharedStringsLimitExceededException(
-                            "Shared strings limit $MAX_SHARED_STRINGS reached"
+                            "Shared strings limit $maxSharedStrings reached"
                         )
                     }
                     result.add(current.toString())
@@ -497,12 +516,12 @@ class DataSyncEngine(
      * Thrown internally when MAX_ROWS is reached. Propagates to callers so a
      * truncated candidate dataset cannot be treated as a successful parse.
      */
-    private class RowLimitExceededException(message: String) : Exception(message)
+    class RowLimitExceededException(message: String) : Exception(message)
 
     /**
      * Thrown internally when MAX_SHARED_STRINGS is reached. Propagates to
      * callers so unresolved shared-string references cannot create a partial
      * candidate dataset that looks valid.
      */
-    private class SharedStringsLimitExceededException(message: String) : Exception(message)
+    class SharedStringsLimitExceededException(message: String) : Exception(message)
 }

@@ -21,11 +21,11 @@ check-architecture-drift.sh Rule 6 doesn't scan ui/theme/, so the Cross-Cutting 
 NEW this session: check-architecture-drift.sh existed but was never invoked by any CI workflow — the Contract's claim of automatic enforcement was false until this session. Fixed in pulse-ci.yml; not yet confirmed green (see Session Log 2026-08-12).
 A gray-zone notification/haptic/rate-limiter feature (PulseHapticsController, PulseVibration, PulseTriggerLimiter, extended CallActionReceiver actions) was built in a prior session but never merged, and is held pending the §9.5 fix — see Contract §10.1. CallActionReceiver itself was edited this session (§11.10 fix) — if/when the held feature is merged, re-check it against the current receiver, not the version it was originally written against.
 Architecture Contract version: v3 — Reconciled and adopted. The committed Architecture-Contract.md contains the reconciled v3 structure, 10 security invariants, Phase 0–7 roadmap, Definition of Done, and corrections against CI-verified source where the two prior lineages disagreed. The former draft-status wording was stale and has been removed from Architecture-Contract.md in this session.
-Security control-plane status: Phase 0.1 and 0.7 are CI-verified complete. Phase 0.2 and 0.3 have live implementations and regression-test sources pending mandatory execution evidence. Phase 0.4 has its minimum schema, atomic activation, real sync boundary, and rollback-test sources pending migration/schema/behavioral execution evidence. Phase 0.5 and 0.6 have hard-failure implementations and regression-test sources pending execution evidence. Phase 0.8 remains open; the Phase 0 gate remains closed.
+Security control-plane status: Phase 0.1 and 0.7 are CI-verified complete. Phase 0.2 and 0.3 have live implementations and regression-test sources pending mandatory execution evidence. Phase 0.4 has its minimum schema, atomic activation, real sync boundary, and rollback-test sources pending migration/schema/behavioral execution evidence. Phase 0.5 now has CSV and bounded XLSX hard-failure implementations and regression-test sources pending execution evidence. Phase 0.6 has its hard-failure implementation and regression-test source pending execution evidence. Phase 0.8 remains open; the Phase 0 gate remains closed.
 Unverified note carried over from a parallel session's ledger entry, not yet confirmed: that entry stated "Architecture Contract version: v2 — Reconciled (this entry). Amendments 0–5 are applied, not pending — see correction below; the Amendments Log in this file previously said otherwise and was wrong." This has NOT been verified against the actual Amendments Log in this file. Check the Amendments Log section before treating this as settled.
 Open Items
 [ ] Delete 3 orphaned legacy XML layouts + 26 unused view IDs (call_shield_overlay_enhanced.xml, dialog_add_blocked_number.xml, overlay_call_blocked.xml) — carried over, not yet independently re-verified this session
-[ ] Continue adopted v3 Phase 0: mandatory execution evidence for 0.2/0.3/0.4/0.5/0.6; commit generated Room schema version 3; add XLSX parser-limit coverage; and complete 0.8 regression coverage. Phase 0.4 implementation is present but gate closure is intentionally pending CI evidence.
+[ ] Continue adopted v3 Phase 0: mandatory execution evidence for 0.2/0.3/0.4/0.5/0.6; commit generated Room schema version 3; and complete 0.8 regression coverage. CSV and bounded XLSX parser-limit implementation/test sources are now present. Phase 0.4 implementation is present but gate closure is intentionally pending evidence.
 [ ] NEW: Migrate remaining BlocklistRepository callers (BlockedNumbersViewModel, ContactsViewModel, PendingCardViewModel) directly onto SecurityRuleRepository, per that class's own deprecation note — not urgent, opportunistic
 [ ] Set up pre-push / CI-side YAML and whitespace validation filters — carried over from prior session, still not done
 [ ] SecurityUtilsTest.kt is a placeholder stub, not real test code — needs actual implementation or removal (see Contract §10.2)
@@ -45,6 +45,17 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top.)
+
+2026-08-17 — Phase 0.5 bounded XLSX hard-failure coverage added; execution evidence pending
+Who: Manus AI
+What: Re-read the adopted Architecture-Contract.md, current SECURITY-DEVOPS-BUILD-PLAN.md, PROJECT_LEDGER.md, DataSyncEngine.kt, and SecureCsvParserLimitTest.kt before editing. Added injectable ParserLimits to DataSyncEngine with production defaults unchanged, so tests can exercise XLSX row and shared-string ceilings with small bounded archives. Exposed the existing typed RowLimitExceededException and SharedStringsLimitExceededException for focused assertions. Added DataSyncEngineXlsxLimitTest.kt covering both overflow paths and proving they throw instead of returning partial candidate datasets.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/DataSyncEngine.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/DataSyncEngineXlsxLimitTest.kt; SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md
+Layers touched: Layer 2 security parsing, JVM regression tests, and governance documentation. No CI workflow, schema, dependency, or Phase 3 policy change.
+Contract consulted: yes — full relevant implementation, test, build-sheet, and ledger contents were reviewed before editing.
+Validation: check-architecture-drift.sh and git diff --check passed. The CI workflow was explicitly left unchanged per current scope. Local Gradle execution remains unavailable because the sandbox has no Android SDK; execution evidence remains pending.
+Build-sheet status: Phase 0.5 now has implementation and regression sources for CSV, XLSX row, and XLSX shared-string hard failures. No Phase 0 gate was closed.
+To-do / heads-up: commit and push this parser/test correction. Continue Phase 0 only; do not resume Phase 1 or broad UI work.
+Signature: Manus AI — 2026-08-17
 
 2026-08-17 — Phase 0.6 unit-test CallDecision compilation regression corrected; remote CI re-run pending
 Who: Manus AI
