@@ -46,6 +46,17 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top.)
 
+2026-08-17 — Phase 0 mutation-boundary regression coverage added; execution evidence pending
+Who: Manus AI
+What: Read the complete live SecurityRuleRepository and CallActionReceiver implementations before adding focused Phase 0.8 evidence. Added SecurityRuleRepositoryMutationBoundaryTest.kt covering manual block construction through DataSourceRepository, manual allow construction through the same boundary, and normalized manual-rule removal through the authoritative DAO. This verifies the Layer 5 mutation contract without introducing a second writer or changing production behavior.
+Files touched: android/app/src/test/kotlin/com/signalgate/pulse/logic/SecurityRuleRepositoryMutationBoundaryTest.kt; SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md
+Layers touched: Layer 5 application-boundary regression test and governance documentation. No production code, dependency, schema, or CI workflow changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, SecurityRuleRepository.kt, CallActionReceiver.kt, and existing test conventions were reviewed before editing.
+Validation: check-architecture-drift.sh and git diff --check passed. Local Gradle execution remains unavailable because the sandbox has no Android SDK; execution evidence remains pending. Remaining Phase 0 gaps are mandatory execution evidence, generated Room schema version 3, and focused edge-action behavioral coverage.
+Build-sheet status: 0.8 now has focused mutation-boundary regression source; it remains open. No Phase 0 gate was closed.
+To-do / heads-up: commit and push this regression coverage, then continue auditing edge-action coverage without advancing beyond Phase 0.
+Signature: Manus AI — 2026-08-17
+
 2026-08-17 — Phase 0.5 bounded XLSX hard-failure coverage added; execution evidence pending
 Who: Manus AI
 What: Re-read the adopted Architecture-Contract.md, current SECURITY-DEVOPS-BUILD-PLAN.md, PROJECT_LEDGER.md, DataSyncEngine.kt, and SecureCsvParserLimitTest.kt before editing. Added injectable ParserLimits to DataSyncEngine with production defaults unchanged, so tests can exercise XLSX row and shared-string ceilings with small bounded archives. Exposed the existing typed RowLimitExceededException and SharedStringsLimitExceededException for focused assertions. Added DataSyncEngineXlsxLimitTest.kt covering both overflow paths and proving they throw instead of returning partial candidate datasets.
