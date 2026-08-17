@@ -45,6 +45,17 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top.)
 
+2026-08-17 — Obsolete Gemini review configuration removed
+Who: Manus AI, following explicit user approval
+What: Read the complete `.gemini/config.yaml` and `.gemini/styleguide.md`, then searched the live repository for all `.gemini`, `config.yaml`, `styleguide.md`, and Gemini references. `config.yaml` contained only the inactive Gemini pull-request review configuration and obsolete Architecture Contract v1/style-guide instructions; it had no legitimate non-Gemini use. Removed the entire `.gemini/` directory, including `config.yaml` and `styleguide.md`.
+Files touched: .gemini/config.yaml (deleted); .gemini/styleguide.md (deleted); PROJECT_LEDGER.md
+Layers touched: Repository administration and governance documentation only. No production code, dependency, schema, CI workflow, or Phase 0 implementation changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, complete Gemini files, and repository-wide reference search were reviewed before deletion.
+Validation: the directory is absent and no remaining `.gemini`, `config.yaml`, `styleguide.md`, or Gemini references were found outside Git history. The cleanup is intentionally limited to obsolete review configuration.
+Build-sheet status: unchanged; no Phase 0 checkbox changed.
+To-do / heads-up: if automated review is reintroduced, implement it from the adopted Architecture Contract and build-plan invariants rather than restoring this obsolete general-purpose style guide.
+Signature: Manus AI — 2026-08-17
+
 2026-08-17 — CI gate reconciliation; stale continue-on-error note closed
 Who: Manus AI, following user clarification
 What: Re-read the complete live `pulse-ci.yml` and `pulse-instrumented-tests.yml` at consumer-v1 commit 36f56fe. Prior session notes incorrectly carried `continue-on-error: true` as an open item against the JVM unit-test step, based on an older ZIP rather than the live branch. A full search confirms there is no active `continue-on-error` key in either workflow; only comments reference its prior existence. `pulse-ci.yml` runs `:app:testPulseDebugUnitTest --stacktrace` as a hard-failing step, and `pulse-instrumented-tests.yml` runs `:app:connectedPulseDebugAndroidTest --no-daemon --stacktrace` as a hard-failing step.
