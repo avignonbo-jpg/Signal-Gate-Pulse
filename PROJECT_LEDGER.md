@@ -28,7 +28,6 @@ Open Items
 [ ] Continue adopted v3 Phase 0: mandatory execution evidence for 0.2/0.3/0.4/0.5/0.6; commit generated Room schema version 3; and complete 0.8 execution coverage. CSV/XLSX parser-limit, mutation-boundary, and CallActionReceiver edge-action implementation/test sources are now present. Phase 0.4 implementation is present but gate closure is intentionally pending evidence.
 [ ] NEW: Migrate remaining BlocklistRepository callers (BlockedNumbersViewModel, ContactsViewModel, PendingCardViewModel) directly onto SecurityRuleRepository, per that class's own deprecation note — not urgent, opportunistic
 [ ] Set up pre-push / CI-side YAML and whitespace validation filters — carried over from prior session, still not done
-[ ] SecurityUtilsTest.kt is a placeholder stub, not real test code — needs actual implementation or removal (see Contract §10.2)
 [ ] Live call-test READ_PHONE_STATE necessity: confirm on a real device whether anything still needs this permission before removing PhoneStateReceiver, its manifest entries, or correcting the stale onboarding description — see TODO(call-testing) in OnboardingViewModel.kt. Do not delete PhoneStateReceiver based on reference-search evidence alone — see the 2026-07-15 incident below.
 [ ] Fix CallScreeningEngine/SignalGateCallScreeningService so HEURISTIC_FLAG calls produce a PendingCardEntity (Contract §9.5) — this is now the top-priority code item; it blocks the held gray-zone notification/haptic work (§10.1) and should be fixed before that work resumes
 [ ] Resolve PermissionSettingsScreen unreachability (Contract §9.1) — wire into Screen.kt/NavGraph.kt or delete
@@ -45,6 +44,17 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top.)
+
+2026-08-17 — SecurityUtils placeholder open item reconciled; existing JVM and instrumented coverage confirmed
+Who: Manus AI
+What: Read the complete live SecurityUtilsTest.kt and verified it is not a placeholder: it contains JVM assertions for non-empty keystore constants and the minimum 32-byte passphrase contract. The companion SecurityUtilsInstrumentedTest.kt provides the Android Keystore-dependent round-trip, corruption, invalidation, reset, and recovery coverage. Removed the stale ledger open item; no source code changed.
+Files touched: PROJECT_LEDGER.md
+Layers touched: Security test governance only. No production behavior, dependency, schema, CI workflow, or Phase 0 scope changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, SecurityUtilsTest.kt, and the instrumented test were reviewed.
+Validation: source inspection only; local Gradle execution remains unavailable because the sandbox has no Android SDK. Phase 0 execution evidence remains pending.
+Build-sheet status: no Phase 0 gate was closed; the stale placeholder note is removed from the live ledger.
+To-do / heads-up: continue Phase 0 evidence reconciliation and package the branch artifacts only after the Phase 0 implementation pass is complete.
+Signature: Manus AI — 2026-08-17
 
 2026-08-17 — Phase 0.7 edge-action behavioral coverage added; execution evidence pending
 Who: Manus AI, following explicit user scope approval
