@@ -45,6 +45,17 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top.)
 
+2026-08-17 — Compose metrics analyzer updated to Pulse-era implementation
+Who: Manus AI, following explicit user approval
+What: Compared the eight-file ZIP contents against the live branch. The archive contained an unintended ninth file, `analyze-compose-metrics-1.sh`, which was excluded from installation. Re-read the complete live destination and replaced only `tools/metrics-analysis/analyze_metrics.py` with the approved incoming version, preserving the existing filename and all repository references. The replacement updates Multi-Port branding to Pulse, aligns critical UI components with the current security surface, and makes missing/empty Compose metrics a visible nonzero configuration failure instead of allowing misleading zero-data conclusions.
+Files touched: tools/metrics-analysis/analyze_metrics.py; PROJECT_LEDGER.md
+Layers touched: Metrics tooling and governance documentation only. No Android production code, dependency, schema, CI workflow, or unrelated ZIP file was changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, live analyzer, incoming analyzer, metrics workflow, metrics shell wrapper, and all analyzer references were reviewed before replacement.
+Validation: incoming/live SHA-256 hashes match after replacement; Python bytecode compilation passed; missing-directory execution failed nonzero as intended; a minimal valid metrics directory produced a report and JSON output; git diff --check passed. The unintended `analyze-compose-metrics-1.sh` remains outside the repository and was not installed.
+Build-sheet status: unchanged; no Phase 0 checkbox changed.
+To-do / heads-up: retain the live filename `tools/metrics-analysis/analyze_metrics.py`; future replacements must preserve this path unless all callers are deliberately migrated.
+Signature: Manus AI — 2026-08-17
+
 2026-08-17 — Obsolete Gemini review configuration removed
 Who: Manus AI, following explicit user approval
 What: Read the complete `.gemini/config.yaml` and `.gemini/styleguide.md`, then searched the live repository for all `.gemini`, `config.yaml`, `styleguide.md`, and Gemini references. `config.yaml` contained only the inactive Gemini pull-request review configuration and obsolete Architecture Contract v1/style-guide instructions; it had no legitimate non-Gemini use. Removed the entire `.gemini/` directory, including `config.yaml` and `styleguide.md`.

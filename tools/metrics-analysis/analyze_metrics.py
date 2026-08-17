@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-SignalGate Multi-Port — Jetpack Compose Compiler Metrics Analyzer
+SignalGate Pulse — Jetpack Compose Compiler Metrics Analyzer
 High-Precision Performance & Stability Analysis for Security UI
 
 This tool is critical for maintaining smooth, reliable, and secure UI behavior
-in the Transparent Shield Overlay and Operational Dashboard.
+in the Call Screening Overlay and Operational Dashboard.
 """
 
 import json
@@ -27,10 +27,13 @@ class ComposeMetricsAnalyzer:
         self.composables_file = self._resolve_file("composables.txt")
         self.metrics_file = self._resolve_file("composables-metrics.txt")
         
-        # Security-relevant UI components to watch closely
+        # Security-relevant UI components to watch closely.
+        # These match confirmed Composable names in the Pulse consumer branch.
+        # "CallOverlay" removed — no such Composable exists in the current codebase.
+        # Update this set whenever a new security-surface screen is added.
         self.critical_components = {
-            "CallOverlay", "Shield", "SignalGateOverlay", "Dashboard", 
-            "QuickActions", "RiskIndicator"
+            "Shield", "Dashboard", "DigestScreen", "PendingCard",
+            "OnboardingWizard", "PermissionSettings", "RiskIndicator"
         }
 
     def _resolve_file(self, suffix: str) -> Path:
@@ -61,7 +64,24 @@ class ComposeMetricsAnalyzer:
 
         missing = [f for f in [self.classes_file, self.composables_file] if not f.exists()]
         if missing:
-            print(f"⚠️  [WARNING] Missing files: {[f.name for f in missing]}")
+            # Distinguish between a genuinely empty directory (compiler flags not applied)
+            # and a directory that exists but is simply missing specific expected files.
+            # Both are build configuration failures, not stability findings — fail loudly
+            # rather than reporting 0% skippable as if it were a real stability result.
+            dir_contents = list(self.metrics_dir.iterdir()) if self.metrics_dir.exists() else []
+            if not dir_contents:
+                print("❌ [CONFIG ERROR] Metrics directory is empty.")
+                print("   The Compose compiler did not emit any output files.")
+                print("   This is a build configuration problem, not a stability finding.")
+                print("   Fix: pass -PcomposeCompilerReports=true -PcomposeCompilerMetrics=true")
+                print("   to Gradle, or run: scripts/analyze-compose-metrics.sh --pulse")
+                print("   Do NOT interpret 0% skippable as a real result — no data was collected.")
+            else:
+                print(f"❌ [CONFIG ERROR] Expected metrics files not found in {self.metrics_dir}")
+                print(f"   Directory contains: {[f.name for f in dir_contents]}")
+                print(f"   Missing: {[f.name for f in missing]}")
+                print("   This usually means the Compose compiler version changed its output")
+                print("   filename format. Check _resolve_file() and update the suffix patterns.")
             return False
 
         print(f"✅ Metrics directory validated: {self.metrics_dir}")
@@ -151,19 +171,38 @@ class ComposeMetricsAnalyzer:
         """Generate high-priority, security-aware recommendations."""
         recs = []
 
+        # Only fire skippability warnings when real data was collected.
+        # A zero result here always means the compiler flags were not applied —
+        # validate() already caught and reported that case.
+        if metrics["total_composables"] == 0:
+            recs.append("⚠️  No composables found — see config error above. No stability conclusions can be drawn.")
+            return recs
+
         if metrics["skippable_percentage"] < 92:
-            recs.append(f"🔴 CRITICAL: Skippable composables only {metrics['skippable_percentage']}% (Target: ≥92% for smooth overlay)")
+            recs.append(
+                f"🔴 CRITICAL: Skippable composables only {metrics['skippable_percentage']}% "
+                f"(Target: ≥92% for smooth screening performance)"
+            )
 
         if metrics["critical_not_skippable"]:
-            recs.append(f"🛡️  SECURITY UI RISK: {len(metrics['critical_not_skippable'])} critical composables are not skippable")
+            recs.append(
+                f"🛡️  SECURITY UI RISK: {len(metrics['critical_not_skippable'])} "
+                f"critical composables are not skippable — recomposition during a call decision is high-risk"
+            )
 
         if metrics["critical_unstable"]:
-            recs.append(f"⚠️  HIGH IMPACT: {len(metrics['critical_unstable'])} unstable classes in security-critical UI")
+            recs.append(
+                f"⚠️  HIGH IMPACT: {len(metrics['critical_unstable'])} unstable classes "
+                f"in security-critical UI ({', '.join(classes['critical_unstable'][:3])})"
+            )
 
         if metrics["unstable_classes"] > 8:
-            recs.append("💡 Consider using @Stable on data models and remember() for expensive objects")
+            recs.append(
+                "💡 Consider @Stable/@Immutable on data models and remember() for expensive objects"
+            )
 
-        recs.append("📌 Priority: Fix Shield Overlay and Quick Actions first")
+        if not recs:
+            recs.append("✅ No critical stability issues found. Keep monitoring on each release.")
 
         return recs
 
@@ -174,7 +213,7 @@ class ComposeMetricsAnalyzer:
 
         m = analysis["metrics"]
         print("\n" + "="*80)
-        print("🔐 SIGNALGATE MULTI-PORT — COMPOSE METRICS ANALYSIS")
+        print("🔐 SIGNALGATE PULSE — COMPOSE METRICS ANALYSIS")
         print("="*80)
 
         print(f"\n📊 COMPOSABLES STATS")
@@ -204,7 +243,9 @@ class ComposeMetricsAnalyzer:
     def analyze(self) -> Dict[str, Any]:
         """Perform full analysis of the metrics."""
         if not self.validate():
-            return {}
+            # Return a sentinel so main() can exit with a non-zero code, making
+            # a config failure visible in CI rather than silently green with 0% data.
+            return {"_config_error": True}
 
         classes = self.parse_classes()
         composables = self.parse_composables()
@@ -236,12 +277,16 @@ def main():
     analyzer = ComposeMetricsAnalyzer(metrics_dir)
     analysis = analyzer.analyze()
 
-    if analysis:
+    if analysis.get("_config_error"):
+        # validate() already printed the actionable error — just exit non-zero
+        # so the CI step fails visibly instead of reporting green with zero data.
+        sys.exit(1)
+    elif analysis:
         analyzer.print_report(analysis)
         if output_json:
             analyzer.save_json(analysis, output_json)
     else:
-        print("❌ Analysis failed")
+        print("❌ Analysis failed — no output produced")
         sys.exit(1)
 
 
