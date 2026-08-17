@@ -2,7 +2,6 @@ package com.signalgate.pulse.logic
 
 import com.signalgate.pulse.CallInfo
 import com.signalgate.pulse.CallTier
-import com.signalgate.pulse.SignalGateCallScreeningService
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -34,7 +33,7 @@ class CallScreeningEngineSecurityFailureTest {
 
         assertEquals(CallTier.SECURITY_FAILURE, result.tier)
         assertEquals(
-            SignalGateCallScreeningService.CallDecision.SECURITY_FAILURE,
+            ScreeningAction.SECURITY_FAILURE,
             result.callDecision
         )
         assertEquals("SECURITY_FAILURE", result.spamStatus)

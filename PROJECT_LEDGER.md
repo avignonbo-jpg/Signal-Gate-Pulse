@@ -46,6 +46,17 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top.)
 
+2026-08-17 — Phase 0.6 unit-test CallDecision compilation regression corrected; remote CI re-run pending
+Who: Manus AI
+What: Read the complete failing CallScreeningEngineSecurityFailureTest.kt from the live branch. The production correction had already replaced the removed SignalGateCallScreeningService.CallDecision enum with the domain-level ScreeningAction, but the regression test still imported the Android service and asserted against the removed nested type. Removed that import and changed the assertion to ScreeningAction.SECURITY_FAILURE, matching CallInfo.callDecision and the production engine.
+Files touched: android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineSecurityFailureTest.kt; PROJECT_LEDGER.md
+Layers touched: Phase 0.6 Layer 4 regression test and governance documentation only. No production behavior, dependency, schema, or Phase 0 scope changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, CallInfo.kt, ScreeningAction.kt, CallScreeningEngine.kt, and the complete failing test were reviewed before editing.
+Validation: check-architecture-drift.sh and git diff --check passed; no stale SignalGateCallScreeningService.CallDecision references remain in production or test code. Local Gradle execution remains unavailable because the sandbox has no Android SDK. The correction requires fresh remote Consumer CI and unit-test execution.
+Build-sheet status: Phase 0.6 remains implementation-complete with regression execution pending; no Phase 0 gate was closed.
+To-do / heads-up: commit and push this test correction, then verify fresh Consumer CI and unit-test results. Continue treating Phase 0 as gated.
+Signature: Manus AI — 2026-08-17
+
 2026-08-17 — CallDecision compilation regression corrected; remote CI re-run pending
 Who: Manus AI
 What: Verified against the live consumer-v1 branch that CallDecision was not moved into a new file by Phase 0.4. DataSourceRepository.CallDecision remains the repository result data class, while the former SignalGateCallScreeningService.CallDecision enum was removed and replaced by the Layer 4 domain enum ScreeningAction. CallScreeningEngine.kt still referenced the removed service-nested enum at eight sites and retained an obsolete Android service import. Replaced those references with ScreeningAction.ALLOW/BLOCK/SCREEN/SECURITY_FAILURE and removed the service dependency from the engine. No behavior or Phase 0 scope was otherwise changed.
