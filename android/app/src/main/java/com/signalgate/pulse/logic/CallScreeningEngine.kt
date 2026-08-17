@@ -3,7 +3,6 @@ package com.signalgate.pulse.logic
 import timber.log.Timber
 import com.signalgate.pulse.CallInfo
 import com.signalgate.pulse.CallTier
-import com.signalgate.pulse.SignalGateCallScreeningService
 import com.signalgate.pulse.data.security.SanitizationEngine
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.database.repositories.HeuristicsMode
@@ -107,7 +106,7 @@ class CallScreeningEngine(
             confidence            = decision.confidence,
             riskLevel             = "LOW",
             matchedSources        = listOf(decision.reason),
-            callDecision          = SignalGateCallScreeningService.CallDecision.ALLOW,
+            callDecision          = ScreeningAction.ALLOW,
             tier                  = tier
         )
     }
@@ -127,9 +126,9 @@ class CallScreeningEngine(
         }
 
         val callDecision = if (tier == CallTier.HEURISTIC_FLAG) {
-            SignalGateCallScreeningService.CallDecision.SCREEN
+            ScreeningAction.SCREEN
         } else {
-            SignalGateCallScreeningService.CallDecision.BLOCK
+            ScreeningAction.BLOCK
         }
 
         Timber.d("$callDecision — tier=$tier source=${decision.source} confidence=${decision.confidence}")
@@ -207,7 +206,7 @@ class CallScreeningEngine(
                 confidence            = evaluation.score,
                 riskLevel             = evaluation.riskLevel,
                 matchedSources        = listOf("Gray-zone heuristics (STIR: ${evaluation.stirLevel})"),
-                callDecision          = SignalGateCallScreeningService.CallDecision.SCREEN,
+                callDecision          = ScreeningAction.SCREEN,
                 tier                  = CallTier.HEURISTIC_FLAG
             )
         } else {
@@ -224,7 +223,7 @@ class CallScreeningEngine(
             confidence            = null,
             riskLevel             = null,
             matchedSources        = emptyList(),
-            callDecision          = SignalGateCallScreeningService.CallDecision.SECURITY_FAILURE,
+            callDecision          = ScreeningAction.SECURITY_FAILURE,
             tier                  = CallTier.SECURITY_FAILURE
         )
     }
@@ -239,7 +238,7 @@ class CallScreeningEngine(
             confidence            = null,
             riskLevel             = null,
             matchedSources        = emptyList(),
-            callDecision          = SignalGateCallScreeningService.CallDecision.ALLOW,
+            callDecision          = ScreeningAction.ALLOW,
             tier                  = CallTier.CLEAN_UNKNOWN
         )
     }

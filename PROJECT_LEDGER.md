@@ -46,6 +46,17 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top.)
 
+2026-08-17 — CallDecision compilation regression corrected; remote CI re-run pending
+Who: Manus AI
+What: Verified against the live consumer-v1 branch that CallDecision was not moved into a new file by Phase 0.4. DataSourceRepository.CallDecision remains the repository result data class, while the former SignalGateCallScreeningService.CallDecision enum was removed and replaced by the Layer 4 domain enum ScreeningAction. CallScreeningEngine.kt still referenced the removed service-nested enum at eight sites and retained an obsolete Android service import. Replaced those references with ScreeningAction.ALLOW/BLOCK/SCREEN/SECURITY_FAILURE and removed the service dependency from the engine. No behavior or Phase 0 scope was otherwise changed.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/CallScreeningEngine.kt; SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md
+Layers touched: Layer 4 domain decision engine and governance documentation. This correction restores the intended Layer 4 → Layer 1 boundary; no new dependency or layer reassignment.
+Contract consulted: yes — adopted Architecture-Contract.md, current build plan, ledger, CallInfo.kt, ScreeningAction.kt, CallScreeningEngine.kt, DataSourceRepository.kt, and the service boundary were reviewed before editing.
+Validation: check-architecture-drift.sh and git diff --check passed; grep confirms no SignalGateCallScreeningService.CallDecision references remain. Local Gradle compilation remains unavailable because the sandbox has no Android SDK. The prior remote CI run failed on this unresolved reference; the correction requires a fresh CI run before compile/test evidence can be considered valid.
+Build-sheet status: Phase 0.6 wording now explicitly records ScreeningAction as the engine domain type and the six-state test matrix. No Phase 0 gate was closed.
+To-do / heads-up: commit and push this correction, then verify fresh Consumer CI and instrumented-test results. Continue treating Phase 0 as gated; do not resume Phase 1 or broad UI work.
+Signature: Manus AI — 2026-08-17
+
 2026-08-16 — Phase 0.4 minimum last-known-good source activation implemented; migration/schema/behavioral evidence pending
 Who: Manus AI, following explicit user scope confirmation
 What: Re-read Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md, PROJECT_LEDGER.md, and every affected implementation/test file before editing. Added nullable SourceEntity fields lastAttemptedSync and lastAcceptedSnapshot with a Room 2→3 migration. Added SourceDao attempt/accept writes. Extended SecurityRuleRepository as the single Layer 5 decision-affecting mutation boundary: it records an attempt outside the transaction, atomically deletes/replaces one source snapshot and records acceptance, preserves the previous active set on failure, and rebuilds Bloom state only after commit with safe Room-read fallback. Removed the obsolete generic updateSourceSyncStatus writer so sync status cannot be fabricated outside the accepted-snapshot boundary. Routed ReliableSourceManager through the atomic replacement result and added SourceSyncUseCase; SourcesViewModel and DashboardViewModel no longer mark existing rows HEALTHY without a real fetch/activation outcome.
