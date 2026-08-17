@@ -45,6 +45,17 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top.)
 
+2026-08-17 — Crash Diagnostic Google/system log ownership investigated; no Pulse remediation justified
+Who: Manus AI
+What: Read the complete live Crash Diagnostic workflow and launch/capture script, inspected the Pulse manifest/build/resource references, and cross-checked AGSA, Chimera, and Android font-loading terminology. Confirmed the supplied log came from the GitHub Actions API 33 Google APIs emulator, not the user's physical device. The ChimeraModuleSetList.pb and AGSA AssistantConnector messages belong to Google/Play-services subsystems; FontLog/Bugle belongs to Google/system font/message activity; BlockstoreStorage is a system reaction to the Pulse package installation/update. No Pulse source reference to Blockstore, downloadable fonts, AGSA/Assistant, or Chimera was found. Added an auditable trace artifact with ownership classification and device-troubleshooting commands.
+Files touched: artifacts/crash-diagnostic-log-trace-2026-08-17.md; PROJECT_LEDGER.md
+Layers touched: Diagnostic evidence and governance only. No production code, dependency, schema, CI workflow, or Phase 0 status changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, crash-diagnostic.yml, verify-launch-and-capture.sh, AndroidManifest.xml, build.gradle, and relevant live source references were reviewed.
+Validation: source ownership inspection and external terminology cross-check completed. The Crash Diagnostic run succeeded and showed no app-attributable Pulse crash. The attached raw log remains supporting evidence; no remediation is justified from these lines alone.
+Build-sheet status: unchanged; Phase 0 remains gated on its existing execution/schema evidence.
+To-do / heads-up: for physical-device follow-up, capture PID-correlated logcat and inspect Google package ownership with adb dumpsys/pm commands; do not modify Pulse based on emulator/system noise.
+Signature: Manus AI — 2026-08-17
+
 2026-08-17 — SecurityUtils placeholder open item reconciled; existing JVM and instrumented coverage confirmed
 Who: Manus AI
 What: Read the complete live SecurityUtilsTest.kt and verified it is not a placeholder: it contains JVM assertions for non-empty keystore constants and the minimum 32-byte passphrase contract. The companion SecurityUtilsInstrumentedTest.kt provides the Android Keystore-dependent round-trip, corruption, invalidation, reset, and recovery coverage. Removed the stale ledger open item; no source code changed.
