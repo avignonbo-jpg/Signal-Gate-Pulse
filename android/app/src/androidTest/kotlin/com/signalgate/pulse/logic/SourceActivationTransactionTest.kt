@@ -58,9 +58,11 @@ class SourceActivationTransactionTest {
 
     @Test
     fun failedReplacement_preservesLastKnownGoodAndRecordsAttempt() = runBlocking {
-        val sourceId = database.sourceDao().insertSource(
+        val insertedId = database.sourceDao().insertSource(
             SourceEntity(name = "Test Federal", type = "FTC", pathOrUrl = "test")
-        ).toInt()
+        )
+        assertTrue("Source insert must return a valid row ID", insertedId > 0)
+        val sourceId = insertedId.toInt()
         val oldEntry = UnifiedEntryEntity(
             phoneNumber = "+15550000001",
             action = "BLOCK",

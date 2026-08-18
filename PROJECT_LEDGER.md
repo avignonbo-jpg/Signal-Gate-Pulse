@@ -344,3 +344,14 @@ Applied (corrected 2026-08-13)
 2026-07-15
 Add Build Integrity clause (Section 8)
 Applied, scope caveat still standing (corrected 2026-08-13)
+
+2026-08-17 — Phase 0.4 source-attempt recording made fail-closed; focused test diagnostic strengthened
+Who: Manus AI
+What: Re-read the complete live SourceActivationTransactionTest.kt, DatabaseDAOs.kt, SecurityRuleRepository.kt, DatabaseEntities.kt, and the current ledger before editing. Verified that SourceDao.recordSyncAttempt() already used the correct `id` parameter and `WHERE id = :id` predicate; no shadowing or parameter-name defect was found. Changed recordSyncAttempt() to return Room's affected-row count. SecurityRuleRepository now requires exactly one source row to be updated before entering atomic snapshot replacement and returns SnapshotActivationResult.Failed if the attempt cannot be recorded, preventing silent security-state divergence. Updated SourceActivationTransactionTest.kt to retain the Long returned by insertSource(), assert it is positive, and explicitly convert it to the SourceEntity Int key type.
+Files touched: android/app/src/main/java/com/signalgate/pulse/database/daos/DatabaseDAOs.kt; android/app/src/main/java/com/signalgate/pulse/logic/SecurityRuleRepository.kt; android/app/src/androidTest/kotlin/com/signalgate/pulse/logic/SourceActivationTransactionTest.kt; PROJECT_LEDGER.md
+Layers touched: Layer 2 persistence DAO contract, Layer 5 application mutation boundary, instrumented regression test, and governance documentation. No new layer, dependency, schema version, or Phase 3 policy was introduced.
+Contract consulted: yes — adopted Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md, PROJECT_LEDGER.md, and all complete affected source/test files were reviewed before editing.
+Validation: grep confirmed there is one live recordSyncAttempt call and its SQL parameter binding is exact. git diff --check passed. Local Gradle execution remains unavailable because the sandbox has no Android SDK; mandatory connectedPulseDebugAndroidTest evidence is still required. No Phase 0 checkbox was closed.
+Build-sheet status: Phase 0.4 remains gated pending mandatory migration/schema/behavioral execution evidence. The focused test now reports invalid source identity and zero-row attempt updates explicitly instead of allowing them to pass silently.
+To-do / heads-up: run the focused instrumented test in CI, inspect the affected-row result if it still fails, obtain and commit generated Room schema 3.json, and continue Phase 0 only. Do not advance to Phase 1.
+Signature: Manus AI — 2026-08-17

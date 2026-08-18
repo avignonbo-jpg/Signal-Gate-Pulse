@@ -138,8 +138,11 @@ class SecurityRuleRepository(
         entries: List<UnifiedEntryEntity>
     ): SnapshotActivationResult {
         val attemptTime = System.currentTimeMillis()
-        database.sourceDao().recordSyncAttempt(sourceId, attemptTime)
         return try {
+            val updatedRows = database.sourceDao().recordSyncAttempt(sourceId, attemptTime)
+            check(updatedRows == 1) {
+                "Sync attempt was not recorded for source $sourceId (updatedRows=$updatedRows)"
+            }
             database.withTransaction {
                 unifiedEntryDao.deleteEntriesBySourceId(sourceId)
                 dataSourceRepository.insertEntries(entries)
