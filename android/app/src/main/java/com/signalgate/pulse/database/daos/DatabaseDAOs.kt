@@ -120,6 +120,7 @@ interface UnifiedEntryDao {
         SELECT ue.* FROM unified_entries ue
         LEFT JOIN sources s ON ue.sourceId = s.id
         WHERE ue.phoneNumber = :phoneNumber
+          AND s.isEnabled = 1
         ORDER BY COALESCE(s.priority, 0) DESC, ue.id ASC
     """)
     suspend fun findEntriesByPhoneNumberWithPriority(phoneNumber: String): List<UnifiedEntryEntity>
@@ -134,7 +135,9 @@ interface UnifiedEntryDao {
     @Query("""
         SELECT ue.* FROM unified_entries ue
         LEFT JOIN sources s ON ue.sourceId = s.id
-        WHERE ue.isPattern = 1 AND ue.action = 'BLOCK'
+        WHERE ue.isPattern = 1
+          AND ue.action = 'BLOCK'
+          AND s.isEnabled = 1
         ORDER BY COALESCE(s.priority, 0) DESC
     """)
     suspend fun getAllBlockPatternsWithPriority(): List<UnifiedEntryEntity>
