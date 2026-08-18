@@ -38,9 +38,11 @@ enum class CallTier {
  * CallInfo is the carrier object flowing from CallScreeningEngine through
  * CallScreeningService. Parcelable so it can be passed via Intent extras if needed.
  *
- * The [tier] field drives all post-call behaviour in CallScreeningService — which
- * combination of CallLogEntry, PendingCardEntity, and notification fires depends
- * entirely on the tier, not on string comparisons of spamStatus.
+ * [screeningDecision] is the immutable consequence contract consumed by the
+ * edge. It carries the call action, audit requirement, review-card requirement,
+ * notification policy, haptic policy, and explicit security-failure state. The
+ * edge must execute that contract rather than reconstructing consequences from
+ * [tier] or [spamStatus].
  *
  * [callDecision] is [ScreeningAction] — a domain-only type with no dependency
  * on `android.telecom`. §0.6 requires the Android `CallResponse` policy to be
@@ -58,5 +60,7 @@ data class CallInfo(
     val riskLevel: String?,
     val matchedSources: List<String>,
     val callDecision: ScreeningAction,
-    val tier: CallTier
+    val tier: CallTier,
+    val screeningDecision: com.signalgate.pulse.logic.ScreeningDecision =
+        com.signalgate.pulse.logic.ScreeningDecision.forTier(tier, callDecision)
 ) : Parcelable

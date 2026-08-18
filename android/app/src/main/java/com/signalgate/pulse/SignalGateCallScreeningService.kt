@@ -49,10 +49,15 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                 // are handled the same way below: fail safe, never as a disguised
                 // ALLOW/CLEAN_UNKNOWN.
                 val callInfo = screeningEngine.screenCall(phoneNumber, details)
-                respondToCall(details, toCallResponse(callInfo.callDecision))
-                writeAuditRecords(callInfo)
-                if (callInfo.tier == CallTier.HEURISTIC_BLOCK) {
-                    fireBlockedCallNotification(callInfo)
+                val decision = callInfo.screeningDecision
+                respondToCall(details, toCallResponse(decision.callAction))
+                writeAuditRecords(callInfo, decision)
+                when (decision.notificationPolicy) {
+                    com.signalgate.pulse.logic.NotificationPolicy.BLOCK_REVIEW ->
+                        fireBlockedCallNotification(callInfo)
+                    com.signalgate.pulse.logic.NotificationPolicy.REVIEW_AVAILABLE ->
+                        Timber.i("Review notification policy recorded for ${callInfo.normalizedPhoneNumber}; dispatch remains a later UX phase")
+                    com.signalgate.pulse.logic.NotificationPolicy.NONE -> Unit
                 }
             } catch (e: Exception) {
                 Timber.e(e, "SECURITY_FAILURE — unhandled error screening $phoneNumber")
@@ -120,9 +125,13 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
         }
     }
 
-    private fun writeAuditRecords(callInfo: CallInfo) {
+    private fun writeAuditRecords(
+        callInfo: CallInfo,
+        decision: com.signalgate.pulse.logic.ScreeningDecision
+    ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                if (!decision.auditRequired) return@launch
                 val sourcesJson = callInfo.matchedSources
                     .takeIf { it.isNotEmpty() }
                     ?.joinToString(prefix = "[\"", separator = "\",\"", postfix = "\"]")
@@ -142,14 +151,14 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                     )
                 )
 
-                if (callInfo.tier == CallTier.HEURISTIC_BLOCK) {
+                if (decision.reviewCardRequired) {
                     pendingCardRepository.insertCard(
                         PendingCardEntity(
                             phoneNumber = callInfo.normalizedPhoneNumber,
                             timestamp = System.currentTimeMillis(),
-                            decision = callInfo.callDecision.name,
+                            decision = decision.callAction.name,
                             confidence = callInfo.confidence ?: 0,
-                            decisionSource = "Tier 3 HEURISTIC_BLOCK"
+                            decisionSource = "${decision.tier.name} review"
                         )
                     )
                 }
