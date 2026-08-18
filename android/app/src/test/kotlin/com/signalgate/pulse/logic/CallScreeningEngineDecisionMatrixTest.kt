@@ -105,7 +105,7 @@ class CallScreeningEngineDecisionMatrixTest {
         assertEquals("+15551234567", number.firstValue)
     }
 
-    private fun repositoryReturning(
+    private suspend fun repositoryReturning(
         decision: DataSourceRepository.CallDecision
     ): DataSourceRepository {
         val repository = mock<DataSourceRepository>()

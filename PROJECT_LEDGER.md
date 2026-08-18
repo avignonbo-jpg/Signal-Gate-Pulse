@@ -388,3 +388,10 @@ Validation: `git diff --check` passed; `check-architecture-drift.sh` passed. Loc
 Coverage status: the six domain outcomes are now represented across the existing Phase 0.6 failure test and the new deterministic engine matrix tests. Repository combinations requiring Room are represented in the new instrumented suite; the diagnosed Phase 1.3 HEURISTIC_FLAG persisted-review consequence remains intentionally separate and open.
 To-do / heads-up: commit and push this focused Phase 1.1 change, then verify the mandatory JVM and connected instrumented workflows. Do not advance to Phase 1.2 or Phase 2 until the Phase 1.1 matrix is green and its evidence is recorded.
 Signature: Manus AI — 2026-08-18
+
+2026-08-18 — Phase 1.1 compiler correction
+Who: Manus AI
+What: Mandatory JVM CI run 32104513436 reached `compilePulseDebugUnitTestKotlin` and identified one test-fixture defect: `repositoryReturning()` invoked the suspend `DataSourceRepository.getCallDecision()` stubbing API from a non-suspend helper. Changed only that helper to `suspend`; no production logic or coverage scope changed.
+Files touched: android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineDecisionMatrixTest.kt; PROJECT_LEDGER.md
+Validation: failure reproduced from CI log at line 112, corrected at source. `git diff --check` remains required before publication. CI rerun is required; Phase 1.1 remains unverified until both mandatory workflows are green.
+Signature: Manus AI — 2026-08-18
