@@ -423,3 +423,11 @@ Files touched: android/app/src/main/java/com/signalgate/pulse/logic/ScreeningDec
 Validation: `git diff --check` passed; `check-architecture-drift.sh` passed. Local Gradle execution was attempted and blocked only by the sandbox lacking an Android SDK (`SDK location not found`). Mandatory JVM and instrumented CI validation is required before Phase 1.2 can be marked complete.
 To-do / heads-up: inspect the CI compile/test result and add edge-execution tests if CI or review identifies an uncovered consequence dispatch path. Phase 1.3 remains gated behind this contract and will separately verify HEURISTIC_FLAG persistence through the digest.
 Signature: Manus AI — 2026-08-18
+
+2026-08-18 — Phase 1.2 contract CI verification
+Who: Manus AI
+What: Mandatory CI completed successfully for the explicit consequence contract on commit 244e1eb. JVM workflow 32191065136 passed. `ScreeningDecisionConsequencesTest` executed 7 tests with failures=0/errors=0; `CallScreeningEngineDecisionMatrixTest` executed 7 tests with failures=0/errors=0; `CallScreeningEngineSecurityFailureTest` executed 1 test with failures=0/errors=0. Instrumented workflow 32191065135 passed with `OK (33 tests)`.
+Evidence: JVM https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32191065136; instrumented https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32191065135. Downloaded JUnit XML confirms zero failures/errors for the named JVM suites.
+Status: The immutable policy contract and compilation are CI-verified. Phase 1.2 is not yet fully closed because dedicated edge-execution tests for service response/audit/review-card/notification policy have not been added; this is intentionally retained as an open verification item rather than inferred from contract tests.
+To-do / heads-up: add focused edge-executor tests or a minimal testable application seam, then rerun both mandatory workflows before marking Phase 1.2 complete. Phase 1.3 remains gated.
+Signature: Manus AI — 2026-08-18
