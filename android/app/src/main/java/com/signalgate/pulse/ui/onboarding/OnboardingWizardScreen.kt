@@ -227,7 +227,8 @@ fun EulaStep(navController: NavHostController) {
  * and sets expectations: one-time setup, then the app gets out of the way.
  *
  * The Trinity mention here is deliberately one line, not a feature tour of
- * Unlike the Pro or Enterprise editions — this is Pulse's first-run moment,
+ * SignalGate Pulse is designed as a set-and-forget experience — this is the
+ * Pulse first-run moment,
  * not a cross-sell. Fuller Trinity detail belongs in Settings → About.
  */
 @Composable

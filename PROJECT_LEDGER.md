@@ -45,6 +45,17 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top.)
 
+2026-08-18 — Pulse-only terminology correction after ZIP merge review
+Who: Manus AI, following explicit user clarification
+What: Corrected the recent ZIP-merge comments that used `Pro/Enterprise` or `Enterprise/Multi-Port` terminology. The current product positioning is SignalGate Pulse as the accessible, set-and-forget member of the SignalGate trilogy, not a lower-grade edition and not an Enterprise rename. Updated only the affected naming/comment strings in `SourcesViewModel.kt`, `SourcesScreen.kt`, `OnboardingWizardScreen.kt`, and `ic_signal_gate_logo.xml`; the existing `PULSE` and `SignalGate Pulse` strings in the drawer/theme were already correct.
+Files touched: android/app/src/main/java/com/signalgate/pulse/ui/screens/SourcesViewModel.kt; android/app/src/main/java/com/signalgate/pulse/ui/screens/SourcesScreen.kt; android/app/src/main/java/com/signalgate/pulse/ui/onboarding/OnboardingWizardScreen.kt; android/app/src/main/res/drawable/ic_signal_gate_logo.xml; PROJECT_LEDGER.md
+Layers touched: UI comments/resource documentation and governance documentation only. No Phase 0 implementation, dependency wiring, navigation behavior, vector geometry, or runtime string behavior changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, live files, and the prior focused diff were reviewed before correction.
+Validation: no added `Pro/Enterprise`, `Enterprise/Multi-Port`, `Multi-Port`, or `Multi-Point` terminology remains in the changed lines; `SourceSyncUseCase` imports, constructor dependency, and sync calls remain present; onboarding outer navigation guards remain present; `git diff --check` and `check-architecture-drift.sh` passed.
+Build-sheet status: unchanged; no Phase 0 checkbox changed.
+To-do / heads-up: information-gathering questions are non-mutating by default. Product naming in comments and strings must be reconciled against current Pulse positioning rather than inferred from a pre-0.4 ZIP.
+Signature: Manus AI — 2026-08-18
+
 2026-08-18 — Pre-0.4 ZIP naming changes merged without regressing live Phase 0 code
 Who: Manus AI, following explicit user instruction
 What: Treated the supplied ZIP as a pre-0.4 snapshot and diffed each remaining file against the live branch before editing. Preserved the live two-dependency `SourcesViewModel` and changed only its `Multi-Port` → `Pro/Enterprise` comment wording; the ZIP's one-dependency version was not installed. Applied only verified comment/string changes to `SourcesScreen.kt`, `GlassmorphicDrawerContent.kt`, `OnboardingWizardScreen.kt`, `SignalGateTheme.kt`, and `ic_signal_gate_logo.xml`.
