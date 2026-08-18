@@ -257,15 +257,27 @@ class DataSyncEngine(
                     try {
                         SAXParserFactory.newInstance().newSAXParser()
                             .parse(InputSource(zip), handler)
-                    } catch (e: SharedStringsLimitExceededException) {
-                        Timber.tag(TAG).w(
-                            "Shared strings limit $maxSharedStrings reached — " +
-                            "${sharedStrings.size} entries collected"
-                        )
-                        // A shared-string limit is a hard security failure. Do not
-                        // return a partial table whose unresolved references could
-                        // silently remove security rules from the candidate dataset.
-                        throw e
+                    } catch (e: Exception) {
+                        // SAX wraps exceptions thrown from handler callbacks in SAXException
+                        // before they reach this catch site. Unwrap to recover the typed
+                        // limit exception — failing to do so lets a partial shared-string
+                        // table silently pass as a valid parse result, a hard security violation.
+                        val cause = unwrapSaxException(e)
+                        when (cause) {
+                            is SharedStringsLimitExceededException -> {
+                                Timber.tag(TAG).w(
+                                    "Shared strings limit $maxSharedStrings reached — " +
+                                    "${sharedStrings.size} entries collected"
+                                )
+                                // A shared-string limit is a hard security failure. Do not
+                                // return a partial table whose unresolved references could
+                                // silently remove security rules from the candidate dataset.
+                                throw cause
+                            }
+                            else -> throw XlsxParseException(
+                                "Unexpected error parsing shared strings", e
+                            )
+                        }
                     }
                     break
                 }
@@ -306,13 +318,25 @@ class DataSyncEngine(
                     try {
                         SAXParserFactory.newInstance().newSAXParser()
                             .parse(InputSource(zip), handler)
-                    } catch (e: RowLimitExceededException) {
-                        Timber.tag(TAG).w(
-                            "Row limit $maxRows reached — ${entries.size} entries collected"
-                        )
-                        // A row limit is a hard security failure. Do not return
-                        // a truncated candidate dataset as if parsing succeeded.
-                        throw e
+                    } catch (e: Exception) {
+                        // SAX wraps exceptions thrown from handler callbacks in SAXException
+                        // before they reach this catch site. Unwrap to recover the typed
+                        // limit exception — failing to do so lets a truncated candidate
+                        // dataset pass as a valid parse result, a hard security violation.
+                        val cause = unwrapSaxException(e)
+                        when (cause) {
+                            is RowLimitExceededException -> {
+                                Timber.tag(TAG).w(
+                                    "Row limit $maxRows reached — ${entries.size} entries collected"
+                                )
+                                // A row limit is a hard security failure. Do not return
+                                // a truncated candidate dataset as if parsing succeeded.
+                                throw cause
+                            }
+                            else -> throw XlsxParseException(
+                                "Unexpected error parsing sheet", e
+                            )
+                        }
                     }
                     break
                 }
@@ -327,6 +351,23 @@ class DataSyncEngine(
             )
         }
         return entries
+    }
+
+
+    /**
+     * SAX parsers wrap exceptions thrown from handler callbacks in SAXException
+     * before they propagate to callers. This strips up to two wrapping layers to
+     * recover the original typed exception (e.g. RowLimitExceededException,
+     * SharedStringsLimitExceededException) so callers can type-match correctly.
+     *
+     * If the root cause is not a SAXException wrapper, the original exception is
+     * returned unchanged so non-limit errors still surface with full context.
+     */
+    private fun unwrapSaxException(e: Exception): Exception {
+        // SAX may double-wrap: SAXException -> SAXException -> real cause
+        var cause: Throwable = e
+        repeat(2) { cause = (cause as? org.xml.sax.SAXException)?.exception ?: cause }
+        return cause as? Exception ?: e
     }
 
     // ── SAX handlers ─────────────────────────────────────────────────────────
