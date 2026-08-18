@@ -98,7 +98,7 @@ class CallScreeningEngineDecisionMatrixTest {
             DataSourceRepository.CallDecision("ALLOW", "manual allow", 100, "manual_allow")
         )
 
-        CallScreeningEngine(repository).screenCall("(555) 123-4567", null)
+        CallScreeningEngine(repository).screenCall("+1 (555) 123-4567", null)
 
         val number = argumentCaptor<String>()
         verify(repository).getCallDecision(number.capture())

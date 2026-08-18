@@ -395,3 +395,11 @@ What: Mandatory JVM CI run 32104513436 reached `compilePulseDebugUnitTestKotlin`
 Files touched: android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineDecisionMatrixTest.kt; PROJECT_LEDGER.md
 Validation: failure reproduced from CI log at line 112, corrected at source. `git diff --check` remains required before publication. CI rerun is required; Phase 1.1 remains unverified until both mandatory workflows are green.
 Signature: Manus AI — 2026-08-18
+
+2026-08-18 — Phase 1.1 normalization-vector correction
+Who: Manus AI
+What: Corrected one failing JVM matrix assertion from CI run 32104877363. The live CallScreeningEngine strips formatting but does not invent a country code; the test had supplied a national-format number while asserting an E.164 `+1` result. The vector now supplies `+1 (555) 123-4567` and asserts the engine’s actual canonical lookup value `+15551234567`. No production behavior was changed.
+Evidence: CI run 32104877363 compiled successfully and executed all seven new engine tests; six passed and only the incorrect normalization expectation failed. The failure was `expected +15551234567 but was 5551234567`, which identified a test assumption rather than a runtime defect.
+Files touched: android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineDecisionMatrixTest.kt; PROJECT_LEDGER.md
+To-do / heads-up: rerun mandatory JVM and instrumented CI. Phase 1.1 remains open until both workflows are green.
+Signature: Manus AI — 2026-08-18
