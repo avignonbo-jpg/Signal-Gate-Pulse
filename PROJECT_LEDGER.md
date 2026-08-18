@@ -403,3 +403,12 @@ Evidence: CI run 32104877363 compiled successfully and executed all seven new en
 Files touched: android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineDecisionMatrixTest.kt; PROJECT_LEDGER.md
 To-do / heads-up: rerun mandatory JVM and instrumented CI. Phase 1.1 remains open until both workflows are green.
 Signature: Manus AI — 2026-08-18
+
+2026-08-18 — Phase 1.1 decision matrix verified complete
+Who: Manus AI
+What: Mandatory CI verification completed for the Phase 1.1 decision matrix after the focused normalization-vector correction. JVM workflow 32105252683 passed on commit be22b9a; the new CallScreeningEngineDecisionMatrixTest ran 7 tests with failures=0/errors=0, and the existing security-failure regression ran with failures=0/errors=0. Instrumented workflow 32105252778 passed on the same commit; the emulator reported OK (33 tests), including DecisionMatrixRepositoryTest. The source-disablement fix in UnifiedEntryDao now excludes disabled sources from exact and pattern decision queries. The first CI attempt exposed and corrected a test-fixture suspension issue; the second exposed and corrected an invalid assumption that the engine invents a country code for national-format input. No production normalization behavior was changed.
+Files touched since prior Phase 1.1 entry: android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineDecisionMatrixTest.kt; PROJECT_LEDGER.md
+Evidence: JVM run https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32105252683 passed; instrumented run https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32105252778 passed. Downloaded artifacts verified the named result counts above.
+Status: Phase 1.1 is complete and CI-verified. Phase 1 overall remains open; 1.2 decision consequences and 1.3 HEURISTIC_FLAG persisted-review behavior are not closed by this entry.
+To-do / heads-up: begin Phase 1.2 only after preserving the six-state matrix and its precedence assumptions. Keep Phase 1.3 separate: the known service behavior currently persists review cards for HEURISTIC_BLOCK but not HEURISTIC_FLAG, which is an explicit next-phase issue rather than a reason to distort the matrix.
+Signature: Manus AI — 2026-08-18
