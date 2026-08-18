@@ -366,3 +366,14 @@ Validation: CI schema-generation workflow 32099857069 passed. Generated 3.json d
 Build-sheet status: the generated-schema portion of Phase 0.4 is now satisfied in source control; no Phase 0 exit checkbox was marked complete until the full required migration and behavioral evidence is green.
 To-do / heads-up: commit and push 3.json, then verify the connected instrumented test and remaining Phase 0 evidence. Continue Phase 0 only; do not advance to Phase 1.
 Signature: Manus AI — 2026-08-17
+
+2026-08-18 — Phase 0 Security Control-Plane Integrity Gate formally closed
+Who: Manus AI, following explicit user authorization to close Phase 0 and advance
+What: Reconciled SECURITY-DEVOPS-BUILD-PLAN.md against the live consumer-v1 branch and mandatory CI evidence. The complete Phase 0 matrix passed on commit 956fc88: JVM workflow run 32099978930 passed the parser-limit, security-failure, mutation-boundary, and edge-action regression classes; instrumented workflow run 32099978903 passed Bloom-authority, source-lifecycle, Room migration, source-deletion cascade, and atomic source-activation coverage. The CI-generated Room schema version 3 artifact is committed at android/app/schemas/com.signalgate.pulse.database.SignalGateDatabase/3.json. The architecture-drift gate and git diff --check passed. Updated all Phase 0 item statuses and all eight Phase 0 exit criteria to complete; reconciled stale continue-on-error wording in the build sheet. No Phase 1 implementation was mixed into the closure commit.
+Files touched: SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md
+Layers touched: Security governance documentation and evidence reconciliation only. No runtime code, dependency, schema, CI workflow, or policy implementation changed in this closure step.
+Contract consulted: yes — adopted Architecture-Contract.md, the complete build plan, current ledger, live CI workflows, generated schema artifact, and downloaded JVM/instrumented result reports were reviewed.
+Evidence: JVM run 32099978930 succeeded at https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32099978930; instrumented run 32099978903 succeeded at https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32099978903; instrumented test log reported OK (27 tests); relevant JUnit XML suites reported failures=0 and errors=0; schema 3.json declares version 3 and both nullable source-activation timestamp columns.
+Build-sheet status: Phase 0.1 through 0.8 and all eight Phase 0 exit criteria are checked complete. Phase 1 is now the active phase; its five exit criteria remain open and no Phase 1 work is claimed by this entry.
+To-do / heads-up: begin Phase 1 only from its stated Decision Engine Integrity scope. First priority is the deterministic six-state decision matrix and the diagnosed HEURISTIC_FLAG persisted-review gap. Do not resume Phase 2 or broad UI work until Phase 1 exits.
+Signature: Manus AI — 2026-08-18
