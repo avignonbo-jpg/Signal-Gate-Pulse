@@ -70,7 +70,7 @@ fun GlassmorphicDrawerContent(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text("SIGNALGATE", color = TextPrimary, fontSize = 18.sp)
-                    Text("MULTI-PORT", color = TextSecondary, fontSize = 12.sp)
+                    Text("PULSE", color = TextSecondary, fontSize = 12.sp)
                 }
             }
 

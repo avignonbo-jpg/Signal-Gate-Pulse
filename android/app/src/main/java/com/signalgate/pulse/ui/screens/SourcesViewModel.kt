@@ -19,7 +19,7 @@ import timber.log.Timber
  * Exposes real SourceEntity data from DataSourceRepository: health status,
  * enable/disable, manual "sync now", and removal.
  *
- * Removed: the "Add Source" custom CSV/URL/XLSX flow. That was a Multi-Port
+ * Removed: the "Add Source" custom CSV/URL/XLSX flow. That was a Pro/Enterprise
  * (prosumer) capability that never belonged in the Pulse consumer flavor —
  * ReliableSourceManager doesn't read the sources table at all, it works off
  * its own hardcoded federal source list, so anything added through this flow

@@ -227,7 +227,7 @@ fun EulaStep(navController: NavHostController) {
  * and sets expectations: one-time setup, then the app gets out of the way.
  *
  * The Trinity mention here is deliberately one line, not a feature tour of
- * Multi-Port or the Enterprise edition — this is Pulse's first-run moment,
+ * Unlike the Pro or Enterprise editions — this is Pulse's first-run moment,
  * not a cross-sell. Fuller Trinity detail belongs in Settings → About.
  */
 @Composable

@@ -13,7 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Custom Colors for SignalGate Multi-Port
+ * Custom Colors for SignalGate Pulse
  * Based on the glassmorphic dark theme prototype.
  */
 val BackgroundDark = Color(0xFF0A0E14)

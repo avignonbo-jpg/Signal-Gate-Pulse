@@ -45,6 +45,17 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top.)
 
+2026-08-18 — Pre-0.4 ZIP naming changes merged without regressing live Phase 0 code
+Who: Manus AI, following explicit user instruction
+What: Treated the supplied ZIP as a pre-0.4 snapshot and diffed each remaining file against the live branch before editing. Preserved the live two-dependency `SourcesViewModel` and changed only its `Multi-Port` → `Pro/Enterprise` comment wording; the ZIP's one-dependency version was not installed. Applied only verified comment/string changes to `SourcesScreen.kt`, `GlassmorphicDrawerContent.kt`, `OnboardingWizardScreen.kt`, `SignalGateTheme.kt`, and `ic_signal_gate_logo.xml`.
+Files touched: android/app/src/main/java/com/signalgate/pulse/ui/screens/SourcesViewModel.kt; android/app/src/main/java/com/signalgate/pulse/ui/screens/SourcesScreen.kt; android/app/src/main/java/com/signalgate/pulse/ui/components/GlassmorphicDrawerContent.kt; android/app/src/main/java/com/signalgate/pulse/ui/onboarding/OnboardingWizardScreen.kt; android/app/src/main/java/com/signalgate/pulse/ui/theme/SignalGateTheme.kt; android/app/src/main/res/drawable/ic_signal_gate_logo.xml; PROJECT_LEDGER.md
+Layers touched: UI naming/comments and governance documentation only. The Phase 0 `SourceSyncUseCase` dependency, real atomic sync calls, onboarding outer-navigation routes, Digest drawer path, theme values, and vector geometry were preserved.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, AppModule.kt, NavGraph.kt, Screen.kt, all live destinations, all incoming files, and per-file diffs were reviewed before editing.
+Validation: focused diff contains only the six intended comment/string changes; `SourceSyncUseCase` imports, constructor dependency, and sync calls remain present; onboarding still navigates through `dashboard`/`onboarding`; `Screen.Digest` remains in the drawer; the excluded `analyze-compose-metrics-1.sh` was not installed; `git diff --check` and `check-architecture-drift.sh` passed.
+Build-sheet status: unchanged; no Phase 0 checkbox changed.
+To-do / heads-up: the ZIP was confirmed to be pre-0.4. Any future file drops from it require per-file diff/merge review; do not blindly replace live files that contain newer security or dependency-boundary work.
+Signature: Manus AI — 2026-08-18
+
 2026-08-17 — Compose metrics analyzer updated to Pulse-era implementation
 Who: Manus AI, following explicit user approval
 What: Compared the eight-file ZIP contents against the live branch. The archive contained an unintended ninth file, `analyze-compose-metrics-1.sh`, which was excluded from installation. Re-read the complete live destination and replaced only `tools/metrics-analysis/analyze_metrics.py` with the approved incoming version, preserving the existing filename and all repository references. The replacement updates Multi-Port branding to Pulse, aligns critical UI components with the current security surface, and makes missing/empty Compose metrics a visible nonzero configuration failure instead of allowing misleading zero-data conclusions.

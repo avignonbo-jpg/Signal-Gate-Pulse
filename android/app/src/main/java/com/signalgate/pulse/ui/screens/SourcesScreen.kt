@@ -23,7 +23,7 @@ import org.koin.androidx.compose.koinViewModel
  * sync-now, enable/disable, and removal.
  *
  * The "Add Source" custom CSV/URL/XLSX flow has been removed — it was a
- * Multi-Port (prosumer) capability, not part of the Pulse consumer design
+ * Pro/Enterprise capability, not part of the Pulse consumer design
  * (FCC + community blocklist + manual only). See SourcesViewModel for the
  * full rationale.
  */
