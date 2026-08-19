@@ -44,6 +44,12 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Contract stale-reference reconciliation: CallOverlayViewModel and SignalGateMode
+Who: Manus AI, following a live `consumer-v1` source-of-truth scan at commit `186a1f4`.
+Finding: Neither `CallOverlayViewModel` nor `SignalGateMode` exists in the current Kotlin source, Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md, or repository-wide tracked content. The historical removal is evidenced by commits `613b1f0` (deleted `CallOverlayViewModel.kt`), `119ec8f` (deleted `SignalGateMode.kt`), and `bd8a18d` (removed the obsolete `CallOverlayViewModel` Koin binding).
+Disposition: Resolved. No code change was needed. The absence was not visible as a distinct prior ledger entry, so this reconciliation is recorded explicitly here.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 3.3 authenticity formally closed; live signed manifest verified
 Who: Manus AI, following the owner-triggered mirror workflow run.
 What: Mirror workflow run `32302233508` succeeded after the corrected workflow was placed on `dnc-mirror-pulse`. The live branch now contains `dnc-numbers.json.manifest.json` alongside `dnc-numbers.json`.
