@@ -13,6 +13,7 @@ import com.signalgate.pulse.database.repositories.CallLogRepository
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.database.repositories.PendingCardRepository
 import com.signalgate.pulse.database.repositories.SettingRepository
+import com.signalgate.pulse.logic.ScreeningAction
 import com.signalgate.pulse.logic.SecurityRuleRepository
 import com.signalgate.pulse.ui.digest.DigestScreen
 import com.signalgate.pulse.ui.digest.PendingCardViewModel
