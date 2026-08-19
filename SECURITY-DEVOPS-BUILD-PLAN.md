@@ -95,10 +95,8 @@ Phase 1 — Decision Engine Integrity
 1.1 Five-tier decision matrix
 Test independently: ALLOWLISTED, FEDERAL_BLOCK, HEURISTIC_BLOCK, HEURISTIC_FLAG, CLEAN_UNKNOWN, and SECURITY_FAILURE.
 Test combinations: manual allow vs. external block; manual block vs. external allow; exact vs. pattern; source priority; normalization; malformed/empty input; advisory signals; default path; source disablement; source replacement.
-
-1.2 Make decision consequences explicit
-Prefer an immutable ScreeningDecision-equivalent result that carries the action and required consequences. The edge layer must execute the decision instead of reverse-engineering consequences from a single tier value — this is exactly the class of bug that caused the still-open gray-zone gap in 1.3 below. At minimum the decision contract must distinguish: call action, audit requirement, review-card requirement, notification policy, haptic policy, and security failure.
-
+1.2 Make decision consequences explicit — ✅ COMPLETE, CI-verified 2026-08-19
+Prefer an immutable ScreeningDecision-equivalent result that carries the action and required consequences. The edge layer must execute the decision instead of reverse-engineering consequences from a single tier value — this is exactly the class of bug that caused the still-open gray-zone gap in 1.3 below. At minimum the decision contract must distinguish: call action, audit requirement, review-card requirement, notification policy, haptic policy, and security failure. `ScreeningDecision` is immutable; `SignalGateCallScreeningService` executes its fields, and `ScreeningServiceEdgeExecutionTest` passed 22/22 in mandatory JVM CI run 32202859358. The same commit passed mandatory instrumented CI run 32202859350.
 1.3 Fix the gray-zone contract
 HEURISTIC_FLAG must produce the persisted review state promised by the domain contract. Verify the complete path: decision → audit record → PendingCardEntity → repository → DigestViewModel → DigestScreen. This is the specific, already-diagnosed bug: CallScreeningEngine's own doc comment promises gray-zone review for every HEURISTIC_FLAG call, but the actual write path only creates a PendingCardEntity for HEURISTIC_BLOCK. It's why the held notification/haptic feature has been sitting unmerged.
 

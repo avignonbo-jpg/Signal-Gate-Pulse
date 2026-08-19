@@ -447,3 +447,10 @@ Evidence: Failed JVM run 32202481391; downloaded `test-results` artifact identif
 Status: Correction is ready for mandatory CI rerun.
 To-do / heads-up: inspect the next targeted JVM result for actual test execution and artifact availability. Do not close the Phase 1.2 edge-execution item until the targeted class passes.
 Signature: Manus AI — 2026-08-19
+
+2026-08-19 — Phase 1.2 formally closed
+Who: Manus AI
+What: Phase 1.2, Make decision consequences explicit, is formally complete. The immutable `ScreeningDecision` contract carries call action, audit requirement, review-card requirement, notification policy, haptic policy, and security-failure state. The edge service executes those fields rather than reverse-engineering consequences from `CallTier`.
+Evidence: Same-commit mandatory JVM workflow 32202859358 passed. `ScreeningDecisionConsequencesTest` and `ScreeningServiceEdgeExecutionTest` passed; the targeted edge-execution class executed 22 tests with failures=0/errors=0. Same-commit mandatory instrumented workflow 32202859350 passed. Architecture drift and whitespace validation passed before publication.
+Status: Build sheet 1.2 marked complete. Phase 1.3 remains open and is now the active gate: prove HEURISTIC_FLAG persists through audit, PendingCardEntity, repository, PendingCardViewModel, and DigestScreen. Phase 1 is not closed and Phase 2 remains gated.
+Signature: Manus AI — 2026-08-19
