@@ -30,8 +30,8 @@ import java.util.*
  *   - Notification content tap → signalgate://digest deep link → NavGraph
  *   - "View Recent Activity" on the consumer dashboard
  *
- * Each card represents one Tier 3 HEURISTIC_BLOCK decision that the user
- * has not yet reviewed. Two actions per card:
+ * Each card represents one review-required HEURISTIC_BLOCK or HEURISTIC_FLAG
+ * decision that the user has not yet reviewed. Two actions per card:
  *   "Not Spam" — overturn: allowlists the number, removes from queue.
  *   "Dismiss"  — acknowledges: removes from queue without allowlisting.
  *

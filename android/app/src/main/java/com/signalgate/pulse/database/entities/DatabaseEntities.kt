@@ -156,8 +156,9 @@ data class SyncHistoryEntry(
  * - CallLogEntry = permanent audit record, never auto-deleted
  * - PendingCardEntity = ephemeral UI queue, deleted on card dismissal
  *
- * Created on every BLOCK decision alongside the CallLogEntry.
- * Dismissed = true when user swipes the card. Row deleted on swipe or
+ * Created when an explicit decision requires review alongside the CallLogEntry
+ * (currently HEURISTIC_BLOCK and HEURISTIC_FLAG).
+ * Dismissed = true when the user swipes the card. Row deleted on swipe or
  * 'Dismiss All'. Never surfaces in history — that is CallLogEntry's job.
  */
 @Entity(
@@ -172,7 +173,7 @@ data class PendingCardEntity(
     val id: Int = 0,
     val phoneNumber: String,
     val timestamp: Long = System.currentTimeMillis(),
-    val decision: String,           // "BLOCK"
+    val decision: String,           // "BLOCK" or "SCREEN" when review is required
     val confidence: Int?,
     val decisionSource: String?,    // Which source triggered the block
     val dismissed: Boolean = false

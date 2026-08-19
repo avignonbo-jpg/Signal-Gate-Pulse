@@ -131,40 +131,66 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (!decision.auditRequired) return@launch
-                val sourcesJson = callInfo.matchedSources
-                    .takeIf { it.isNotEmpty() }
-                    ?.joinToString(prefix = "[\"", separator = "\",\"", postfix = "\"]")
-
-                callLogRepository.insertCallLog(
-                    CallLogEntry(
-                        phoneNumber = callInfo.originalPhoneNumber,
-                        normalizedPhoneNumber = callInfo.normalizedPhoneNumber,
-                        timestamp = System.currentTimeMillis(),
-                        decision = callInfo.callDecision.name,
-                        spamStatus = callInfo.spamStatus,
-                        spamCategory = callInfo.spamCategory,
-                        confidence = callInfo.confidence,
-                        riskLevel = callInfo.riskLevel,
-                        matchedSources = sourcesJson,
-                        notes = callInfo.tier.name
-                    )
+                executeDecisionConsequences(
+                    callInfo = callInfo,
+                    decision = decision,
+                    callLogRepository = callLogRepository,
+                    pendingCardRepository = pendingCardRepository
                 )
-
-                if (decision.reviewCardRequired) {
-                    pendingCardRepository.insertCard(
-                        PendingCardEntity(
-                            phoneNumber = callInfo.normalizedPhoneNumber,
-                            timestamp = System.currentTimeMillis(),
-                            decision = decision.callAction.name,
-                            confidence = callInfo.confidence ?: 0,
-                            decisionSource = "${decision.tier.name} review"
-                        )
-                    )
-                }
             } catch (e: Exception) {
                 Timber.e(e, "Failed to write audit records")
             }
+        }
+    }
+
+    /**
+     * Persists the explicit decision consequences at the application boundary.
+     *
+     * This seam deliberately contains persistence only: notification and haptic
+     * dispatch remain policy consumers in their governed product phase. Keeping
+     * this function internal makes the complete gray-zone persistence chain
+     * testable without constructing TelecomCallScreeningService or relying on
+     * asynchronous sleeps in tests.
+     */
+    internal suspend fun executeDecisionConsequences(
+        callInfo: CallInfo,
+        decision: com.signalgate.pulse.logic.ScreeningDecision,
+        callLogRepository: CallLogRepository,
+        pendingCardRepository: PendingCardRepository,
+        now: () -> Long = { System.currentTimeMillis() }
+    ) {
+        if (!decision.auditRequired) return
+
+        val sourcesJson = callInfo.matchedSources
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(prefix = "[\"", separator = "\",\"", postfix = "\"]")
+        val timestamp = now()
+
+        callLogRepository.insertCallLog(
+            CallLogEntry(
+                phoneNumber = callInfo.originalPhoneNumber,
+                normalizedPhoneNumber = callInfo.normalizedPhoneNumber,
+                timestamp = timestamp,
+                decision = callInfo.callDecision.name,
+                spamStatus = callInfo.spamStatus,
+                spamCategory = callInfo.spamCategory,
+                confidence = callInfo.confidence,
+                riskLevel = callInfo.riskLevel,
+                matchedSources = sourcesJson,
+                notes = callInfo.tier.name
+            )
+        )
+
+        if (decision.reviewCardRequired) {
+            pendingCardRepository.insertCard(
+                PendingCardEntity(
+                    phoneNumber = callInfo.normalizedPhoneNumber,
+                    timestamp = timestamp,
+                    decision = decision.callAction.name,
+                    confidence = callInfo.confidence ?: 0,
+                    decisionSource = "${decision.tier.name} review"
+                )
+            )
         }
     }
 

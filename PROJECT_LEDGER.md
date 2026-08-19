@@ -454,3 +454,11 @@ What: Phase 1.2, Make decision consequences explicit, is formally complete. The 
 Evidence: Same-commit mandatory JVM workflow 32202859358 passed. `ScreeningDecisionConsequencesTest` and `ScreeningServiceEdgeExecutionTest` passed; the targeted edge-execution class executed 22 tests with failures=0/errors=0. Same-commit mandatory instrumented workflow 32202859350 passed. Architecture drift and whitespace validation passed before publication.
 Status: Build sheet 1.2 marked complete. Phase 1.3 remains open and is now the active gate: prove HEURISTIC_FLAG persists through audit, PendingCardEntity, repository, PendingCardViewModel, and DigestScreen. Phase 1 is not closed and Phase 2 remains gated.
 Signature: Manus AI — 2026-08-19
+
+2026-08-19 — Phase 1.3 gray-zone persistence implementation
+Who: Manus AI
+What: Began Phase 1.3 after pushing the formal Phase 1.2 closure. Added an internal suspend persistence seam in `SignalGateCallScreeningService` so the edge executes `auditRequired` and `reviewCardRequired` through the real `CallLogRepository` and `PendingCardRepository` boundaries. The seam preserves notification/haptic dispatch as a later policy consumer and avoids asynchronous sleeps in tests. Reconciled stale PendingCardEntity, PendingCardDao, and DigestScreen documentation to include both HEURISTIC_BLOCK and HEURISTIC_FLAG review-required decisions. Added Compose UI test dependencies and created `GrayZoneReviewabilityTest` covering decision → audit record → PendingCardEntity → repository Flow → PendingCardViewModel → DigestScreen.
+Evidence status: Static source edits are complete; mandatory JVM/instrumented CI is required. Local Android execution remains unavailable because the sandbox lacks an Android SDK.
+Status: Phase 1.3 remains open pending compilation, runtime, and UI test evidence. Phase 1 exit criteria and Phase 2 remain gated.
+To-do / heads-up: run mandatory CI, inspect exact GrayZoneReviewabilityTest counts and any Compose/runtime failures, then fix only evidence-supported defects. Do not mark Phase 1 complete until the full exit matrix is green.
+Signature: Manus AI — 2026-08-19

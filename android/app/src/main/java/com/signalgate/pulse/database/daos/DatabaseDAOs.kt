@@ -217,8 +217,9 @@ interface SyncHistoryDao {
 
 /**
  * DAO for PendingCardEntity operations.
- * Cards are created on Tier 3 HEURISTIC_BLOCK decisions and deleted on dismissal.
- * Never used for permanent history — that is CallLogDao's job.
+ * Cards are created when the decision contract requires review (currently
+ * HEURISTIC_BLOCK or HEURISTIC_FLAG) and deleted on dismissal. Never used for
+ * permanent history — that is CallLogDao's job.
  */
 @Dao
 interface PendingCardDao {
