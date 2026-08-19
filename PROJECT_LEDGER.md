@@ -44,6 +44,14 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 2.1 notification/haptics integration CI-verified
+Who: Manus AI, following the Phase 2.1 integration push.
+What: The complete Phase 2.1 integration from commit `63e7dd7` passed the mandatory CI gates. The supplied haptics, vibration-pattern, limiter, manifest, Koin, service, and focused limiter-test changes were accepted without lint errors.
+Validation evidence: `Pulse Consumer CI` run `32244130376` passed build, architecture drift, JVM unit tests, lint, artifact upload, and compose-metrics verification. `Pulse Instrumented Tests` run `32244130346` passed the emulator suite and artifact upload. `Compose Metrics CI` run `32244130337` passed. The supplied `MissingPermission` lint blocker was cleared by `android.permission.VIBRATE`; the remaining warnings were non-blocking and unchanged by design.
+Boundary verification: `SignalGateCallScreeningService` persists the explicit decision consequences before UX dispatch. `PulseTriggerLimiter` gates only notification/haptic UX; it cannot suppress the decision, audit record, or required review card. Koin resolves both new singletons, and the receiver remains unchanged as the current Phase 0.7 application boundary.
+To-do / heads-up: Phase 2.1 notification/haptic implementation is now CI-verified. Future notification-action changes must be reviewed against the current `CallActionReceiver`, and rate limiting must remain a UX throttle rather than a security control.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 2.1 notification/haptics integration prepared for CI
 Who: Manus AI, following receipt of the three held source files from the owner.
 What: Installed `PulseHapticsController.kt`, `PulseVibration.kt`, and `PulseTriggerLimiter.kt` under `ui/notifications/`. Added the normal `android.permission.VIBRATE` declaration to `AndroidManifest.xml`, registered `PulseHapticsController` and `PulseTriggerLimiter` as Koin singletons in `notificationModule`, and wired them into `SignalGateCallScreeningService`. The service now completes the explicit audit/review-card persistence path before consulting UX rate limiting; HEURISTIC_BLOCK dispatches its explicit block notification and pulse, while HEURISTIC_FLAG uses the limiter to co-throttle its review notification and haptic. Optional notification/haptic failures are logged without rewriting the completed domain decision as SECURITY_FAILURE.
