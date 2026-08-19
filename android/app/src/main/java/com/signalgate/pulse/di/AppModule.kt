@@ -168,7 +168,7 @@ val engineModule = module {
     // domains (full numbers vs. short prefixes) into one filter would inflate
     // the false-positive rate for both without any benefit.
     single(named("patternBloom")) { BloomFilterEngine() }
-    single { SecureCsvParser(get()) }
+    single { SecureCsvParser() }
     single {
         PrecedenceEngine(
             bloomFilter = get(),

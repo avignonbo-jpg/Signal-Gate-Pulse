@@ -1,7 +1,7 @@
 package com.signalgate.pulse.logic
 
-import com.signalgate.pulse.data.security.SanitizationEngine
 import com.signalgate.pulse.data.security.SecureCsvParser
+import com.signalgate.pulse.data.security.SourceRecordValidator
 import com.signalgate.pulse.database.entities.SourceEntity
 import com.signalgate.pulse.database.entities.UnifiedEntryEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
@@ -37,8 +37,8 @@ import java.util.concurrent.TimeUnit
  *   stop, and the FTC's own rate limit is decoupled entirely from user count.
  *
  *   Field used: "phone_number" — the E.164-formatted number in each complaint
- *   record. Filtering/sanitization already happens server-side in the mirror,
- *   but this app re-sanitizes and re-validates length on receipt regardless —
+ *   record. Filtering happens server-side in the mirror, but this app routes every
+ *   received value through SourceRecordValidator regardless —
  *   never trust an external source blindly, even one you operate yourself.
  *
  *   See: https://github.com/avignonbo-jpg/signalgate-dnc-mirror
@@ -240,8 +240,10 @@ class ReliableSourceManager(
         for (i in 0 until dataArray.length()) {
             if (numbers.size >= MAX_ENTRIES_PER_SOURCE) break
             val rawNumber = dataArray.optString(i, "").trim()
-            val sanitized = SanitizationEngine.sanitizePhoneNumber(rawNumber)
-            if (sanitized.length in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH) numbers.add(sanitized)
+            val canonicalNumber = SourceRecordValidator.canonicalizePhone(rawNumber)
+            if (canonicalNumber != null &&
+                canonicalNumber.length in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH
+            ) numbers.add(canonicalNumber)
         }
         Timber.tag(TAG).d("FTC mirror — ${dataArray.length()} records (kept: ${numbers.size})")
         return numbers.distinct()
@@ -256,8 +258,8 @@ class ReliableSourceManager(
      * since SecureCsvParser reads one line at a time under a hard 2,000,000-line cap.
      *
      * MIN_NUMBER_LENGTH/MAX_NUMBER_LENGTH filtering happens here rather than inside
-     * SecureCsvParser: the parser's contract is generic streaming + sanitization +
-     * bloom-filter population, not this source's specific length bounds, and a stray
+     * SecureCsvParser: the parser's contract is bounded raw streaming, not this
+     * source's specific length bounds, and a stray
      * CSV header cell must not reach the DB as a bogus block entry.
      */
     private fun fetchCsvNumbers(url: String, label: String): List<String> {
@@ -271,9 +273,13 @@ class ReliableSourceManager(
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw Exception("HTTP ${response.code} fetching $label")
             val stream = response.body?.byteStream() ?: throw Exception("Empty body from $label")
-            secureCsvParser.streamAndPopulate(stream) { number ->
-                if (numbers.size < MAX_ENTRIES_PER_SOURCE && number.length in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH) {
-                    numbers.add(number)
+            secureCsvParser.streamRows(stream) { rawNumber ->
+                val canonicalNumber = SourceRecordValidator.canonicalizePhone(rawNumber)
+                if (numbers.size < MAX_ENTRIES_PER_SOURCE &&
+                    canonicalNumber != null &&
+                    canonicalNumber.length in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH
+                ) {
+                    numbers.add(canonicalNumber)
                 }
             }
         }

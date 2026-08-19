@@ -44,6 +44,14 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 3.1 parser/validator separation prepared for CI
+Who: Manus AI, following the Phase 3.1 source-pipeline audit.
+What: `SecureCsvParser` now owns bounded raw CSV extraction only. It no longer sanitizes records or mutates Bloom state. `SourceRecordValidator` owns canonicalization and phone-field security length validation. `DataSyncEngine` and `ReliableSourceManager` route CSV and FTC mirror records through that validator before constructing candidate entries; snapshot activation remains exclusively in `SecurityRuleRepository.replaceSourceSnapshot`.
+Preservation: XLSX hard row/shared-string limits remain inside `DataSyncEngine` and continue to throw typed failures. CSV’s hard row limit remains inside `SecureCsvParser`; callers must discard callbacks when the parser throws. Bloom population remains downstream in `DataSourceRepository.insertEntries`, preserving the authoritative mutation chokepoint.
+Tests: Updated `SecureCsvParserLimitTest` for the raw parser API and added `SourceRecordValidatorTest` covering canonicalization, length rejection, and parser-before-validator ordering. DI now constructs `SecureCsvParser()` without a Bloom dependency.
+Validation: `git diff --check` passed. Local Android Gradle execution is unavailable because the sandbox lacks the Android SDK. Mandatory CI is required before marking Phase 3.1 complete.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 2 formally closed; Phase 3.1 opened
 Who: Manus AI, following the owner’s instruction to advance from the completed notification/product phase.
 Closure: Phase 2.1 haptics, 2.2 rate limiting, 2.3 notification actions, and 2.4 privacy are all complete and CI-verified. Final Phase 2.3/2.4 evidence is Consumer CI `32254152945`, Instrumented CI `32254152984`, and Compose Metrics CI `32254152979`; the signed closure commit is `b2fb334`. The build sheet now records Phase 2 as formally CLOSED.

@@ -14,10 +14,10 @@ class SecureCsvParserLimitTest {
     @Test
     fun rowLimitExceeded_isHardFailure() {
         var callbackCount = 0
-        val parser = SecureCsvParser(BloomFilterEngine())
+        val parser = SecureCsvParser()
 
         val failure = assertThrows(CsvResourceLimitExceededException::class.java) {
-            parser.streamAndPopulate(GeneratedCsvInputStream(SecureCsvParser.MAX_ROWS + 1)) {
+            parser.streamRows(GeneratedCsvInputStream(SecureCsvParser.MAX_ROWS + 1)) {
                 callbackCount++
             }
         }

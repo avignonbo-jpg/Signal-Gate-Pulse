@@ -1,7 +1,7 @@
 package com.signalgate.pulse.logic
 
-import com.signalgate.pulse.data.security.SanitizationEngine
 import com.signalgate.pulse.data.security.SecureCsvParser
+import com.signalgate.pulse.data.security.SourceRecordValidator
 import com.signalgate.pulse.database.entities.UnifiedEntryEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import kotlinx.coroutines.Dispatchers
@@ -148,7 +148,9 @@ class DataSyncEngine(
     ): List<UnifiedEntryEntity> = withContext(Dispatchers.IO) {
         Timber.tag(TAG).i("CSV parse started — source=$sourceId")
         val entries = mutableListOf<UnifiedEntryEntity>()
-        csvParser.streamAndPopulate(inputStream) { phoneNumber ->
+        csvParser.streamRows(inputStream) { rawPhoneNumber ->
+            val phoneNumber = SourceRecordValidator.canonicalizePhone(rawPhoneNumber)
+                ?: return@streamRows
             entries.add(
                 UnifiedEntryEntity(
                     phoneNumber = phoneNumber,
@@ -510,14 +512,14 @@ class DataSyncEngine(
                 rowsSkipped++
                 return
             }
-            val sanitized = SanitizationEngine.sanitizePhoneNumber(raw)
-            if (sanitized.length < MIN_PHONE_LENGTH || sanitized.length > MAX_PHONE_LENGTH) {
-                rowsSkipped++
-                return
-            }
+            val canonicalPhone = SourceRecordValidator.canonicalizePhone(raw)
+                ?: run {
+                    rowsSkipped++
+                    return
+                }
             onEntry(
                 UnifiedEntryEntity(
-                    phoneNumber = sanitized,
+                    phoneNumber = canonicalPhone,
                     action = "BLOCK",
                     sourceId = sourceId,
                     category = "XLSX Import",
