@@ -32,11 +32,11 @@ import com.signalgate.pulse.database.entities.UnifiedEntryEntity
  * ksp arg room.schemaLocation). They should be committed to version control —
  * they are the ground truth for what each version's schema looked like.
  *
- * Schema version 3: Phase 0.4 source activation timestamps added.
+ * Schema version 4: Phase 3.4 explicit source lifecycle and snapshot metadata.
  *
- * Version 2 remains the PendingCardEntity schema; version 3 adds only the
- * nullable last-attempted and last-accepted snapshot timestamps required to
- * distinguish a sync attempt from an accepted active snapshot.
+ * Version 3 remains the Phase 0.4 source activation timestamp schema; version 4
+ * adds lifecycle state, snapshot version/hash, accepted record count, and a
+ * bounded failure/rejection reason without backfilling unverifiable metadata.
  */
 @Database(
     entities = [
@@ -47,7 +47,7 @@ import com.signalgate.pulse.database.entities.UnifiedEntryEntity
         SyncHistoryEntry::class,
         PendingCardEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class SignalGateDatabase : RoomDatabase() {
@@ -100,5 +100,20 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE sources ADD COLUMN last_attempted_sync INTEGER")
         db.execSQL("ALTER TABLE sources ADD COLUMN last_accepted_snapshot INTEGER")
+    }
+}
+
+/**
+ * Migration 3 -> 4: adds explicit source lifecycle and accepted-snapshot metadata.
+ * Existing rows start ENABLED with unknown snapshot metadata; no historical
+ * acceptance or failure facts are invented during migration.
+ */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE sources ADD COLUMN lifecycle_state TEXT NOT NULL DEFAULT 'ENABLED'")
+        db.execSQL("ALTER TABLE sources ADD COLUMN snapshot_version TEXT")
+        db.execSQL("ALTER TABLE sources ADD COLUMN snapshot_hash TEXT")
+        db.execSQL("ALTER TABLE sources ADD COLUMN accepted_record_count INTEGER")
+        db.execSQL("ALTER TABLE sources ADD COLUMN lifecycle_reason TEXT")
     }
 }

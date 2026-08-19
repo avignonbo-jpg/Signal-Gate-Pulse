@@ -166,6 +166,38 @@ class MigrationTest {
     }
 
     /**
+     * Validates the Phase 3.4 lifecycle migration adds explicit state and metadata
+     * columns while preserving the pre-existing source row and leaving unknown
+     * historical snapshot facts nullable.
+     */
+    @Test
+    @Throws(IOException::class)
+    fun migrate3To4_addsLifecycleMetadataWithSafeDefaults() {
+        helper.createDatabase(TEST_DB, 3).apply {
+            execSQL(
+                """INSERT INTO sources
+                   (name, type, pathOrUrl, isEnabled, lastSynced, last_attempted_sync,
+                    last_accepted_snapshot, priority, entriesCount, healthStatus, createdAt, updatedAt)
+                   VALUES ('Existing Source', 'FTC', 'remote', 1, 0, 2000,
+                           2000, 90, 12, 'HEALTHY', 1000, 1000)"""
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(TEST_DB, 4, true, MIGRATION_3_4)
+        val cursor = db.query("SELECT * FROM sources WHERE name = 'Existing Source'")
+        assertEquals("existing source must survive 3→4 migration", 1, cursor.count)
+        cursor.moveToFirst()
+        assertEquals("new sources must start ENABLED", "ENABLED", cursor.getString(cursor.getColumnIndexOrThrow("lifecycle_state")))
+        assertEquals("snapshot_version must remain unknown", 0, cursor.getType(cursor.getColumnIndexOrThrow("snapshot_version")))
+        assertEquals("snapshot_hash must remain unknown", 0, cursor.getType(cursor.getColumnIndexOrThrow("snapshot_hash")))
+        assertEquals("accepted_record_count must remain unknown", 0, cursor.getType(cursor.getColumnIndexOrThrow("accepted_record_count")))
+        assertEquals("lifecycle_reason must remain unknown", 0, cursor.getType(cursor.getColumnIndexOrThrow("lifecycle_reason")))
+        cursor.close()
+        db.close()
+    }
+
+    /**
      * Validates the pending_cards table schema matches PendingCardEntity exactly.
      *
      * Specifically checks column names, types, and nullability — the most common

@@ -31,6 +31,16 @@ data class SourceEntity(
     val priority: Int = 0,
     val entriesCount: Int = 0,
     val healthStatus: String = "UNKNOWN",
+    @ColumnInfo(name = "lifecycle_state")
+    val lifecycleState: String = "ENABLED",
+    @ColumnInfo(name = "snapshot_version")
+    val snapshotVersion: String? = null,
+    @ColumnInfo(name = "snapshot_hash")
+    val snapshotHash: String? = null,
+    @ColumnInfo(name = "accepted_record_count")
+    val acceptedRecordCount: Int? = null,
+    @ColumnInfo(name = "lifecycle_reason")
+    val lifecycleReason: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

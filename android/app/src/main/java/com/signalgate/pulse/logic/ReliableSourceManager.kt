@@ -14,6 +14,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import timber.log.Timber
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 /**
@@ -147,7 +148,9 @@ class ReliableSourceManager(
         val maxObservedFieldLength: Int,
         val malformedRecordCount: Int,
         val fetchedAt: Long,
-        val expectedContentTypes: Set<String>
+        val expectedContentTypes: Set<String>,
+        val snapshotVersion: String?,
+        val snapshotHash: String?
     )
 
     private val httpClient = OkHttpClient.Builder()
@@ -169,9 +172,13 @@ class ReliableSourceManager(
 
     private suspend fun syncSource(source: FederalSource, knownSourceId: Int? = null): SyncResult {
         val syncStartMs = System.currentTimeMillis()
+        var sourceIdForFailure: Int? = knownSourceId
+        var hadAcceptedSnapshot = false
         Timber.tag(TAG).i("Starting sync: ${source.name} (strategy=${source.strategy})")
         return try {
-            val sourceId = knownSourceId ?: ensureSourceRow(source)
+            val sourceId = knownSourceId ?: ensureSourceRow(source).also { sourceIdForFailure = it }
+            hadAcceptedSnapshot = dataSourceRepository.getSourceById(sourceId)?.lastAcceptedSnapshot != null
+            val attemptTimestamp = securityRuleRepository.beginSourceSync(sourceId)
             val fetchStartMs = System.currentTimeMillis()
             val snapshot = fetchWithFallback(source)
             val fetchDurationMs = System.currentTimeMillis() - fetchStartMs
@@ -210,7 +217,16 @@ class ReliableSourceManager(
                 )
             }
 
-            val activation = securityRuleRepository.replaceSourceSnapshot(sourceId, entries)
+            val activation = securityRuleRepository.replaceSourceSnapshot(
+                sourceId = sourceId,
+                entries = entries,
+                metadata = SnapshotMetadata(
+                    version = snapshot.snapshotVersion,
+                    hash = snapshot.snapshotHash,
+                    acceptedRecordCount = entries.size
+                ),
+                attemptTimestamp = attemptTimestamp
+            )
             val inserted = when (activation) {
                 SnapshotActivationResult.Accepted -> entries.size
                 is SnapshotActivationResult.Failed -> throw activation.cause
@@ -225,12 +241,20 @@ class ReliableSourceManager(
             )
             SyncResult(source.name, inserted, true)
         } catch (e: Exception) {
+            val reason = e.message ?: "Source sync failed"
+            sourceIdForFailure?.let { sourceId ->
+                securityRuleRepository.recordSourceFailure(
+                    sourceId = sourceId,
+                    state = lifecycleFailureState(reason, hadAcceptedSnapshot),
+                    reason = reason
+                )
+            }
             val totalDurationMs = System.currentTimeMillis() - syncStartMs
             Timber.tag(TAG).e(
                 e,
                 "Sync failed: ${source.name}, total_duration_ms=$totalDurationMs"
             )
-            SyncResult(source.name, 0, false, e.message)
+            SyncResult(source.name, 0, false, reason)
         }
     }
 
@@ -309,7 +333,9 @@ class ReliableSourceManager(
             maxObservedFieldLength = maxFieldLength,
             malformedRecordCount = malformed,
             fetchedAt = body.fetchedAt,
-            expectedContentTypes = setOf("application/json")
+            expectedContentTypes = setOf("application/json"),
+            snapshotVersion = json.optString("generated_at", null),
+            snapshotHash = sha256Hex(body.bytes)
         )
     }
 
@@ -367,7 +393,9 @@ class ReliableSourceManager(
                 maxObservedFieldLength = maxFieldLength,
                 malformedRecordCount = malformed,
                 fetchedAt = fetchedAt,
-                expectedContentTypes = setOf("text/csv", "application/csv")
+                expectedContentTypes = setOf("text/csv", "application/csv"),
+                snapshotVersion = fetchedAt.toString(),
+                snapshotHash = sha256Hex(numbers.joinToString("\n").toByteArray())
             )
         }
     }
@@ -458,6 +486,21 @@ class ReliableSourceManager(
         )
         return newId.toInt()
     }
+
+    private fun lifecycleFailureState(
+        reason: String,
+        hadAcceptedSnapshot: Boolean
+    ): SourceLifecycleState = when {
+        reason.startsWith("Snapshot rejected") ||
+            reason.startsWith("Snapshot authenticity rejected") -> SourceLifecycleState.REJECTED
+        hadAcceptedSnapshot -> SourceLifecycleState.STALE
+        else -> SourceLifecycleState.FAILED
+    }
+
+    private fun sha256Hex(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { byte -> "%02x".format(byte) }
 
     fun getSourceInfo(): List<FederalSource> = SOURCES
 }

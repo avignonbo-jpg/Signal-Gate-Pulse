@@ -42,14 +42,23 @@ interface SourceDao {
     @Query("SELECT COUNT(*) FROM sources")
     fun getSourceCount(): Flow<Int>
 
-    @Query("UPDATE sources SET isEnabled = :isEnabled WHERE id = :id")
-    suspend fun updateSourceEnabled(id: Int, isEnabled: Boolean)
+    @Query("UPDATE sources SET isEnabled = :isEnabled, lifecycle_state = CASE WHEN :isEnabled = 1 THEN 'ENABLED' ELSE 'DISABLED' END, lifecycle_reason = NULL, updatedAt = :timestamp WHERE id = :id")
+    suspend fun updateSourceEnabled(id: Int, isEnabled: Boolean, timestamp: Long = System.currentTimeMillis())
 
-    @Query("UPDATE sources SET last_attempted_sync = :timestamp, updatedAt = :timestamp WHERE id = :id")
+    @Query("UPDATE sources SET last_attempted_sync = :timestamp, lifecycle_state = 'SYNCING', lifecycle_reason = NULL, updatedAt = :timestamp WHERE id = :id AND isEnabled = 1")
     suspend fun recordSyncAttempt(id: Int, timestamp: Long): Int
 
-    @Query("UPDATE sources SET last_accepted_snapshot = :timestamp, lastSynced = :timestamp, entriesCount = :entriesCount, healthStatus = 'HEALTHY', updatedAt = :timestamp WHERE id = :id")
-    suspend fun recordSnapshotAccepted(id: Int, timestamp: Long, entriesCount: Int)
+    @Query("UPDATE sources SET last_accepted_snapshot = :timestamp, lastSynced = :timestamp, entriesCount = :entriesCount, accepted_record_count = :entriesCount, snapshot_version = :snapshotVersion, snapshot_hash = :snapshotHash, lifecycle_state = 'HEALTHY', healthStatus = 'HEALTHY', lifecycle_reason = NULL, updatedAt = :timestamp WHERE id = :id")
+    suspend fun recordSnapshotAccepted(
+        id: Int,
+        timestamp: Long,
+        entriesCount: Int,
+        snapshotVersion: String?,
+        snapshotHash: String?
+    )
+
+    @Query("UPDATE sources SET lifecycle_state = :state, healthStatus = 'ERROR', lifecycle_reason = :reason, updatedAt = :timestamp WHERE id = :id AND isEnabled = 1")
+    suspend fun recordSyncFailure(id: Int, state: String, reason: String, timestamp: Long): Int
 }
 
 /**

@@ -44,6 +44,13 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 3.4 lifecycle implementation prepared for CI
+Who: Manus AI, following the Phase 3.4 source-pipeline audit.
+What: Added explicit `SourceLifecycleState` values ENABLED, SYNCING, HEALTHY, STALE, FAILED, REJECTED, and DISABLED; persisted lifecycle state, snapshot version, snapshot hash, accepted record count, and lifecycle reason on `SourceEntity`; added Room migration 3→4 and registered it in `SecureDatabase`.
+Boundary: `SecurityRuleRepository` remains the only snapshot activation boundary. It records SYNCING before fetch, commits accepted metadata only inside the existing atomic replacement transaction, rejects empty candidates without deleting active entries, and records FAILED/REJECTED outcomes. `ReliableSourceManager` maps operational failures with an existing accepted snapshot to STALE, while rejected candidates remain REJECTED. SourcesScreen now observes explicit lifecycle state and safe metadata without rendering phone-number payloads. SourcesViewModel and DashboardViewModel remain routed through SourceSyncUseCase.
+Tests: Extended migration and atomic-activation instrumented coverage for v4 defaults, accepted metadata, failed replacement, empty-candidate rejection, last-known-good preservation, and lifecycle states. `git diff --check` passes. Generated Room schema 4 and mandatory CI remain pending.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Contract stale-reference reconciliation: CallOverlayViewModel and SignalGateMode
 Who: Manus AI, following a live `consumer-v1` source-of-truth scan at commit `186a1f4`.
 Finding: Neither `CallOverlayViewModel` nor `SignalGateMode` exists in the current Kotlin source, Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md, or repository-wide tracked content. The historical removal is evidenced by commits `613b1f0` (deleted `CallOverlayViewModel.kt`), `119ec8f` (deleted `SignalGateMode.kt`), and `bd8a18d` (removed the obsolete `CallOverlayViewModel` Koin binding).

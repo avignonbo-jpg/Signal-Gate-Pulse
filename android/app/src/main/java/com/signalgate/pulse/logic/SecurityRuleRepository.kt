@@ -135,13 +135,20 @@ class SecurityRuleRepository(
      */
     suspend fun replaceSourceSnapshot(
         sourceId: Int,
-        entries: List<UnifiedEntryEntity>
+        entries: List<UnifiedEntryEntity>,
+        metadata: SnapshotMetadata = SnapshotMetadata(acceptedRecordCount = entries.size),
+        attemptTimestamp: Long? = null
     ): SnapshotActivationResult {
-        val attemptTime = System.currentTimeMillis()
+        val attemptTime = attemptTimestamp ?: System.currentTimeMillis()
         return try {
-            val updatedRows = database.sourceDao().recordSyncAttempt(sourceId, attemptTime)
-            check(updatedRows == 1) {
-                "Sync attempt was not recorded for source $sourceId (updatedRows=$updatedRows)"
+            if (attemptTimestamp == null) {
+                val updatedRows = database.sourceDao().recordSyncAttempt(sourceId, attemptTime)
+                check(updatedRows == 1) {
+                    "Sync attempt was not recorded for source $sourceId (updatedRows=$updatedRows)"
+                }
+            }
+            check(entries.isNotEmpty()) {
+                "Snapshot activation rejected: candidate contains no accepted records"
             }
             database.withTransaction {
                 unifiedEntryDao.deleteEntriesBySourceId(sourceId)
@@ -149,7 +156,9 @@ class SecurityRuleRepository(
                 database.sourceDao().recordSnapshotAccepted(
                     id = sourceId,
                     timestamp = attemptTime,
-                    entriesCount = entries.size
+                    entriesCount = metadata.acceptedRecordCount,
+                    snapshotVersion = metadata.version,
+                    snapshotHash = metadata.hash
                 )
             }
 
@@ -165,9 +174,43 @@ class SecurityRuleRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            database.sourceDao().recordSyncFailure(
+                id = sourceId,
+                state = if (e.message?.startsWith("Snapshot activation rejected") == true) {
+                    SourceLifecycleState.REJECTED.name
+                } else {
+                    SourceLifecycleState.FAILED.name
+                },
+                reason = e.message ?: "Snapshot activation failed",
+                timestamp = System.currentTimeMillis()
+            )
             Timber.e(e, "Snapshot replace failed for source $sourceId — last-known-good preserved")
             SnapshotActivationResult.Failed(e)
         }
+    }
+
+    /** Marks a source as syncing before any network or parser work begins. */
+    suspend fun beginSourceSync(sourceId: Int): Long {
+        val timestamp = System.currentTimeMillis()
+        val updatedRows = database.sourceDao().recordSyncAttempt(sourceId, timestamp)
+        check(updatedRows == 1) {
+            "Sync could not begin for source $sourceId (updatedRows=$updatedRows)"
+        }
+        return timestamp
+    }
+
+    /** Records a pre-activation rejection or fetch failure without touching entries. */
+    suspend fun recordSourceFailure(
+        sourceId: Int,
+        state: SourceLifecycleState,
+        reason: String
+    ) {
+        database.sourceDao().recordSyncFailure(
+            id = sourceId,
+            state = state.name,
+            reason = reason,
+            timestamp = System.currentTimeMillis()
+        )
     }
 
     /**

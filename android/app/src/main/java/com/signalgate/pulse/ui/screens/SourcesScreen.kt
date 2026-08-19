@@ -17,10 +17,10 @@ import com.signalgate.pulse.utils.humanReadable
 import org.koin.androidx.compose.koinViewModel
 
 /**
- * SourcesScreen — Phase 3.3/3.4 (Contract §4 L7).
- * Real SourceEntity data via SourcesViewModel -> DataSourceRepository: health
- * status (green/yellow/red), human-readable last-sync timestamp, manual
- * sync-now, enable/disable, and removal.
+ * SourcesScreen — Phase 3.4 (Contract §4 L7).
+ * Real SourceEntity data via SourcesViewModel -> DataSourceRepository: explicit
+ * lifecycle state, accepted-snapshot metadata, manual sync-now, enable/disable,
+ * and removal. No phone-number payload is rendered on this surface.
  *
  * The "Add Source" custom CSV/URL/XLSX flow has been removed — it was a
  * SignalGate Pulse set-and-forget capability, not part of a customizable flow
@@ -97,8 +97,8 @@ private fun SourceRow(
                 Text(source.name, style = MaterialTheme.typography.titleMedium)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = source.healthStatus,
-                        color = getHealthColor(source.healthStatus),
+                        text = source.lifecycleState,
+                        color = getLifecycleColor(source.lifecycleState),
                         style = MaterialTheme.typography.labelMedium
                     )
                     Spacer(Modifier.width(8.dp))
@@ -114,9 +114,20 @@ private fun SourceRow(
                 style = MaterialTheme.typography.bodySmall
             )
             Text(
-                "Last sync: ${source.lastSynced.humanReadable()} • ${source.entriesCount} entries",
+                "Last accepted: ${source.lastAcceptedSnapshot?.humanReadable() ?: "Never"} • " +
+                    "${source.acceptedRecordCount ?: source.entriesCount} entries",
                 style = MaterialTheme.typography.bodySmall
             )
+            Text(
+                "Last attempted: ${source.lastAttemptedSync?.humanReadable() ?: "Never"}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            source.lifecycleReason?.takeIf { it.isNotBlank() }?.let { reason ->
+                Text(
+                    "Status reason: ${reason.take(120)}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onSync) { Text("Sync now") }
@@ -126,10 +137,12 @@ private fun SourceRow(
     }
 }
 
-// Health dashboard color coding — HEALTHY/WARNING/UNKNOWN/anything else (incl. ERROR).
-private fun getHealthColor(status: String): Color = when (status.uppercase()) {
+// Lifecycle color coding. State text is persisted and never derived from entry count.
+private fun getLifecycleColor(state: String): Color = when (state.uppercase()) {
     "HEALTHY" -> Color(0xFF2ECC71)
-    "WARNING" -> Color(0xFFF1C40F)
-    "UNKNOWN" -> Color(0xFF95A5A6)
-    else -> Color(0xFFE74C3C)
+    "ENABLED", "SYNCING" -> Color(0xFF3498DB)
+    "STALE" -> Color(0xFFF1C40F)
+    "DISABLED" -> Color(0xFF95A5A6)
+    "FAILED", "REJECTED" -> Color(0xFFE74C3C)
+    else -> Color(0xFF95A5A6)
 }
