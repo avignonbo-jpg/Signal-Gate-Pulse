@@ -44,6 +44,13 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 2.3/2.4 CI-verified and closed
+Who: Manus AI, following corrected commit `4fd665a`.
+What: The focused Robolectric null-action-array correction passed. Phase 2.3 is closed: `CallActionReceiverBehaviorTest` proves invalid actions are rejected before repository access and the supported notification action routes allowlisting through `SecurityRuleRepository` and card dismissal through `PendingCardRepository`; no receiver-owned feature persistence or direct DAO access exists. Phase 2.4 is closed: notification privacy tests prove private visibility, redacted public versions, absence of raw phone numbers from rendered notification content, and preserved blocked-call action behavior. Screening-service and limiter operational logs no longer emit raw phone numbers.
+Validation evidence: `Pulse Consumer CI` run `32254152945` passed architecture drift, build, JVM tests including `NotificationPrivacyTest`, lint, artifact upload, and compose-metrics verification. `Pulse Instrumented Tests` run `32254152984` passed the emulator suite. `Compose Metrics CI` run `32254152979` passed. The first consumer run `32253631311` failed only on Robolectric’s nullable no-action array observation; production code compiled and linted, and the focused assertion fix was pushed as `4fd665a`.
+Closure: Phase 2.3 and Phase 2.4 are complete. INV-004 action validation and application/repository routing remain intact. INV-007 privacy behavior is explicit for operational logs, lock-screen content, and notification mirroring. Phase 3 is the next gated phase.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 2.4 privacy test correction after CI feedback
 Who: Manus AI, following mandatory Consumer CI run `32253631311`.
 What: The privacy implementation compiled and linted, but `NotificationPrivacyTest.reviewNotification_isPrivateAndRedactedOnLockScreenAndMirrors` failed because Robolectric exposes the no-action notification’s `actions` array as null. This was a test-observation issue, not a privacy or production behavior failure. The assertions now treat the Android platform array as nullable while still requiring the blocked notification’s action and the review notification’s lack of actions.
