@@ -28,7 +28,7 @@ class NotificationPrivacyTest {
         assertNotificationDoesNotExpose(notification, phoneNumber)
         assertNotNull("A redacted public version is required", notification.publicVersion)
         assertNotificationDoesNotExpose(notification.publicVersion!!, phoneNumber)
-        assertTrue("The existing action must remain present", notification.actions.isNotEmpty())
+        assertTrue("The existing action must remain present", notification.actions?.isNotEmpty() == true)
     }
 
     @Test
@@ -42,7 +42,7 @@ class NotificationPrivacyTest {
         assertNotificationDoesNotExpose(notification, phoneNumber)
         assertNotNull("A redacted public version is required", notification.publicVersion)
         assertNotificationDoesNotExpose(notification.publicVersion!!, phoneNumber)
-        assertFalse("Review notification has no feature action button", notification.actions.isNotEmpty())
+        assertFalse("Review notification has no feature action button", notification.actions?.isNotEmpty() == true)
     }
 
     private fun blockedCallInfo() = CallInfo(

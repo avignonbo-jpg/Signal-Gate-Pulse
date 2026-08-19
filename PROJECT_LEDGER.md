@@ -44,6 +44,12 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 2.4 privacy test correction after CI feedback
+Who: Manus AI, following mandatory Consumer CI run `32253631311`.
+What: The privacy implementation compiled and linted, but `NotificationPrivacyTest.reviewNotification_isPrivateAndRedactedOnLockScreenAndMirrors` failed because Robolectric exposes the no-action notification’s `actions` array as null. This was a test-observation issue, not a privacy or production behavior failure. The assertions now treat the Android platform array as nullable while still requiring the blocked notification’s action and the review notification’s lack of actions.
+Validation: Production privacy behavior remains unchanged: private visibility, redacted public versions, no raw phone number in rendered content, and no raw phone number in the changed operational logs. `git diff --check` passed. Mandatory CI is being rerun on this correction.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 2.3 notification actions and Phase 2.4 privacy prepared for CI
 Who: Manus AI, following the owner’s instruction to advance from Phase 2.2.
 What: Phase 2.3 was audited against the live `CallActionReceiver` and its existing behavioral tests. The supported notification action validates ingress data, then routes allowlisting through `SecurityRuleRepository` and digest dismissal through `PendingCardRepository`; no receiver-owned feature persistence or direct DAO access exists. The existing `CallActionReceiverBehaviorTest` covers incomplete and unrelated actions plus supported repository routing, so no new action or receiver production code was invented.
