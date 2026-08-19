@@ -44,6 +44,14 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 3.2 snapshot sanity checks prepared for CI
+Who: Manus AI, following the Phase 3.1 CI-verified parser/validator separation.
+What: Added `SnapshotSanityValidator` as the explicit candidate gate before `SecurityRuleRepository.replaceSourceSnapshot`. It validates content type, UTF-8 encoding, bounded bytes, record and accepted-record ranges, maximum raw field length, duplicate accounting, malformed-record ratio, freshness, and catastrophic accepted-count changes against the last active source count. `ReliableSourceManager` now captures metadata for FTC JSON and streamed CSV candidates, bounds FTC body reads, counts streamed CSV bytes, and rejects invalid encoding before parsing.
+Tests: Added `SnapshotSanityValidatorTest` covering acceptance, content type, encoding, byte/record/field limits, malformed ratio, freshness, and catastrophic count changes. Existing Phase 0.5 parser hard-limit tests remain in place.
+Boundary: A rejected candidate throws before `replaceSourceSnapshot`; no active entries, accepted timestamp, or derived Bloom state can change. Duplicate records are deduplicated deterministically and accounted for rather than treated as a decision rule.
+Validation: `git diff --check` passed. Local Android Gradle execution is unavailable because the sandbox lacks the Android SDK. Mandatory CI is required before marking Phase 3.2 complete.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 3.1 parser/validator separation prepared for CI
 Who: Manus AI, following the Phase 3.1 source-pipeline audit.
 What: `SecureCsvParser` now owns bounded raw CSV extraction only. It no longer sanitizes records or mutates Bloom state. `SourceRecordValidator` owns canonicalization and phone-field security length validation. `DataSyncEngine` and `ReliableSourceManager` route CSV and FTC mirror records through that validator before constructing candidate entries; snapshot activation remains exclusively in `SecurityRuleRepository.replaceSourceSnapshot`.

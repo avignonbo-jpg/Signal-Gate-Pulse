@@ -1,6 +1,7 @@
 package com.signalgate.pulse.logic
 
 import com.signalgate.pulse.data.security.SecureCsvParser
+import com.signalgate.pulse.data.security.SnapshotSanityValidator
 import com.signalgate.pulse.data.security.SourceRecordValidator
 import com.signalgate.pulse.database.entities.SourceEntity
 import com.signalgate.pulse.database.entities.UnifiedEntryEntity
@@ -61,7 +62,8 @@ class ReliableSourceManager(
     private val dataSourceRepository: DataSourceRepository,
     private val securityRuleRepository: SecurityRuleRepository,
     private val syncHistoryRepository: SyncHistoryRepository,
-    private val secureCsvParser: SecureCsvParser
+    private val secureCsvParser: SecureCsvParser,
+    private val snapshotSanityValidator: SnapshotSanityValidator
 ) {
 
     companion object {
@@ -133,6 +135,19 @@ class ReliableSourceManager(
         val errorMessage: String? = null
     )
 
+    private data class FetchedSnapshot(
+        val numbers: List<String>,
+        val contentType: String?,
+        val charset: String?,
+        val byteCount: Long,
+        val recordCount: Int,
+        val duplicateRecordCount: Int,
+        val maxObservedFieldLength: Int,
+        val malformedRecordCount: Int,
+        val fetchedAt: Long,
+        val expectedContentTypes: Set<String>
+    )
+
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(CONNECT_TIMEOUT_SEC, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_SEC, TimeUnit.SECONDS)
@@ -156,13 +171,33 @@ class ReliableSourceManager(
         return try {
             val sourceId = knownSourceId ?: ensureSourceRow(source)
             val fetchStartMs = System.currentTimeMillis()
-            val numbers = fetchWithFallback(source)
+            val snapshot = fetchWithFallback(source)
             val fetchDurationMs = System.currentTimeMillis() - fetchStartMs
             Timber.tag(TAG).i(
-                "Fetched ${source.name}: numbers=${numbers.size}, duration_ms=$fetchDurationMs"
+                "Fetched ${source.name}: numbers=${snapshot.numbers.size}, duration_ms=$fetchDurationMs"
             )
+            val previousAcceptedCount = dataSourceRepository.getEntryCountBySourceId(sourceId)
+            when (val sanity = snapshotSanityValidator.validate(
+                SnapshotSanityValidator.Candidate(
+                    contentType = snapshot.contentType,
+                    charset = snapshot.charset,
+                    byteCount = snapshot.byteCount,
+                    recordCount = snapshot.recordCount,
+                    acceptedRecordCount = snapshot.numbers.size,
+                    duplicateRecordCount = snapshot.duplicateRecordCount,
+                    maxObservedFieldLength = snapshot.maxObservedFieldLength,
+                    malformedRecordCount = snapshot.malformedRecordCount,
+                    fetchedAt = snapshot.fetchedAt,
+                    previousAcceptedRecordCount = previousAcceptedCount,
+                    expectedContentTypes = snapshot.expectedContentTypes
+                )
+            )) {
+                SnapshotSanityValidator.Result.Accepted -> Unit
+                is SnapshotSanityValidator.Result.Rejected ->
+                    throw IllegalArgumentException("Snapshot rejected: ${sanity.reason}")
+            }
 
-            val entries = numbers.map { number ->
+            val entries = snapshot.numbers.map { number ->
                 UnifiedEntryEntity(
                     phoneNumber = number,
                     action      = "BLOCK",
@@ -197,21 +232,21 @@ class ReliableSourceManager(
         }
     }
 
-    private fun fetchWithFallback(source: FederalSource): List<String> {
+    private fun fetchWithFallback(source: FederalSource): FetchedSnapshot {
         val urls = listOf(source.primaryUrl) + source.fallbackUrls
         var lastError: Exception? = null
         for (url in urls) {
             try {
-                val numbers = when (source.strategy) {
+                val snapshot = when (source.strategy) {
                     FetchStrategy.FTC_REST_API -> {
-                        if (url == FTC_API_BASE) fetchFtcApiNumbers()
-                        else fetchCsvNumbers(url, source.name)
+                        if (url == FTC_API_BASE) fetchFtcApiSnapshot()
+                        else fetchCsvSnapshot(url, source.name)
                     }
-                    FetchStrategy.CSV -> fetchCsvNumbers(url, source.name)
+                    FetchStrategy.CSV -> fetchCsvSnapshot(url, source.name)
                 }
-                if (numbers.isNotEmpty()) {
-                    Timber.tag(TAG).i("Fetched ${numbers.size} numbers from $url")
-                    return numbers
+                if (snapshot.numbers.isNotEmpty()) {
+                    Timber.tag(TAG).i("Fetched ${snapshot.numbers.size} numbers from $url")
+                    return snapshot
                 }
                 Timber.tag(TAG).w("Empty response from $url — trying next fallback")
             } catch (e: Exception) {
@@ -223,83 +258,175 @@ class ReliableSourceManager(
     }
 
     /**
-     * Fetches the pre-aggregated snapshot published by signalgate-dnc-mirror
-     * (see the class doc comment above). One flat file, no pagination needed —
-     * the mirror already did that server-side. Still re-sanitizes, re-validates
-     * length, AND re-enforces MAX_ENTRIES_PER_SOURCE here — this app never
-     * trusts an external source blindly, even a mirror it operates itself.
-     * The mirror's cumulative merge only ever grows; this cap is what stops
-     * that growth from silently exceeding what the rest of this class assumes
-     * as a hard per-source ceiling.
+     * Fetches the bounded FTC mirror candidate and records all sanity metadata
+     * before the application boundary decides whether it may be activated.
      */
-    private fun fetchFtcApiNumbers(): List<String> {
+    private fun fetchFtcApiSnapshot(): FetchedSnapshot {
         val body = fetchRawBody(FTC_API_BASE, "FTC DNC mirror")
-        val json = JSONObject(body)
-        val dataArray = json.optJSONArray("phone_numbers") ?: return emptyList()
+        val json = JSONObject(body.text)
+        val dataArray = json.optJSONArray("phone_numbers")
+            ?: throw IllegalArgumentException("FTC mirror missing phone_numbers array")
         val numbers = mutableListOf<String>()
+        val seen = mutableSetOf<String>()
+        var malformed = 0
+        var duplicates = 0
+        var maxFieldLength = 0
         for (i in 0 until dataArray.length()) {
-            if (numbers.size >= MAX_ENTRIES_PER_SOURCE) break
             val rawNumber = dataArray.optString(i, "").trim()
+            maxFieldLength = maxOf(maxFieldLength, rawNumber.length)
             val canonicalNumber = SourceRecordValidator.canonicalizePhone(rawNumber)
-            if (canonicalNumber != null &&
-                canonicalNumber.length in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH
-            ) numbers.add(canonicalNumber)
+            if (canonicalNumber == null ||
+                canonicalNumber.length !in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH
+            ) {
+                malformed++
+            } else if (!seen.add(canonicalNumber)) {
+                duplicates++
+            } else if (numbers.size < MAX_ENTRIES_PER_SOURCE) {
+                numbers.add(canonicalNumber)
+            }
         }
-        Timber.tag(TAG).d("FTC mirror — ${dataArray.length()} records (kept: ${numbers.size})")
-        return numbers.distinct()
+        return FetchedSnapshot(
+            numbers = numbers,
+            contentType = body.contentType,
+            charset = body.charset,
+            byteCount = body.byteCount,
+            recordCount = dataArray.length(),
+            duplicateRecordCount = duplicates,
+            maxObservedFieldLength = maxFieldLength,
+            malformedRecordCount = malformed,
+            fetchedAt = body.fetchedAt,
+            expectedContentTypes = setOf("application/json")
+        )
     }
 
     /**
-     * Security fix (audit finding): streams the response body line-by-line through
-     * SecureCsvParser instead of buffering the whole HTTP response into a JVM String
-     * first (the previous parseCsvBody(fetchRawBody(...)) approach). These federal
-     * endpoints are external, unauthenticated-by-us data sources — an oversized,
-     * malformed, or malicious response can no longer force unbounded heap growth,
-     * since SecureCsvParser reads one line at a time under a hard 2,000,000-line cap.
-     *
-     * MIN_NUMBER_LENGTH/MAX_NUMBER_LENGTH filtering happens here rather than inside
-     * SecureCsvParser: the parser's contract is bounded raw streaming, not this
-     * source's specific length bounds, and a stray
-     * CSV header cell must not reach the DB as a bogus block entry.
+     * Streams CSV through the bounded raw parser, then validates/canonicalizes
+     * each field and retains metadata for the snapshot sanity boundary.
      */
-    private fun fetchCsvNumbers(url: String, label: String): List<String> {
-        val parseStartMs = System.currentTimeMillis()
+    private fun fetchCsvSnapshot(url: String, label: String): FetchedSnapshot {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "SignalGate-Pulse/1.0")
-            .header("Accept", "application/json, text/csv, */*")
+            .header("Accept", "text/csv, application/csv, */*")
             .build()
         val numbers = mutableListOf<String>()
+        val seen = mutableSetOf<String>()
+        var recordCount = 0
+        var malformed = 0
+        var duplicates = 0
+        var maxFieldLength = 0
+        val fetchedAt = System.currentTimeMillis()
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw Exception("HTTP ${response.code} fetching $label")
-            val stream = response.body?.byteStream() ?: throw Exception("Empty body from $label")
+            val contentType = response.header("Content-Type")
+            val charset = charsetFromContentType(contentType)
+            if (!charset.equals("UTF-8", ignoreCase = true)) {
+                throw IllegalArgumentException("Unsupported source encoding")
+            }
+            val bodyStream = response.body?.byteStream() ?: throw Exception("Empty body from $label")
+            val stream = CountingInputStream(bodyStream)
             secureCsvParser.streamRows(stream) { rawNumber ->
-                val canonicalNumber = SourceRecordValidator.canonicalizePhone(rawNumber)
-                if (numbers.size < MAX_ENTRIES_PER_SOURCE &&
-                    canonicalNumber != null &&
-                    canonicalNumber.length in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH
+                val normalizedRaw = rawNumber.trim()
+                if (recordCount == 0 && normalizedRaw.lowercase() in setOf("phone", "phone_number", "number")) {
+                    return@streamRows
+                }
+                recordCount++
+                maxFieldLength = maxOf(maxFieldLength, normalizedRaw.length)
+                val canonicalNumber = SourceRecordValidator.canonicalizePhone(normalizedRaw)
+                if (canonicalNumber == null ||
+                    canonicalNumber.length !in MIN_NUMBER_LENGTH..MAX_NUMBER_LENGTH
                 ) {
+                    malformed++
+                } else if (!seen.add(canonicalNumber)) {
+                    duplicates++
+                } else if (numbers.size < MAX_ENTRIES_PER_SOURCE) {
                     numbers.add(canonicalNumber)
                 }
             }
+            return FetchedSnapshot(
+                numbers = numbers,
+                contentType = contentType,
+                charset = charset,
+                byteCount = stream.count,
+                recordCount = recordCount,
+                duplicateRecordCount = duplicates,
+                maxObservedFieldLength = maxFieldLength,
+                malformedRecordCount = malformed,
+                fetchedAt = fetchedAt,
+                expectedContentTypes = setOf("text/csv", "application/csv")
+            )
         }
-        val distinctNumbers = numbers.distinct()
-        Timber.tag(TAG).d(
-            "Parsed $label: raw_numbers=${numbers.size}, distinct_numbers=${distinctNumbers.size}, duration_ms=${System.currentTimeMillis() - parseStartMs}"
-        )
-        return distinctNumbers
     }
 
-    private fun fetchRawBody(url: String, label: String): String {
+    private class CountingInputStream(
+        input: java.io.InputStream
+    ) : java.io.FilterInputStream(input) {
+        var count: Long = 0
+            private set
+
+        override fun read(): Int {
+            val value = super.read()
+            if (value >= 0) count++
+            return value
+        }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+            val read = super.read(buffer, offset, length)
+            if (read > 0) count += read
+            return read
+        }
+    }
+
+    private data class RawBody(
+        val text: String,
+        val contentType: String?,
+        val charset: String?,
+        val byteCount: Long,
+        val fetchedAt: Long
+    )
+
+    private fun fetchRawBody(url: String, label: String): RawBody {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "SignalGate-Pulse/1.0")
             .header("Accept", "application/json, text/csv, */*")
             .build()
-        val response = httpClient.newCall(request).execute()
-        if (!response.isSuccessful) throw Exception("HTTP ${response.code} fetching $label")
-        return response.body?.string() ?: throw Exception("Empty body from $label")
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("HTTP ${response.code} fetching $label")
+            val body = response.body ?: throw Exception("Empty body from $label")
+            val bytes = body.byteStream().use { readBoundedBody(it, SnapshotSanityValidator.Limits().maxBytes) }
+            return RawBody(
+                text = bytes.toString(Charsets.UTF_8),
+                contentType = response.header("Content-Type"),
+                charset = charsetFromContentType(response.header("Content-Type")),
+                byteCount = bytes.size.toLong(),
+                fetchedAt = System.currentTimeMillis()
+            )
+        }
     }
+
+    private fun readBoundedBody(input: java.io.InputStream, maxBytes: Long): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(64 * 1024)
+        var total = 0L
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            total += count
+            if (total > maxBytes) throw IllegalArgumentException("Snapshot byte limit exceeded")
+            out.write(buffer, 0, count)
+        }
+        return out.toByteArray()
+    }
+
+    private fun charsetFromContentType(contentType: String?): String? =
+        contentType?.split(';')
+            ?.drop(1)
+            ?.firstOrNull { it.trim().startsWith("charset=", ignoreCase = true) }
+            ?.substringAfter('=')
+            ?.trim()
+            ?.trim('"')
+            ?: "UTF-8"
 
     private suspend fun ensureSourceRow(source: FederalSource): Int {
         val existing = dataSourceRepository.getSourceByName(source.name)

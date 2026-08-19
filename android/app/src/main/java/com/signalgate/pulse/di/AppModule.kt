@@ -35,6 +35,7 @@ import com.signalgate.pulse.workers.CommunitySyncWorker
 import com.signalgate.pulse.data.security.BloomFilterEngine
 import com.signalgate.pulse.data.security.PrecedenceEngine
 import com.signalgate.pulse.data.security.SecureCsvParser
+import com.signalgate.pulse.data.security.SnapshotSanityValidator
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.core.qualifier.named
@@ -169,6 +170,7 @@ val engineModule = module {
     // the false-positive rate for both without any benefit.
     single(named("patternBloom")) { BloomFilterEngine() }
     single { SecureCsvParser() }
+    single { SnapshotSanityValidator() }
     single {
         PrecedenceEngine(
             bloomFilter = get(),
@@ -181,7 +183,7 @@ val engineModule = module {
     // Security fix (audit finding): third get() resolves the SecureCsvParser
     // singleton registered above — ReliableSourceManager now streams federal CSV
     // feeds through it instead of a hand-rolled parser. See ReliableSourceManager.
-    single { ReliableSourceManager(get(), get(), get(), get()) }
+    single { ReliableSourceManager(get(), get(), get(), get(), get()) }
     single { SourceSyncUseCase(get()) }
 
     // L6 — decision boundary
