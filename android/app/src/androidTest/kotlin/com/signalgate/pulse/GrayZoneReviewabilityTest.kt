@@ -16,6 +16,7 @@ import com.signalgate.pulse.database.repositories.SettingRepository
 import com.signalgate.pulse.logic.ScreeningAction
 import com.signalgate.pulse.logic.SecurityRuleRepository
 import com.signalgate.pulse.ui.digest.DigestScreen
+import com.signalgate.pulse.ui.notifications.PulseTriggerLimiter
 import com.signalgate.pulse.ui.digest.PendingCardViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -82,6 +83,57 @@ class GrayZoneReviewabilityTest {
     @After
     fun tearDown() {
         database.close()
+    }
+
+    @Test
+    fun rateLimitedReviewUx_doesNotSuppressAuditOrReviewCardPersistence() = runBlocking<Unit> {
+        val callInfo = CallInfo(
+            originalPhoneNumber = phoneNumber,
+            normalizedPhoneNumber = phoneNumber,
+            spamStatus = CallTier.HEURISTIC_FLAG.name,
+            spamCategory = "advisory",
+            confidence = 45,
+            riskLevel = "MEDIUM",
+            matchedSources = listOf("advisory-pattern"),
+            callDecision = ScreeningAction.SCREEN,
+            tier = CallTier.HEURISTIC_FLAG
+        )
+        val decision = callInfo.screeningDecision
+        val limiter = PulseTriggerLimiter()
+
+        // The service persists consequences before consulting the limiter. Both
+        // calls must therefore retain their audit and review-card records even
+        // though the second notification/haptic dispatch is suppressed.
+        SignalGateCallScreeningService().executeDecisionConsequences(
+            callInfo = callInfo,
+            decision = decision,
+            callLogRepository = callLogRepository,
+            pendingCardRepository = pendingCardRepository,
+            now = { 1_700_000_000_000L }
+        )
+        val firstDispatch = limiter.shouldDispatchNotification(
+            decision.notificationPolicy,
+            phoneNumber,
+            now = 1_700_000_000_000L
+        )
+
+        SignalGateCallScreeningService().executeDecisionConsequences(
+            callInfo = callInfo,
+            decision = decision,
+            callLogRepository = callLogRepository,
+            pendingCardRepository = pendingCardRepository,
+            now = { 1_700_000_000_001L }
+        )
+        val secondDispatch = limiter.shouldDispatchNotification(
+            decision.notificationPolicy,
+            phoneNumber,
+            now = 1_700_000_000_001L
+        )
+
+        assertTrue("The first review UX dispatch should be allowed", firstDispatch)
+        assertFalse("The repeated review UX dispatch should be throttled", secondDispatch)
+        assertEquals("Rate limiting must not suppress audit records", 2, callLogRepository.getCallsByPhoneNumber(phoneNumber).size)
+        assertEquals("Rate limiting must not suppress required review cards", 2, pendingCardRepository.getUndismissedCards().first().size)
     }
 
     @Test

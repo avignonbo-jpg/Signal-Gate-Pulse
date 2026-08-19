@@ -44,6 +44,15 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 2.2 rate-limiting invariant test added
+Who: Manus AI, following the owner’s instruction to move to Phase 2.2.
+What: Added `rateLimitedReviewUx_doesNotSuppressAuditOrReviewCardPersistence` to `GrayZoneReviewabilityTest`. The test executes the service persistence seam for two identical HEURISTIC_FLAG outcomes, consults `PulseTriggerLimiter` only after each persistence operation, verifies the first UX dispatch is allowed and the repeated dispatch is suppressed, then asserts that both call-log audit records and both required undismissed review cards remain present. Existing JVM limiter tests continue to cover cooldown, reset, non-rate-limited block policies, and NONE policies.
+Invariant: `PulseTriggerLimiter` is a UX throttle only. It cannot suppress the domain decision, `CallLogEntry`, or `PendingCardEntity` required by `ScreeningDecision.reviewCardRequired`. The production service ordering and the new emulator test prove persistence precedes limiter consultation.
+Files touched: `android/app/src/androidTest/kotlin/com/signalgate/pulse/GrayZoneReviewabilityTest.kt`; `PROJECT_LEDGER.md`.
+Validation: `git diff --check` passed. Local Gradle execution remains unavailable because the sandbox lacks the Android SDK; mandatory remote JVM and instrumented CI are required for final confirmation.
+To-do / heads-up: run and inspect the mandatory CI workflows for the new test commit. Do not mark Phase 2.2 complete until the instrumented invariant test is green.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 2.1 notification/haptics integration CI-verified
 Who: Manus AI, following the Phase 2.1 integration push.
 What: The complete Phase 2.1 integration from commit `63e7dd7` passed the mandatory CI gates. The supplied haptics, vibration-pattern, limiter, manifest, Koin, service, and focused limiter-test changes were accepted without lint errors.
