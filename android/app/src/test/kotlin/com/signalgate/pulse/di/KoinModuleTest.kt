@@ -16,6 +16,8 @@ import com.signalgate.pulse.logic.CallRiskEvaluator
 import com.signalgate.pulse.logic.CallScreeningEngine
 import com.signalgate.pulse.logic.DataSyncEngine
 import com.signalgate.pulse.logic.ReliableSourceManager
+import com.signalgate.pulse.ui.notifications.PulseHapticsController
+import com.signalgate.pulse.ui.notifications.PulseTriggerLimiter
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.Executors
 import org.junit.After
@@ -98,7 +100,7 @@ class KoinModuleTest : KoinTest {
 
         startKoin {
             androidContext(testApp)
-            modules(testDatabaseModule, repositoryModule, engineModule, viewModelModule, workerModule)
+            modules(testDatabaseModule, repositoryModule, engineModule, viewModelModule, notificationModule, workerModule)
         }
     }
 
@@ -123,7 +125,7 @@ class KoinModuleTest : KoinTest {
         stopKoin()
         checkModules {
             androidContext(testApp)
-            modules(testDatabaseModule, repositoryModule, engineModule, viewModelModule)
+            modules(testDatabaseModule, repositoryModule, engineModule, viewModelModule, notificationModule)
         }
     }
 
@@ -144,5 +146,11 @@ class KoinModuleTest : KoinTest {
         getKoin().get<DataSyncEngine>()
         getKoin().get<ReliableSourceManager>()
         getKoin().get<BloomFilterEngine>()
+    }
+
+    @Test
+    fun notificationConsequencesResolve() {
+        getKoin().get<PulseHapticsController>()
+        getKoin().get<PulseTriggerLimiter>()
     }
 }

@@ -24,6 +24,8 @@ import com.signalgate.pulse.ui.RecentCallsViewModel
 import com.signalgate.pulse.ui.dashboard.DashboardViewModel
 import com.signalgate.pulse.ui.digest.PendingCardViewModel
 import com.signalgate.pulse.ui.onboarding.OnboardingViewModel
+import com.signalgate.pulse.ui.notifications.PulseHapticsController
+import com.signalgate.pulse.ui.notifications.PulseTriggerLimiter
 import com.signalgate.pulse.ui.screens.SettingsViewModel
 import com.signalgate.pulse.ui.screens.SourcesViewModel
 import com.signalgate.pulse.ui.viewmodels.ContactsViewModel
@@ -219,6 +221,16 @@ val viewModelModule = module {
 }
 
 /**
+ * notificationModule — Provides the Phase 2.1 UX consequence consumers.
+ * Haptics and rate limiting are downstream of ScreeningDecision; neither may
+ * alter the domain decision, audit record, or persisted review-card contract.
+ */
+val notificationModule = module {
+    single { PulseHapticsController(androidContext()) }
+    single { PulseTriggerLimiter() }
+}
+
+/**
  * workerModule — Provides CoroutineWorker instances via KoinWorkerFactory.
  * Scope: Per-work lifecycle (WorkManager controls creation).
  *
@@ -258,6 +270,7 @@ val appModule = listOf(
     repositoryModule,
     engineModule,
     viewModelModule,
+    notificationModule,
     workerModule
 )
 

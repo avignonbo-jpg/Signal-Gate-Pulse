@@ -13,6 +13,7 @@
          Pulse does not draw over other apps. Any PR reintroducing an overlay
          permission should be blocked — see Architecture Contract v5. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET" />

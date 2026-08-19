@@ -17,6 +17,10 @@ import com.signalgate.pulse.database.repositories.CallLogRepository
 import com.signalgate.pulse.database.repositories.PendingCardRepository
 import com.signalgate.pulse.logic.CallScreeningEngine
 import com.signalgate.pulse.logic.ScreeningAction
+import com.signalgate.pulse.logic.NotificationPolicy
+import com.signalgate.pulse.logic.ScreeningDecision
+import com.signalgate.pulse.ui.notifications.PulseHapticsController
+import com.signalgate.pulse.ui.notifications.PulseTriggerLimiter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,6 +32,8 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
     private val screeningEngine: CallScreeningEngine by inject()
     private val callLogRepository: CallLogRepository by inject()
     private val pendingCardRepository: PendingCardRepository by inject()
+    private val pulseHapticsController: PulseHapticsController by inject()
+    private val pulseTriggerLimiter: PulseTriggerLimiter by inject()
 
     companion object {
         private const val TAG = "SignalGateScreening"
@@ -51,13 +57,21 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                 val callInfo = screeningEngine.screenCall(phoneNumber, details)
                 val decision = callInfo.screeningDecision
                 respondToCall(details, toCallResponse(decision.callAction))
-                writeAuditRecords(callInfo, decision)
-                when (decision.notificationPolicy) {
-                    com.signalgate.pulse.logic.NotificationPolicy.BLOCK_REVIEW ->
-                        fireBlockedCallNotification(callInfo)
-                    com.signalgate.pulse.logic.NotificationPolicy.REVIEW_AVAILABLE ->
-                        Timber.i("Review notification policy recorded for ${callInfo.normalizedPhoneNumber}; dispatch remains a later UX phase")
-                    com.signalgate.pulse.logic.NotificationPolicy.NONE -> Unit
+                // Persist every explicit consequence before consulting the UX limiter.
+                // Rate limiting may suppress dispatch, never audit or review state.
+                executeDecisionConsequences(
+                    callInfo = callInfo,
+                    decision = decision,
+                    callLogRepository = callLogRepository,
+                    pendingCardRepository = pendingCardRepository
+                )
+                try {
+                    dispatchDecisionUx(callInfo, decision)
+                } catch (e: Exception) {
+                    // UX dispatch is best effort after persistence. A notification
+                    // or platform haptic failure must not rewrite the completed
+                    // domain outcome as SECURITY_FAILURE.
+                    Timber.e(e, "Optional screening UX dispatch failed")
                 }
             } catch (e: Exception) {
                 Timber.e(e, "SECURITY_FAILURE — unhandled error screening $phoneNumber")
@@ -125,32 +139,50 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
         }
     }
 
-    private fun writeAuditRecords(
+    /**
+     * Dispatches only the UX consequences described by the immutable decision.
+     * Persistence has already completed when this function is called. The limiter
+     * can suppress repeated review UX but cannot alter the decision or its records.
+     */
+    private fun dispatchDecisionUx(
         callInfo: CallInfo,
-        decision: com.signalgate.pulse.logic.ScreeningDecision
+        decision: ScreeningDecision
     ) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                executeDecisionConsequences(
-                    callInfo = callInfo,
-                    decision = decision,
-                    callLogRepository = callLogRepository,
-                    pendingCardRepository = pendingCardRepository
-                )
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to write audit records")
+        when (decision.notificationPolicy) {
+            NotificationPolicy.BLOCK_REVIEW -> {
+                if (pulseTriggerLimiter.shouldDispatchNotification(
+                        NotificationPolicy.BLOCK_REVIEW,
+                        callInfo.normalizedPhoneNumber
+                    )
+                ) {
+                    fireBlockedCallNotification(callInfo)
+                }
+                pulseHapticsController.dispatch(decision.hapticPolicy)
             }
+            NotificationPolicy.REVIEW_AVAILABLE -> {
+                // Notification and haptic share one cooldown decision so they are
+                // co-throttled and never present inconsistent review UX.
+                if (pulseTriggerLimiter.shouldDispatchNotification(
+                        NotificationPolicy.REVIEW_AVAILABLE,
+                        callInfo.normalizedPhoneNumber
+                    )
+                ) {
+                    fireReviewAvailableNotification(callInfo)
+                    pulseHapticsController.dispatch(decision.hapticPolicy)
+                }
+            }
+            NotificationPolicy.NONE -> Unit
         }
     }
 
     /**
      * Persists the explicit decision consequences at the application boundary.
      *
-     * This seam deliberately contains persistence only: notification and haptic
-     * dispatch remain policy consumers in their governed product phase. Keeping
-     * this function internal makes the complete gray-zone persistence chain
-     * testable without constructing TelecomCallScreeningService or relying on
-     * asynchronous sleeps in tests.
+     * This seam contains the persistence half of the consequence contract. The
+     * caller completes it before dispatching Phase 2.1 notification or haptic UX.
+     * Keeping this function internal makes the complete gray-zone persistence
+     * chain testable without constructing TelecomCallScreeningService or relying
+     * on asynchronous sleeps in tests.
      */
     internal suspend fun executeDecisionConsequences(
         callInfo: CallInfo,
@@ -238,6 +270,40 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
             .addAction(0, "Not Spam", notSpamPendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .build()
+
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(notificationId, notification)
+    }
+
+    private fun fireReviewAvailableNotification(callInfo: CallInfo) {
+        val context = applicationContext
+        val notificationId = callInfo.normalizedPhoneNumber.hashCode()
+        createBlockedCallChannel(context)
+
+        val digestIntent = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse("signalgate://digest"),
+            context,
+            MainActivity::class.java
+        ).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            digestIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val confidenceText = callInfo.confidence?.let { " ($it% match)" } ?: ""
+        val notification = NotificationCompat.Builder(context, BLOCKED_CALL_CHANNEL_ID)
+            .setSmallIcon(R.drawable.shield_logo)
+            .setContentTitle("Call Needs Review")
+            .setContentText("Suspicious call${confidenceText}")
+            .setContentIntent(contentPendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .build()
 
