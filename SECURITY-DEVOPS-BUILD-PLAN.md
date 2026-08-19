@@ -111,9 +111,9 @@ Phase 1 exit criteria
 
 [x] No edge-layer code invents domain semantics (contract-driven edge execution and mandatory architecture/test gates)
 
-Phase 2 — Gray-Zone Product Completion
+Phase 2 — Gray-Zone Product Completion — ✅ CLOSED, CI-verified 2026-08-19
 
-Only after Phase 1 passes.
+Only after Phase 1 passes. All four Phase 2 items are complete and signed in `PROJECT_LEDGER.md`; the mandatory Consumer, instrumented, and Compose Metrics workflows passed for the final Phase 2.3/2.4 commit.
 
 2.1 Notification and haptics — ✅ COMPLETE, CI-verified 2026-08-19
 `PulseHapticsController`, `PulseVibration`, and Koin wiring are present and execute only the explicit haptic policy after persisted consequences. The normal `VIBRATE` manifest permission is declared. Mandatory Consumer, instrumented, and metrics workflows passed in runs 32244130376, 32244130346, and 32244130337.
@@ -126,6 +126,7 @@ The existing `CallActionReceiver` action is validated at the ingress seam and ro
 
 2.4 Privacy — ✅ COMPLETE, CI-verified 2026-08-19
 Blocked-call and review notifications now use private visibility, contain no raw phone number in rendered content, and provide a redacted public version for lock-screen and mirrored surfaces. Operational logs in the screening and limiter paths no longer emit raw phone numbers. `NotificationPrivacyTest` verifies private visibility and redacted public versions.
+
 Phase 3 — Data Source Reliability
 
 3.1 Parser/validator separation

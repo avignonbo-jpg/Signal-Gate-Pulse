@@ -44,6 +44,12 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 2 formally closed; Phase 3.1 opened
+Who: Manus AI, following the owner’s instruction to advance from the completed notification/product phase.
+Closure: Phase 2.1 haptics, 2.2 rate limiting, 2.3 notification actions, and 2.4 privacy are all complete and CI-verified. Final Phase 2.3/2.4 evidence is Consumer CI `32254152945`, Instrumented CI `32254152984`, and Compose Metrics CI `32254152979`; the signed closure commit is `b2fb334`. The build sheet now records Phase 2 as formally CLOSED.
+Phase 3.1 opening: The next source-of-truth audit will trace `DataSyncEngine`, parser/security parsing, `ReliableSourceManager`, `SourceSyncUseCase`, `SecurityRuleRepository`, and activation persistence. The required separation is bounded raw parsing → schema validation → canonicalization → security sanity checks → snapshot activation, while preserving Phase 0.5 hard-failure and last-known-good invariants. No Phase 3.2–3.4 implementation will be treated as complete until 3.1’s boundary and tests pass in mandatory CI.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 2.3/2.4 CI-verified and closed
 Who: Manus AI, following corrected commit `4fd665a`.
 What: The focused Robolectric null-action-array correction passed. Phase 2.3 is closed: `CallActionReceiverBehaviorTest` proves invalid actions are rejected before repository access and the supported notification action routes allowlisting through `SecurityRuleRepository` and card dismissal through `PendingCardRepository`; no receiver-owned feature persistence or direct DAO access exists. Phase 2.4 is closed: notification privacy tests prove private visibility, redacted public versions, absence of raw phone numbers from rendered notification content, and preserved blocked-call action behavior. Screening-service and limiter operational logs no longer emit raw phone numbers.
