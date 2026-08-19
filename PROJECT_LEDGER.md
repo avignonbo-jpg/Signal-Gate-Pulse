@@ -44,6 +44,12 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 3.3 test-provider correction after CI feedback
+Who: Manus AI, following Consumer CI `32286208347`.
+What: The new manifest verifier compiled, but all five `ArtifactAuthenticityVerifierTest` methods failed during shared test-field initialization because the JVM provider did not accept the generic EC `initialize(256)` request. The test-only key generation now explicitly requests `ECGenParameterSpec("secp256r1")`, matching the production P-256 design. No production behavior changed.
+Validation: The failure was isolated to test setup at the key-generation line; the correction preserves generated P-256 keys and detached `SHA256withECDSA` coverage. Mandatory CI rerun is required.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 3.3 manifest verifier implemented; mirror publication blocked on repository access
 Who: Manus AI, following the approved P-256 authenticity design and the owner-provided `DNC_SIGNING_PRIVATE_KEY` secret name.
 What: Replaced the temporary hash-sidecar verifier design with `ArtifactAuthenticityVerifier` and `SourceAuthenticityTrustAnchor`. The FTC path now fetches `dnc-numbers.json.manifest.json`, requires algorithm `SHA256withECDSA`, validates the SHA-256 payload hash and signedAt freshness window, verifies the detached Base64 DER ECDSA signature against the embedded P-256 SPKI public key, and only then proceeds to `SnapshotSanityValidator` and `SecurityRuleRepository.replaceSourceSnapshot`. FCC remains deliberately HTTPS-transport-only because it is third-party infrastructure outside the controlled signing pipeline.

@@ -2,6 +2,7 @@ package com.signalgate.pulse.data.security
 
 import android.util.Base64
 import java.security.KeyPairGenerator
+import java.security.spec.ECGenParameterSpec
 import java.security.MessageDigest
 import java.security.Signature
 import java.time.Instant
@@ -12,7 +13,7 @@ import org.junit.Test
 class ArtifactAuthenticityVerifierTest {
     private val now = Instant.parse("2026-08-19T20:00:00Z")
     private val keyPair = KeyPairGenerator.getInstance("EC").apply {
-        initialize(256)
+        initialize(ECGenParameterSpec("secp256r1"))
     }.generateKeyPair()
     private val publicKeyB64 = Base64.encodeToString(keyPair.public.encoded, Base64.NO_WRAP)
 
