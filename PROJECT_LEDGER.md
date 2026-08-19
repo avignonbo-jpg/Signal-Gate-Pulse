@@ -44,6 +44,15 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 2.1 notification/haptics readiness check
+Who: Manus AI, following Phase 1 closure and explicit instruction to begin Phase 2.1 only after persisted gray-zone review was proven.
+What: Re-read the live `CallActionReceiver.kt`, `ScreeningDecision.kt`, and `SignalGateCallScreeningService.kt`, then searched the tracked `consumer-v1` tree and workspace for `PulseHapticsController`, `PulseVibration`, and `PulseTriggerLimiter`. The held implementation is not present in the live branch or available workspace artifacts; only `NotificationChannelManager.kt` is currently tracked under the notification area. No speculative replacement or new service layer was created.
+Files touched: `PROJECT_LEDGER.md` only.
+Layers touched: governance documentation only. The current receiver remains the Phase 0.7 boundary: it owns only `ACTION_NOT_SPAM`, depends on `PendingCardRepository` and `SecurityRuleRepository`, and exposes the existing internal validation seam.
+Contract consulted: yes — adopted `Architecture-Contract.md`, the current build sheet, the signed Phase 1 closure entry, the decision consequence contract, and the complete live receiver were reviewed.
+Validation: Phase 1 remains closed and CI-verified on `c0b6c4a`/`1131661`. Phase 2.1 is authorized but blocked from implementation until the held source files or an approved artifact are supplied. Notification/haptic code must consume explicit decision policy and must never alter the domain decision, audit record, or required review-card persistence.
+To-do / heads-up: provide the held `PulseHapticsController`, `PulseVibration`, and `PulseTriggerLimiter` files (or identify their archive/commit). Once supplied, diff them against the current receiver and architecture contract before installation.
+Signature: Manus AI — 2026-08-19
 
 2026-08-19 — Phase 1 Decision Engine Integrity formally closed
 Who: Manus AI, following the explicit Phase 1 exit-gate instruction
