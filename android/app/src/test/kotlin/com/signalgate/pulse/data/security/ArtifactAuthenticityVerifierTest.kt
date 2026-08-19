@@ -1,6 +1,6 @@
 package com.signalgate.pulse.data.security
 
-import android.util.Base64
+import java.util.Base64
 import java.security.KeyPairGenerator
 import java.security.spec.ECGenParameterSpec
 import java.security.MessageDigest
@@ -15,7 +15,7 @@ class ArtifactAuthenticityVerifierTest {
     private val keyPair = KeyPairGenerator.getInstance("EC").apply {
         initialize(ECGenParameterSpec("secp256r1"))
     }.generateKeyPair()
-    private val publicKeyB64 = Base64.encodeToString(keyPair.public.encoded, Base64.NO_WRAP)
+    private val publicKeyB64 = Base64.getEncoder().encodeToString(keyPair.public.encoded)
 
     @Test
     fun matchingManifestAndSignature_areVerified() {
@@ -86,7 +86,7 @@ class ArtifactAuthenticityVerifierTest {
             sha256Hex = MessageDigest.getInstance("SHA-256")
                 .digest(payload)
                 .joinToString("") { byte -> "%02x".format(byte) },
-            signatureB64 = Base64.encodeToString(signature.sign(), Base64.NO_WRAP),
+            signatureB64 = Base64.getEncoder().encodeToString(signature.sign()),
             signedAt = signedAt.toString()
         )
     }

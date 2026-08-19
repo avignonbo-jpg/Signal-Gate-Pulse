@@ -44,6 +44,12 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 3.3 JVM Base64 test compatibility correction after CI feedback
+Who: Manus AI, following Consumer CI `32286767291`.
+What: After the explicit `secp256r1` correction, all five verifier tests still failed during shared test-field initialization because the test imported `android.util.Base64`, whose methods are unavailable in local JVM tests. The test now uses `java.util.Base64` only; production Android code remains unchanged.
+Validation: The failure was isolated to the test-only public-key/signature encoding line. The test still exercises the production verifier through its test-key seam and detached `SHA256withECDSA` vectors. Mandatory CI rerun is required.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 3.3 test-provider correction after CI feedback
 Who: Manus AI, following Consumer CI `32286208347`.
 What: The new manifest verifier compiled, but all five `ArtifactAuthenticityVerifierTest` methods failed during shared test-field initialization because the JVM provider did not accept the generic EC `initialize(256)` request. The test-only key generation now explicitly requests `ECGenParameterSpec("secp256r1")`, matching the production P-256 design. No production behavior changed.
