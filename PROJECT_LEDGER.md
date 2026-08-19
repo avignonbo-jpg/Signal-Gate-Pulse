@@ -44,6 +44,14 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 2.2 rate-limiting invariant CI-verified and closed
+Who: Manus AI, following the Phase 2.2 test push.
+What: The rate-limiting boundary is now CI-verified. The repeated HEURISTIC_FLAG UX dispatch was suppressed by `PulseTriggerLimiter`, while both audit records and both required `PendingCardEntity` review cards remained persisted. The domain decision remained `SCREEN`; the limiter had no access to or control over decision or persistence consequences.
+Validation evidence: `Pulse Consumer CI` run `32248702045` passed architecture drift, build, JVM unit tests, lint, artifact upload, and compose-metrics verification. `Pulse Instrumented Tests` run `32248701979` passed the emulator suite, including `rateLimitedReviewUx_doesNotSuppressAuditOrReviewCardPersistence` and the complete gray-zone Digest path. `Compose Metrics CI` run `32248701987` passed.
+Closure: Phase 2.2 is complete. `PulseTriggerLimiter` is documented and tested as a UX throttle, not a security control. No Phase 1 decision or persisted-consequence invariant was weakened.
+To-do / heads-up: Future limiter changes must preserve the same ordering and invariant test. Any new notification action should be reviewed against the current `CallActionReceiver` before implementation.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 2.2 rate-limiting invariant test added
 Who: Manus AI, following the owner’s instruction to move to Phase 2.2.
 What: Added `rateLimitedReviewUx_doesNotSuppressAuditOrReviewCardPersistence` to `GrayZoneReviewabilityTest`. The test executes the service persistence seam for two identical HEURISTIC_FLAG outcomes, consults `PulseTriggerLimiter` only after each persistence operation, verifies the first UX dispatch is allowed and the repeated dispatch is suppressed, then asserts that both call-log audit records and both required undismissed review cards remain present. Existing JVM limiter tests continue to cover cooldown, reset, non-rate-limited block policies, and NONE policies.
