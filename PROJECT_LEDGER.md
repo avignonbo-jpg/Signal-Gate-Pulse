@@ -44,6 +44,13 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 3.1 and 3.2 CI-verified; Phase 3.3 opened
+Who: Manus AI, following the mandatory CI gates for the source-pipeline work.
+Closure: Phase 3.1 parser/validator separation passed Consumer CI `32256017818`, Instrumented CI `32256017902`, and Compose Metrics CI `32256017967` on commit `035d570`. Phase 3.2 snapshot sanity checks passed Consumer CI `32257006586`, Instrumented CI `32257006994`, and Compose Metrics CI `32257006268` on commit `94818f8`.
+Result: The source pipeline now has bounded raw parsing, shared canonicalization/field validation, explicit snapshot candidate sanity checks, and atomic activation remains downstream in `SecurityRuleRepository`. Snapshot sanity rejects bad content type/encoding, byte and record limits, excessive fields, malformed ratios, stale candidates, and catastrophic count changes; duplicate records are deterministic and accounted for.
+Phase 3.3 opening: Authenticity is now the active gate. The current FTC mirror uses GitHub raw HTTPS; this is transport security, not artifact authenticity. The next implementation must introduce a signed snapshot/manifest or hash verification path only where the operational source can publish the corresponding artifact, and must verify before activation. No authenticity claim may be recorded without a test proving tamper rejection.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 3.2 snapshot sanity checks prepared for CI
 Who: Manus AI, following the Phase 3.1 CI-verified parser/validator separation.
 What: Added `SnapshotSanityValidator` as the explicit candidate gate before `SecurityRuleRepository.replaceSourceSnapshot`. It validates content type, UTF-8 encoding, bounded bytes, record and accepted-record ranges, maximum raw field length, duplicate accounting, malformed-record ratio, freshness, and catastrophic accepted-count changes against the last active source count. `ReliableSourceManager` now captures metadata for FTC JSON and streamed CSV candidates, bounds FTC body reads, counts streamed CSV bytes, and rejects invalid encoding before parsing.

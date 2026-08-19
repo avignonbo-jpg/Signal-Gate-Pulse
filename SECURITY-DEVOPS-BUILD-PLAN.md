@@ -129,13 +129,14 @@ Blocked-call and review notifications now use private visibility, contain no raw
 
 Phase 3 — Data Source Reliability
 
-3.1 Parser/validator separation
-Separate: bounded raw parsing, schema validation, canonicalization, security sanity checks, snapshot activation. Same underlying work as 0.5's BoundedXlsxParser extraction — this phase is where that separation gets fully carried through the rest of the source pipeline, not just the parser entry point.
+3.1 Parser/validator separation — ✅ COMPLETE, CI-verified 2026-08-19
+`SecureCsvParser` owns bounded raw extraction; `SourceRecordValidator` owns canonicalization and phone-field validation; downstream application code owns candidate construction and `SecurityRuleRepository` owns atomic activation. Consumer CI `32256017818`, Instrumented CI `32256017902`, and Compose Metrics CI `32256017967` passed on commit `035d570`.
 
-3.2 Snapshot sanity checks
-Validate: content type, encoding, schema/header, maximum bytes, maximum records, maximum field length, duplicate behavior, expected count ranges, freshness, catastrophic count changes, malformed-record ratio.
 
-3.3 Authenticity
+3.2 Snapshot sanity checks — ✅ COMPLETE, CI-verified 2026-08-19
+`SnapshotSanityValidator` now validates content type, UTF-8 encoding, maximum bytes, maximum records, maximum field length, duplicate accounting, expected count ranges, freshness, catastrophic count changes, and malformed-record ratio before snapshot activation. Consumer CI `32257006586`, Instrumented CI `32257006994`, and Compose Metrics CI `32257006268` passed on commit `94818f8`.
+
+3.3 Authenticity — IN PROGRESS
 Where operationally supported, publish signed source snapshots/manifests. The app verifies signature/hash before activation. HTTPS remains transport security, not the sole artifact-authenticity guarantee — the current FTC-mirror trust model is GitHub-raw-HTTPS-and-nothing-else, which is fine as transport but isn't artifact authenticity.
 
 3.4 Source lifecycle
