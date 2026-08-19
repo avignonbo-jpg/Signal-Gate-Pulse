@@ -439,3 +439,11 @@ Evidence: Failed JVM run 32201506025 identified the exact compiler errors. Stati
 Status: Focused test source is corrected locally; mandatory CI rerun is required before closing the edge-execution verification item.
 To-do / heads-up: monitor the targeted JVM test on the next consumer-v1 CI run. If compilation passes, inspect the test result count and artifact paths; if the test fails at runtime, fix only the evidence-supported edge behavior.
 Signature: Manus AI — 2026-08-19
+
+2026-08-19 — ScreeningServiceEdgeExecutionTest JUnit return-type correction
+Who: Manus AI
+What: The runBlocking conversion compiled, but CI run 32202481391 reported `InvalidTestClassError`: three JUnit methods returned a non-Unit value because the final Mockito `verify(...)` expression became the generic return value of `runBlocking`. Constrained all eight coroutine test bodies to `runBlocking<Unit>`, preserving the test logic and making every JUnit method return void/Unit as required by JUnit4. No production code or dependency was changed.
+Evidence: Failed JVM run 32202481391; downloaded `test-results` artifact identified `reviewCardRequired_false_doesNotWritePendingCard`, `allowlisted_doesNotWritePendingCard_andDoesNotWriteCallLog`, and `heuristicBlock_allConsequenceFieldsAreCorrect` as the invalid methods. Static validation after correction passed `git diff --check` and `check-architecture-drift.sh`; only `kotlinx.coroutines.runBlocking` remains and no `runTest`/`kotlinx.coroutines.test` references remain.
+Status: Correction is ready for mandatory CI rerun.
+To-do / heads-up: inspect the next targeted JVM result for actual test execution and artifact availability. Do not close the Phase 1.2 edge-execution item until the targeted class passes.
+Signature: Manus AI — 2026-08-19
