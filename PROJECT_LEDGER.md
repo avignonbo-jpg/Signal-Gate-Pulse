@@ -44,6 +44,12 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 3.3 production Base64 compatibility correction after CI feedback
+Who: Manus AI, following Consumer CI `32287280407`.
+What: The remaining valid-signature test failed because production `ArtifactAuthenticityVerifier` still called `android.util.Base64`, which is not implemented in local JVM tests. Since the app minimum API is 29, production verification now uses `java.util.Base64.getDecoder()`, available on the supported platform and executable in JVM tests. No trust boundary, key, algorithm, or lifecycle behavior changed.
+Validation: Only the two production Base64 decode calls and import changed. The verifier continues to reject malformed/empty signatures through its existing fail-closed exception path. Mandatory CI rerun is required.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 3.3 JVM Base64 test compatibility correction after CI feedback
 Who: Manus AI, following Consumer CI `32286767291`.
 What: After the explicit `secp256r1` correction, all five verifier tests still failed during shared test-field initialization because the test imported `android.util.Base64`, whose methods are unavailable in local JVM tests. The test now uses `java.util.Base64` only; production Android code remains unchanged.

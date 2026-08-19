@@ -1,6 +1,6 @@
 package com.signalgate.pulse.data.security
 
-import android.util.Base64
+import java.util.Base64
 import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.Signature
@@ -102,13 +102,10 @@ object ArtifactAuthenticityVerifier {
         }
 
         return try {
-            val publicKeyBytes = Base64.decode(
-                publicKeyDerBase64,
-                Base64.DEFAULT
-            )
+            val publicKeyBytes = Base64.getDecoder().decode(publicKeyDerBase64)
             val publicKey = KeyFactory.getInstance("EC")
                 .generatePublic(X509EncodedKeySpec(publicKeyBytes))
-            val signatureBytes = Base64.decode(manifest.signatureB64, Base64.DEFAULT)
+            val signatureBytes = Base64.getDecoder().decode(manifest.signatureB64)
             if (signatureBytes.isEmpty()) {
                 return Result.Failed("Missing detached signature")
             }
