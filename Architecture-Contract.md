@@ -144,7 +144,7 @@ Caller ID, contact-provider data, downloaded source data, broadcast extras, deep
 INV-005 — Deterministic Security Decisions
 Given the same authoritative security state, normalized input, source configuration, and domain policy, the decision engine must produce the same decision. UI state, notification timing, haptic effects, logging, and network availability must not alter the domain decision.
 INV-006 — Decision Side Effects Follow the Decision Contract
-Audit records, review cards, notifications, haptics, and rate limiting are consequences of an explicit domain/application decision. Edge code must not infer security semantics from one enum field when the domain contract requires additional consequences. In particular, HEURISTIC_FLAG must remain reviewable according to the domain contract. Status: open — this is the gray-zone PendingCardEntity gap, §10.5.
+Audit records, review cards, notifications, haptics, and rate limiting are consequences of an explicit domain/application decision. Edge code must not infer security semantics from one enum field when the domain contract requires additional consequences. In particular, HEURISTIC_FLAG must remain reviewable according to the domain contract. Status: satisfied for decision, audit, and persisted review-card consequences; notification/haptic dispatch remains governed by Phase 2 product completion.
 INV-007 — No Raw PII in Operational Logs
 Production logging must not emit raw phone numbers, contact names, or equivalent call-identifying PII. Diagnostics should use non-reversible identifiers or controlled redaction. User-visible notifications must have an explicit lock-screen/privacy policy.
 INV-008 — Protected Source Lifecycle
@@ -185,8 +185,8 @@ TelemetryViewModel is registered in Koin but is not consumed by a screen. Wire i
 The app/build.gradle KSP comment describing exportSchema = false conflicts with SignalGateDatabase using exportSchema = true. Open — Phase 4.
 10.4 ShieldStatusGlow color conversion
 ShieldStatusGlow.kt uses Color.hashCode() for a native Paint color. Use toArgb(). Open — Phase 4.
-10.5 Gray-zone persistence contract
-HEURISTIC_FLAG currently does not create the review state promised by the domain contract (INV-006). This must be fixed before any notification/haptic feature is resumed. Open — Phase 1.
+10.5 Gray-zone persistence contract — [RESOLVED, CI-verified 2026-08-19]
+HEURISTIC_FLAG now creates the review state promised by the domain contract through the explicit ScreeningDecision consequence contract. GrayZoneReviewabilityTest verifies decision → audit record → PendingCardEntity → repository → PendingCardViewModel → DigestScreen in mandatory instrumented CI. Notification/haptic product dispatch remains Phase 2 work.
 10.6 Architecture script coverage gap
 Rule 6 must scan ui/theme/ if those classes remain cross-cutting. Open — Phase 5.
 10.7 Security-rule mutation has multiple paths — [RESOLVED, CI-verified 2026-08-13]
