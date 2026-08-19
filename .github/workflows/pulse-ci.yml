@@ -55,17 +55,6 @@ jobs:
           path: android/app/build/outputs/apk/**/app-*.apk
           retention-days: 7
 
-      # Temporary Phase 3.4 migration evidence: the sandbox cannot run KSP
-      # without an Android SDK, so retain the generated Room schema artifact
-      # until schemas/.../4.json is committed to the branch.
-      - name: Upload Generated Room Schemas
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: room-schemas-${{ github.sha }}
-          path: android/app/schemas/**
-          retention-days: 7
-
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4

@@ -136,24 +136,24 @@ Phase 3 — Data Source Reliability
 3.2 Snapshot sanity checks — ✅ COMPLETE, CI-verified 2026-08-19
 `SnapshotSanityValidator` now validates content type, UTF-8 encoding, maximum bytes, maximum records, maximum field length, duplicate accounting, expected count ranges, freshness, catastrophic count changes, and malformed-record ratio before snapshot activation. Consumer CI `32257006586`, Instrumented CI `32257006994`, and Compose Metrics CI `32257006268` passed on commit `94818f8`.
 
-3.3 Authenticity — IN PROGRESS
-Where operationally supported, publish signed source snapshots/manifests. The app verifies signature/hash before activation. HTTPS remains transport security, not the sole artifact-authenticity guarantee — the current FTC-mirror trust model is GitHub-raw-HTTPS-and-nothing-else, which is fine as transport but isn't artifact authenticity.
+3.3 Authenticity — ✅ COMPLETE, CI-verified 2026-08-19
+The first-party FTC mirror publishes `dnc-numbers.json.manifest.json` containing the SHA-256 payload hash and detached P-256 ECDSA signature. Pulse verifies the manifest hash and signature before activation. Live manifest validation returned `Verified OK` against the embedded Pulse trust anchor. Consumer CI `32287636576`, Instrumented CI `32287636596`, and Compose Metrics CI `32287636574` passed for the app-side verifier. Mirror workflow `32302233508` successfully published the signed manifest.
 
-3.4 Source lifecycle
-Use explicit states: ENABLED, SYNCING, HEALTHY, STALE, FAILED, REJECTED, DISABLED. Track at least: last attempted sync, last accepted snapshot, snapshot version, snapshot hash, accepted record count, rejection/failure reason.
+3.4 Source lifecycle — ✅ COMPLETE, CI-verified 2026-08-19
+Added explicit states `ENABLED`, `SYNCING`, `HEALTHY`, `STALE`, `FAILED`, `REJECTED`, and `DISABLED`. `SourceEntity` now tracks last attempted sync, last accepted snapshot, snapshot version, snapshot hash, accepted record count, and lifecycle failure/rejection reason. Schema version 4 and `MIGRATION_3_4` are committed. `SecurityRuleRepository` remains the atomic mutation boundary; empty candidates and failed replacements preserve the last-known-good entry set. Consumer CI `32306315653`, Instrumented CI `32306315748`, and Compose Metrics CI `32306315731` passed on commit `c3c5b59`; generated schema 4 was recovered from Consumer CI `32307077748` and committed with the cleanup commit.
 
-3.5 The SourcesViewModel fake-sync problem
-Resolved in Phase 0.4 foundation: SourcesViewModel and DashboardViewModel now route sync requests through SourceSyncUseCase and ReliableSourceManager, so they no longer fabricate HEALTHY from the existing entry count. The full Phase 3.4 state machine remains intentionally out of scope; current UI reporting is still limited to logging accepted/failed outcomes.
+3.5 The SourcesViewModel fake-sync problem — ✅ COMPLETE
+Resolved in Phase 0.4 foundation: SourcesViewModel and DashboardViewModel route sync requests through SourceSyncUseCase and ReliableSourceManager, so they no longer fabricate HEALTHY from the existing entry count. The Phase 3.4 state machine now persists accepted/rejected/failed lifecycle outcomes, while the UI observes the persisted state and safe metadata.
 
-Phase 3 exit criteria
+Phase 3 exit criteria — ✅ COMPLETE, CI-verified 2026-08-19
 
-[ ] A bad source cannot replace a good source
+[x] A bad source cannot replace a good source — atomic replacement and failed-candidate tests preserve the last-known-good entries.
 
-[ ] A partial source cannot become active
+[x] A partial source cannot become active — snapshot sanity checks and empty-candidate rejection prevent activation.
 
-[ ] Sync status means accepted dataset state, not network success
+[x] Sync status means accepted dataset state, not network success — SYNCING is recorded before fetch, HEALTHY only on committed activation, and failures become STALE/FAILED/REJECTED.
 
-[ ] Source state is observable without exposing PII
+[x] Source state is observable without exposing PII — SourcesScreen renders lifecycle state, timestamps, counts, and bounded reasons without phone-number payloads.
 
 Phase 4 — Architecture and Product Completion
 
