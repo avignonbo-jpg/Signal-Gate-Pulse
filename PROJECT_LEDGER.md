@@ -431,3 +431,11 @@ Evidence: JVM https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32
 Status: The immutable policy contract and compilation are CI-verified. Phase 1.2 is not yet fully closed because dedicated edge-execution tests for service response/audit/review-card/notification policy have not been added; this is intentionally retained as an open verification item rather than inferred from contract tests.
 To-do / heads-up: add focused edge-executor tests or a minimal testable application seam, then rerun both mandatory workflows before marking Phase 1.2 complete. Phase 1.3 remains gated.
 Signature: Manus AI — 2026-08-18
+
+2026-08-19 — ScreeningServiceEdgeExecutionTest coroutine compatibility correction
+Who: Manus AI
+What: The first CI run for `ScreeningServiceEdgeExecutionTest` failed at compilation because Pulse declares `kotlinx-coroutines-android` but does not declare `kotlinx-coroutines-test`; `kotlinx.coroutines.test.runTest` was therefore unavailable. The test also called suspend repository methods from non-suspend test bodies. Replaced all eight `runTest` wrappers with the project-supported `kotlinx.coroutines.runBlocking` and retained the suspend calls inside those coroutine bodies. No production code or dependency was changed.
+Evidence: Failed JVM run 32201506025 identified the exact compiler errors. Static validation after the correction passed `git diff --check` and `check-architecture-drift.sh`; no `runTest` or `kotlinx.coroutines.test` references remain in the test.
+Status: Focused test source is corrected locally; mandatory CI rerun is required before closing the edge-execution verification item.
+To-do / heads-up: monitor the targeted JVM test on the next consumer-v1 CI run. If compilation passes, inspect the test result count and artifact paths; if the test fails at runtime, fix only the evidence-supported edge behavior.
+Signature: Manus AI — 2026-08-19

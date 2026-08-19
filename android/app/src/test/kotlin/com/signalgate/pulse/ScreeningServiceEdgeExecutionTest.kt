@@ -10,7 +10,7 @@ import com.signalgate.pulse.logic.HapticPolicy
 import com.signalgate.pulse.logic.NotificationPolicy
 import com.signalgate.pulse.logic.ScreeningAction
 import com.signalgate.pulse.logic.ScreeningDecision
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -138,7 +138,7 @@ class ScreeningServiceEdgeExecutionTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun auditRequired_true_writesCallLogEntry() = runTest {
+    fun auditRequired_true_writesCallLogEntry() = runBlocking {
         val info = callInfoForTier(CallTier.FEDERAL_BLOCK, ScreeningAction.BLOCK)
         assert(info.screeningDecision.auditRequired) {
             "Precondition: FEDERAL_BLOCK must require audit"
@@ -167,7 +167,7 @@ class ScreeningServiceEdgeExecutionTest {
     }
 
     @Test
-    fun auditRequired_false_doesNotWriteCallLogEntry() = runTest {
+    fun auditRequired_false_doesNotWriteCallLogEntry() = runBlocking {
         val info = callInfoForTier(CallTier.ALLOWLISTED, ScreeningAction.ALLOW)
         assert(!info.screeningDecision.auditRequired) {
             "Precondition: ALLOWLISTED must not require audit"
@@ -186,7 +186,7 @@ class ScreeningServiceEdgeExecutionTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun reviewCardRequired_true_writesPendingCard() = runTest {
+    fun reviewCardRequired_true_writesPendingCard() = runBlocking {
         val info = callInfoForTier(CallTier.HEURISTIC_BLOCK, ScreeningAction.BLOCK, confidence = 85)
         assert(info.screeningDecision.reviewCardRequired) {
             "Precondition: HEURISTIC_BLOCK must require review card"
@@ -210,7 +210,7 @@ class ScreeningServiceEdgeExecutionTest {
     }
 
     @Test
-    fun reviewCardRequired_false_doesNotWritePendingCard() = runTest {
+    fun reviewCardRequired_false_doesNotWritePendingCard() = runBlocking {
         val info = callInfoForTier(CallTier.FEDERAL_BLOCK, ScreeningAction.BLOCK)
         assert(!info.screeningDecision.reviewCardRequired) {
             "Precondition: FEDERAL_BLOCK must not require review card"
@@ -224,7 +224,7 @@ class ScreeningServiceEdgeExecutionTest {
     }
 
     @Test
-    fun allowlisted_doesNotWritePendingCard_andDoesNotWriteCallLog() = runTest {
+    fun allowlisted_doesNotWritePendingCard_andDoesNotWriteCallLog() = runBlocking {
         val info = callInfoForTier(CallTier.ALLOWLISTED, ScreeningAction.ALLOW)
         val decision = info.screeningDecision
         assert(!decision.auditRequired && !decision.reviewCardRequired)
@@ -323,7 +323,7 @@ class ScreeningServiceEdgeExecutionTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun securityFailure_auditRecord_carriesDistinctDecisionName() = runTest {
+    fun securityFailure_auditRecord_carriesDistinctDecisionName() = runBlocking {
         val info = callInfoForTier(CallTier.SECURITY_FAILURE, ScreeningAction.SECURITY_FAILURE)
 
         // The audit record written by handleSecurityFailure must carry
@@ -359,7 +359,7 @@ class ScreeningServiceEdgeExecutionTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun heuristicBlock_allConsequenceFieldsAreCorrect() = runTest {
+    fun heuristicBlock_allConsequenceFieldsAreCorrect() = runBlocking {
         val info     = callInfoForTier(CallTier.HEURISTIC_BLOCK, ScreeningAction.BLOCK, confidence = 90)
         val decision = info.screeningDecision
 
@@ -394,7 +394,7 @@ class ScreeningServiceEdgeExecutionTest {
     }
 
     @Test
-    fun heuristicFlag_allConsequenceFieldsAreCorrect() = runTest {
+    fun heuristicFlag_allConsequenceFieldsAreCorrect() = runBlocking {
         val info     = callInfoForTier(CallTier.HEURISTIC_FLAG, ScreeningAction.SCREEN, confidence = 45)
         val decision = info.screeningDecision
 
