@@ -44,6 +44,16 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 2.3 notification actions and Phase 2.4 privacy prepared for CI
+Who: Manus AI, following the owner’s instruction to advance from Phase 2.2.
+What: Phase 2.3 was audited against the live `CallActionReceiver` and its existing behavioral tests. The supported notification action validates ingress data, then routes allowlisting through `SecurityRuleRepository` and digest dismissal through `PendingCardRepository`; no receiver-owned feature persistence or direct DAO access exists. The existing `CallActionReceiverBehaviorTest` covers incomplete and unrelated actions plus supported repository routing, so no new action or receiver production code was invented.
+Phase 2.4 implementation: blocked-call and review notifications now use `VISIBILITY_PRIVATE`, never render the raw phone number, and attach a redacted `VISIBILITY_PUBLIC` version for lock-screen and mirrored surfaces. Screening-service and limiter diagnostics no longer emit raw phone numbers. Notification builders were extracted into internal test seams, and `NotificationPrivacyTest` verifies private visibility, redacted public versions, and the preserved Not Spam action.
+Contract alignment: INV-004 external notification-action input remains validated at the edge; INV-007’s operational-log and user-visible notification privacy requirements are now explicit in the notification implementation. Deep-link routing remains the existing `signalgate://digest` path and carries no raw number.
+Files touched: `SECURITY-DEVOPS-BUILD-PLAN.md`; `android/app/src/main/java/com/signalgate/pulse/SignalGateCallScreeningService.kt`; `android/app/src/main/java/com/signalgate/pulse/ui/notifications/PulseTriggerLimiter.kt`; `android/app/src/test/kotlin/com/signalgate/pulse/NotificationPrivacyTest.kt`; `PROJECT_LEDGER.md`.
+Validation: `git diff --check` passed. Mandatory CI remains required; local Gradle execution is unavailable because the sandbox lacks the Android SDK.
+To-do / heads-up: run mandatory JVM, lint, instrumented, and metrics workflows for this commit. Do not treat Phase 2.3 or 2.4 as closed until the privacy test and existing receiver-boundary tests pass in CI.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 2.2 rate-limiting invariant CI-verified and closed
 Who: Manus AI, following the Phase 2.2 test push.
 What: The rate-limiting boundary is now CI-verified. The repeated HEURISTIC_FLAG UX dispatch was suppressed by `PulseTriggerLimiter`, while both audit records and both required `PendingCardEntity` review cards remained persisted. The domain decision remained `SCREEN`; the limiter had no access to or control over decision or persistence consequences.

@@ -69,11 +69,11 @@ class PulseTriggerLimiter {
             .also { allowed ->
                 if (allowed) {
                     lastReviewDispatch[normalizedPhoneNumber] = now
-                    Timber.tag(TAG).d("Review notification allowed for $normalizedPhoneNumber")
+                    Timber.tag(TAG).d("Review notification allowed")
                 } else {
                     Timber.tag(TAG).d(
-                        "Review notification suppressed for $normalizedPhoneNumber " +
-                        "(within ${COOLDOWN_MS / 1000}s cooldown)"
+                        "Review notification suppressed within " +
+                        "${COOLDOWN_MS / 1000}s cooldown"
                     )
                 }
             }
@@ -114,7 +114,7 @@ class PulseTriggerLimiter {
      */
     fun resetCooldown(normalizedPhoneNumber: String) {
         lastReviewDispatch.remove(normalizedPhoneNumber)
-        Timber.tag(TAG).d("Cooldown reset for $normalizedPhoneNumber")
+        Timber.tag(TAG).d("Cooldown reset")
     }
 
     /** Clears all cooldown state. Intended for testing only. */

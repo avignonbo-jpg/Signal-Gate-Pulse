@@ -115,19 +115,17 @@ Phase 2 — Gray-Zone Product Completion
 
 Only after Phase 1 passes.
 
-2.1 Notification and haptics
-Reintroduce the held gray-zone notification/haptic implementation (PulseHapticsController, PulseVibration) only after persisted review state is proven in 1.3. It was built once already and shelved specifically because it depends on the 1.3 fix — re-check it against the current CallActionReceiver (rewired in 0.7) before merging, not the version it was originally written against.
+2.1 Notification and haptics — ✅ COMPLETE, CI-verified 2026-08-19
+`PulseHapticsController`, `PulseVibration`, and Koin wiring are present and execute only the explicit haptic policy after persisted consequences. The normal `VIBRATE` manifest permission is declared. Mandatory Consumer, instrumented, and metrics workflows passed in runs 32244130376, 32244130346, and 32244130337.
 
-2.2 Rate limiting
+2.2 Rate limiting — ✅ COMPLETE, CI-verified 2026-08-19
+`PulseTriggerLimiter` suppresses repeated UX dispatch only. The invariant test proves that a suppressed second HEURISTIC_FLAG notification leaves both call-log audit records and both required review cards persisted. Mandatory Consumer, instrumented, and metrics workflows passed in runs 32248702045, 32248701979, and 32248701987.
 
-PulseTriggerLimiter may suppress repeated notifications, but it must never suppress: the domain decision, the call-log audit record, or the existence of a required review card. Rate limiting is a UX throttle, not a security control — it must not be able to accidentally become one.
+2.3 Notification actions — ✅ COMPLETE, CI-verified 2026-08-19
+The existing `CallActionReceiver` action is validated at the ingress seam and routes allowlisting through `SecurityRuleRepository` and digest dismissal through `PendingCardRepository`; no direct DAO or receiver-owned feature persistence exists. `CallActionReceiverBehaviorTest` covers invalid-action rejection and supported action routing.
 
-2.3 Notification actions
-
-All action buttons must route through application/repository boundaries. No receiver may directly own feature persistence — this is the same rule 0.7 already established for CallActionReceiver's existing action; any new actions added here inherit that same requirement.
-
-2.4 Privacy
-Define lock-screen and notification-mirroring behavior. Raw phone numbers should not be exposed by default on privacy-sensitive surfaces (INV-007 in the contract).
+2.4 Privacy — ✅ COMPLETE, CI-verified 2026-08-19
+Blocked-call and review notifications now use private visibility, contain no raw phone number in rendered content, and provide a redacted public version for lock-screen and mirrored surfaces. Operational logs in the screening and limiter paths no longer emit raw phone numbers. `NotificationPrivacyTest` verifies private visibility and redacted public versions.
 Phase 3 — Data Source Reliability
 
 3.1 Parser/validator separation

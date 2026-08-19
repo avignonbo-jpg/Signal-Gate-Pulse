@@ -43,7 +43,7 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
 
     override fun onScreenCall(details: Call.Details) {
         val phoneNumber = details.handle?.schemeSpecificPart ?: return
-        Timber.d("onScreenCall: $phoneNumber")
+        Timber.d("onScreenCall: screening request received")
 
         CoroutineScope(Dispatchers.Default).launch {
             try {
@@ -74,7 +74,7 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                     Timber.e(e, "Optional screening UX dispatch failed")
                 }
             } catch (e: Exception) {
-                Timber.e(e, "SECURITY_FAILURE — unhandled error screening $phoneNumber")
+                Timber.e(e, "SECURITY_FAILURE — unhandled screening error")
                 handleSecurityFailure(details, phoneNumber)
             }
         }
@@ -134,7 +134,7 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                     )
                 )
             } catch (e: Exception) {
-                Timber.e(e, "Failed to write SECURITY_FAILURE audit record for $phoneNumber")
+                Timber.e(e, "Failed to write SECURITY_FAILURE audit record")
             }
         }
     }
@@ -229,9 +229,22 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
     private fun fireBlockedCallNotification(callInfo: CallInfo) {
         val context = applicationContext
         val notificationId = callInfo.normalizedPhoneNumber.hashCode()
-
         createBlockedCallChannel(context)
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(notificationId, buildBlockedCallNotification(context, callInfo))
+    }
 
+    /**
+     * Builds the blocked-call notification with an explicit private visibility
+     * policy. The raw number is carried only in the explicit, non-exported
+     * PendingIntent extra required to route the action through CallActionReceiver;
+     * it is never rendered in notification content or its public redaction.
+     */
+    internal fun buildBlockedCallNotification(
+        context: Context,
+        callInfo: CallInfo
+    ): android.app.Notification {
+        val notificationId = callInfo.normalizedPhoneNumber.hashCode()
         val digestIntent = Intent(
             Intent.ACTION_VIEW,
             Uri.parse("signalgate://digest"),
@@ -246,7 +259,6 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
             digestIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
         val notSpamIntent = Intent(context, CallActionReceiver::class.java).apply {
             action = CallActionReceiver.ACTION_NOT_SPAM
             putExtra(CallActionReceiver.EXTRA_PHONE_NUMBER, callInfo.normalizedPhoneNumber)
@@ -258,30 +270,33 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
             notSpamIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        val confidenceText = callInfo.confidence?.let { " ($it% match)" } ?: ""
-        val bodyText = "${callInfo.originalPhoneNumber}$confidenceText"
-
-        val notification = NotificationCompat.Builder(context, BLOCKED_CALL_CHANNEL_ID)
+        return NotificationCompat.Builder(context, BLOCKED_CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.shield_logo)
             .setContentTitle("Call Blocked")
-            .setContentText(bodyText)
+            .setContentText("A blocked call is available for review.")
             .setContentIntent(contentPendingIntent)
             .addAction(0, "Not Spam", notSpamPendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(buildRedactedPublicVersion(context))
             .build()
-
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(notificationId, notification)
     }
 
     private fun fireReviewAvailableNotification(callInfo: CallInfo) {
         val context = applicationContext
         val notificationId = callInfo.normalizedPhoneNumber.hashCode()
         createBlockedCallChannel(context)
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(notificationId, buildReviewAvailableNotification(context, callInfo))
+    }
 
+    internal fun buildReviewAvailableNotification(
+        context: Context,
+        callInfo: CallInfo
+    ): android.app.Notification {
+        val notificationId = callInfo.normalizedPhoneNumber.hashCode()
         val digestIntent = Intent(
             Intent.ACTION_VIEW,
             Uri.parse("signalgate://digest"),
@@ -296,20 +311,31 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
             digestIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val confidenceText = callInfo.confidence?.let { " ($it% match)" } ?: ""
-        val notification = NotificationCompat.Builder(context, BLOCKED_CALL_CHANNEL_ID)
+        return NotificationCompat.Builder(context, BLOCKED_CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.shield_logo)
             .setContentTitle("Call Needs Review")
-            .setContentText("Suspicious call${confidenceText}")
+            .setContentText("A suspicious call needs review.")
             .setContentIntent(contentPendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(buildRedactedPublicVersion(context))
             .build()
-
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(notificationId, notification)
     }
+
+    /**
+     * Redacted representation used when Android mirrors a private notification
+     * to a lock screen or other privacy-sensitive surface. It intentionally has
+     * no phone number, confidence, action, or call-specific identifying detail.
+     */
+    private fun buildRedactedPublicVersion(context: Context): android.app.Notification =
+        NotificationCompat.Builder(context, BLOCKED_CALL_CHANNEL_ID)
+            .setSmallIcon(R.drawable.shield_logo)
+            .setContentTitle("SignalGate Pulse")
+            .setContentText("Call review available")
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
 
     private fun createBlockedCallChannel(context: Context) {
         val channel = NotificationChannel(
