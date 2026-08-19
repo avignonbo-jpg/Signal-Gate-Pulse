@@ -44,6 +44,14 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-08-19 — Phase 3.3 manifest verifier implemented; mirror publication blocked on repository access
+Who: Manus AI, following the approved P-256 authenticity design and the owner-provided `DNC_SIGNING_PRIVATE_KEY` secret name.
+What: Replaced the temporary hash-sidecar verifier design with `ArtifactAuthenticityVerifier` and `SourceAuthenticityTrustAnchor`. The FTC path now fetches `dnc-numbers.json.manifest.json`, requires algorithm `SHA256withECDSA`, validates the SHA-256 payload hash and signedAt freshness window, verifies the detached Base64 DER ECDSA signature against the embedded P-256 SPKI public key, and only then proceeds to `SnapshotSanityValidator` and `SecurityRuleRepository.replaceSourceSnapshot`. FCC remains deliberately HTTPS-transport-only because it is third-party infrastructure outside the controlled signing pipeline.
+Tests: Added manifest parsing, valid P-256 signature, payload tamper, algorithm rejection, stale/future manifest, and malformed-manifest vectors with a test-only public-key seam. No private key is present in the Pulse repository.
+Mirror: Updated the controlled mirror workflow to accept `DNC_SIGNING_PRIVATE_KEY` as PEM or Base64 DER, sign the finalized JSON bytes with OpenSSL `SHA256withECDSA`, and publish a deterministic manifest. The connected GitHub identity currently lacks write permission to `avignonbo-jpg/signalgate-dnc-mirror`; push was rejected with HTTP 403. The mirror change is therefore prepared locally but not live, and Phase 3.3 cannot close until the manifest is published by the mirror repository.
+Validation: App and mirror diffs pass static whitespace checks; local Android Gradle execution remains unavailable because the sandbox lacks the Android SDK. Mandatory CI is required after the mirror artifact and app commit are available.
+Signature: Manus AI — 2026-08-19
+
 2026-08-19 — Phase 3.1 and 3.2 CI-verified; Phase 3.3 opened
 Who: Manus AI, following the mandatory CI gates for the source-pipeline work.
 Closure: Phase 3.1 parser/validator separation passed Consumer CI `32256017818`, Instrumented CI `32256017902`, and Compose Metrics CI `32256017967` on commit `035d570`. Phase 3.2 snapshot sanity checks passed Consumer CI `32257006586`, Instrumented CI `32257006994`, and Compose Metrics CI `32257006268` on commit `94818f8`.

@@ -1,6 +1,7 @@
 package com.signalgate.pulse.logic
 
 import com.signalgate.pulse.data.security.SecureCsvParser
+import com.signalgate.pulse.data.security.ArtifactAuthenticityVerifier
 import com.signalgate.pulse.data.security.SnapshotSanityValidator
 import com.signalgate.pulse.data.security.SourceRecordValidator
 import com.signalgate.pulse.database.entities.SourceEntity
@@ -76,6 +77,7 @@ class ReliableSourceManager(
 
         private const val FTC_API_BASE  =
             "https://raw.githubusercontent.com/avignonbo-jpg/signalgate-dnc-mirror/dnc-mirror-pulse/dnc-numbers.json"
+        private const val FTC_API_MANIFEST = "$FTC_API_BASE.manifest.json"
 
         private const val FCC_PRIMARY_URL  =
             "https://opendata.fcc.gov/api/views/vakf-fz8e/rows.csv?accessType=DOWNLOAD"
@@ -263,6 +265,18 @@ class ReliableSourceManager(
      */
     private fun fetchFtcApiSnapshot(): FetchedSnapshot {
         val body = fetchRawBody(FTC_API_BASE, "FTC DNC mirror")
+        val manifestBody = fetchRawBody(FTC_API_MANIFEST, "FTC DNC mirror manifest")
+        when (val parsed = ArtifactAuthenticityVerifier.parseManifest(manifestBody.text)) {
+            is ArtifactAuthenticityVerifier.ResultOrManifest.Failure ->
+                throw IllegalArgumentException("Snapshot authenticity rejected: ${parsed.reason}")
+            is ArtifactAuthenticityVerifier.ResultOrManifest.ManifestValue -> {
+                when (val authenticity = ArtifactAuthenticityVerifier.verify(body.bytes, parsed.manifest)) {
+                    ArtifactAuthenticityVerifier.Result.Verified -> Unit
+                    is ArtifactAuthenticityVerifier.Result.Failed ->
+                        throw IllegalArgumentException("Snapshot authenticity rejected: ${authenticity.reason}")
+                }
+            }
+        }
         val json = JSONObject(body.text)
         val dataArray = json.optJSONArray("phone_numbers")
             ?: throw IllegalArgumentException("FTC mirror missing phone_numbers array")
@@ -379,6 +393,7 @@ class ReliableSourceManager(
 
     private data class RawBody(
         val text: String,
+        val bytes: ByteArray,
         val contentType: String?,
         val charset: String?,
         val byteCount: Long,
@@ -397,6 +412,7 @@ class ReliableSourceManager(
             val bytes = body.byteStream().use { readBoundedBody(it, SnapshotSanityValidator.Limits().maxBytes) }
             return RawBody(
                 text = bytes.toString(Charsets.UTF_8),
+                bytes = bytes,
                 contentType = response.header("Content-Type"),
                 charset = charsetFromContentType(response.header("Content-Type")),
                 byteCount = bytes.size.toLong(),
