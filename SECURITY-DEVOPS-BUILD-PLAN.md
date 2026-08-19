@@ -160,45 +160,73 @@ Phase 4 — Architecture and Product Completion
 4.1 Orphans and unreachable UI
 
 Resolve PermissionSettingsScreen and TelemetryViewModel: wire them to justified owners or remove them.
-Update from the 2026-08-14 reachability audit: this item is bigger than previously scoped. Three fully orphaned data classes were found with zero references anywhere in the codebase outside their own file: BenchmarkResult, PermissionStatus, ThreatSource. PermissionStatus is very likely the other half of the already-known PermissionSettingsScreen problem — same abandoned feature, two orphaned pieces, not two unrelated ones. Resolve them together: either both get wired into a real permissions flow, or both get deleted in the same commit.
-Also from that same audit — the swipe-right drawer: MainActivity wraps the app in a Compose ModalNavigationDrawer, which responds to edge-swipe by default. NavGraph.kt declares an onOpenDrawer callback that is never actually wired to any screen — meaning there's currently no intentional way to open the drawer (no 3-dot icon calls it), but it's fully reachable via the undocumented swipe gesture regardless. The drawer itself (GlassmorphicDrawerContent.kt) still has "MULTI-PORT" as a literal visible text label, and SettingsScreens.kt has a fully functional RGB shield-color-slider section — a Multi-Port-flavor feature, not part of the Pulse consumer design. Owner's plan (confirmed 2026-08-13): keep the drawer as an intentional, low-visibility "set and forget" menu — invisible until swipe or a (to-be-wired) 3-dot tap — but redesign its contents for Pulse (drop the RGB picker, rebrand the header, remove other Multi-Port-flavor calls). That redesign itself belongs to the project owner, not this build plan — but wiring onOpenDrawer to an actual trigger, once the redesign is ready, is a real Phase 4 task.
+Update from the 2026-08-14 reachability audit: this item is bigger than previously scoped. Three fully orphaned data classes were found with zero references anywhere in the codebase outside their own file: 
+
+BenchmarkResult, PermissionStatus, ThreatSource. 
+
+PermissionStatus is very likely the other half of the already-known PermissionSettingsScreen problem — same abandoned feature, two orphaned pieces, not two unrelated ones. Resolve them together: either both get wired into a real permissions flow, or both get deleted in the same commit.
+
+Also from that same audit — the swipe-right drawer: MainActivity wraps the app in a Compose ModalNavigationDrawer, which responds to edge-swipe by default. NavGraph.kt declares an onOpenDrawer callback that is never actually wired to any screen — meaning there's currently no intentional way to open the drawer (no 3-dot icon calls it), but it's fully reachable via the undocumented swipe gesture regardless. The drawer itself (GlassmorphicDrawerContent.kt) still has "MULTI-PORT" as a literal visible text label, and SettingsScreens.kt has a fully functional RGB shield-color-slider section — a Multi-Port-flavor feature, not part of the Pulse consumer design. 
+
+Owner's plan (confirmed 2026-08-13): keep the drawer as an intentional, low-visibility "set and forget" menu — invisible until swipe or a (to-be-wired) 3-dot tap — but redesign its contents for Pulse (drop the RGB picker, rebrand the header, remove other Multi-Port-flavor calls). That redesign itself belongs to the project owner, not this build plan — but wiring onOpenDrawer to an actual trigger, once the redesign is ready, is a real Phase 4 task.
 
 4.2 Onboarding persistence
 Move EULA acceptance and other onboarding persistence behind ViewModel/application boundaries. Treat consent/version state as auditable application state, not arbitrary Compose state.
+
 4.3 Contacts boundary
 Move ContactsContract/ContentResolver access behind a repository/data-source boundary (ContactsRepository). ContactsViewModel currently owns this directly.
+
 4.4 UI quality
 Fix ShieldStatusGlow's Color.hashCode()-for-Paint-color bug (should use .toArgb()) and other verified correctness issues. Continue Compose/design-system work only against stable application contracts — i.e., after Phase 0/1 are done, not concurrently with them.
+
 4.5 Legacy resources
 Remove unreferenced XML/layout/view resources only after the complete target files have been read and any Android/runtime dependency has been ruled out. The historical PhoneStateReceiver incident (a deliberate no-op "landmine-defusal" file that got deleted based on grep evidence alone, without reading its own header comment explaining why it existed) is the standing reason reference-search evidence alone is never sufficient for a deletion decision in this codebase.
+
 4.6 Cold-start UX — ⚠ IN PROGRESS. Splash infrastructure landed 2026-08-14; a real-device icon failure was found and interim-mitigated 2026-08-15, but the item itself is still open — user is actively working on it, deprioritized beneath Phase 0
-Not originally scoped in this plan, but real product-quality work started out of sequence because it was small, safe, and high-value: added the AndroidX SplashScreen API (core-splashscreen) so the ~5-second wait during MainApplication.onCreate()'s intentional blocking DB init shows a branded starting window instead of a blank screen. The blocking init itself was not touched — it's a deliberate, documented safety property (a cold process can be woken directly by CallScreeningService with no Activity involved, and screening must never run against a half-seeded database). Added StartupTimingTest.kt as a lightweight instrumented regression guard.
+ 
+Not originally scoped in this plan, but real product-quality work started out of sequence because it was small, safe, and high-value: added the AndroidX SplashScreen API (core-splashscreen) so the ~5-second wait during MainApplication.onCreate()'s intentional blocking DB init shows a branded starting window instead of a blank screen. 
+
+The blocking init itself was not touched — it's a deliberate, documented safety property (a cold process can be woken directly by CallScreeningService with no Activity involved, and screening must never run against a half-seeded database). Added StartupTimingTest.kt as a lightweight instrumented regression guard.
+
 2026-08-15 update: the initially-shipped splash icon (shield_logo.png) turned out to be badly oversized for the platform icon slot (1412×1704px hero-card asset vs. the ~192dp/288dp-safe-zone the SplashScreen API expects) and caused an 8-second blank black screen on real-device testing — the exact failure this feature was built to fix, just from a different cause. Neither CI's emulator-based crash-diagnostic step nor StartupTimingTest.kt caught it, since the failure was a silent render fallback, not a crash. Interim mitigation applied: icon removed, windowSplashScreenBackground kept alone — this stops the observed blank-screen symptom and is itself a fully standard, supported configuration, but it is not the intended final branded state. This item is open, not closed — see PROJECT_LEDGER.md, 2026-08-15 entry. Per explicit user direction the same day, this is correctly deprioritized beneath Phase 0's core security control-plane work — that's the right call under Security-First, this note exists just so a future read of this plan doesn't mistake "infrastructure exists" for "finished."
+
 4.7 Package identity cleanup — ✅ DONE, 2026-08-14, ahead of this phase
 Also not originally scoped, also completed early: renamed the Kotlin source package from com.signalgate.multipoint to com.signalgate.pulse across all 79 files, plus the AGP namespace, the Room schema-export directory, and the drift-check script's scan path (this last one mattered most — a stale path there would have made the script silently scan nothing and always report clean, a dangerous false-negative). applicationId was deliberately left unchanged — that's the actual Play Store/device package identity, a separate and more consequential decision than the source package name, still pending explicit confirmation.
+
 Phase 5 — Mandatory Security CI
 5.1 Test gating
 Remove continue-on-error: true from required tests in pulse-ci.yml. A required failure must fail CI. Reconciled 2026-08-17: no active continue-on-error key exists in either pulse-ci.yml or pulse-instrumented-tests.yml; both the JVM unit-test and instrumented-test steps are hard-failing. Branch-protection enforcement is a separate repository-policy decision and is not implied by workflow step behavior.
+
 5.2 Instrumented security tests
 Mandatory CI must cover: Android Keystore, SQLCipher open/close, Keystore invalidation, database deletion/reset, Room migration, fresh-install schema, screening service behavior, five/six-tier decision path, security failure behavior.
+
 5.3 Static/architecture checks
 Run architecture drift checks as required gates — done, 2026-08-13. Expand the script to enforce the contract's edge-to-DAO and UI-persistence restrictions more completely (the contract's §9 lists 10 target rules; the script currently enforces rules 1–7, not 8–10 — those remaining rules describe target enforcement for violations that are already fixed in source, so the gap is about catching a regression, not an active hole today).
+
 5.4 Dependency and secret scanning
 Add vulnerability scanning with explicit severity policy and exception ownership. Add secret scanning for repository and build artifacts. Neither exists yet.
+
 5.5 GitHub Actions hardening
 Use least-privilege permissions. Pin third-party actions to immutable commit SHAs where practical. Do not permit workflow conveniences to weaken release security.
+
 5.6 Known gap found 2026-08-14 — missing script
 scripts/verify-launch-and-capture.sh is referenced by .github/workflows/crash-diagnostic.yml but does not actually exist in the current consumer-v1 checkout, despite existing in an earlier archive of this project. That workflow is very likely broken right now, independent of anything else in this plan. Needs its own investigation — either restore the script or fix the workflow.
+
 Phase 6 — Release Hardening
 6.1 R8 — ⚠ PACKAGE PATH CONFIRMED CORRECT as a side effect of the 2026-08-14/15 rename merge; substance still open
 Replace broad -keep class com.signalgate.pulse.** { *; }-style rules with narrow, justified rules. Remove stale legacy rules. Validate the minified release build on device/emulator.
+
 Confirmed 2026-08-15: the rename merge's post-merge cleanup caught and fixed every stray com.signalgate.multipoint reference in proguard-rules.pro — it would have silently failed to protect any pulse-package class from R8 stripping in a release build, and debug CI never runs ProGuard, so this specific breakage wouldn't have surfaced as a build failure on its own. proguard-rules.pro now correctly reads com.signalgate.pulse.** throughout, with a guard comment warning against reverting it. That fix was mechanical (package path only) and does not address this item's actual substance, which remains fully open: the blanket -keep class com.signalgate.pulse.** { *; } still defeats most of R8's value for the app's own package, and both stale class-name keeps are still present unchanged — com.signalgate.pulse.CallScreeningService (the real class is SignalGateCallScreeningService) and com.signalgate.pulse.ui.SettingsFragment (no Compose-era equivalent exists).
+
 6.2 Signing
 CI release signing must fail closed when credentials are absent. Release keys must remain outside source control and developer logs.
+
 6.3 SBOM/provenance
 Generate an SBOM, artifact checksums, and provenance tied to source commit/workflow. Preserve these with the release candidate.
+
 6.4 Release validation
 Run: release build, R8 validation, instrumented tests, launch verification, manifest/exported-component review, backup exclusion review, privacy/logging review.
+
 Phase 7 — Release Candidate Gate
 A release candidate may be promoted only when all of the following are true:
 [ ] Security invariants INV-001 through INV-010 have evidence
@@ -223,6 +251,7 @@ Do not let notification/rate-limiting code decide whether a call is blocked.
 Do not let UI or Platform/Edge code become an alternate persistence path.
 Do not make a failed security operation indistinguishable from a legitimate allow decision.
 Do not revert MainApplication's blocking DB init in the name of startup UX — cover the wait (done, 4.6), don't remove the guarantee it provides.
+
 Final engineering principle
 The release bar is not "the app builds." The release bar is "the security properties remain true when the system is under failure, stale data, cold start, concurrent mutation, malformed input, dependency change, and release optimization."
 This document is a working extraction of the adopted Architecture-Contract.md §11, kept current as a separate reference file. If the two ever visibly disagree, the contract's §11 is the source of truth for the invariant-level requirements — update this file to match, under the same governance rule §13 of the contract for reconciling any other documentation/reality mismatch.
