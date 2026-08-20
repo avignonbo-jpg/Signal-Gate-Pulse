@@ -1,0 +1,718 @@
+# **SignalGate Pulse — Project Ledger**
+This is the single authoritative log of project state. Every AI session (any model, any tool) reads this file first and appends to it last. This replaces ad hoc tracking across chat history, memory, and scattered procedure docs — if it isn't in here, it didn't happen as far as the project is concerned.
+Governing document: Architecture-Contract.md (v3 — Security Integrity Gate, adopted). This is the only binding Architecture Contract for this project; the reconciled v3 content was committed under this canonical filename and no separate Architecture-Contract-v3-DRAFT.md remains.
+How to use this file (read this first, every session)
+At the start of any session working on this codebase:
+Read the "Current State" section below before writing or suggesting any code.
+Read "Open Items" — do not re-solve something already listed as decided.
+If asked to make an architectural change (new class, new layer assignment, new dependency), check it against Architecture-Contract.md before proceeding. If it conflicts, say so explicitly and stop — do not silently comply or silently ignore the contract.
+At the end of any session (before ending the conversation):
+Append a new entry to "Session Log" — even a short one. Include: date, what changed, which files, which layer(s) touched, and whether the Architecture Contract was consulted.
+Update "Current State" if the change affects it (new branch as source of truth, new known-broken state, new dependency, etc.).
+Move anything resolved out of "Open Items" into the session log entry; add anything newly discovered into "Open Items."
+Never silently skip this. If the person doesn't ask for a ledger update, do it anyway before the conversation ends — this is a standing instruction, not a one-time request.
+
+## **Current State**
+
+Authoritative branch: consumer-v1 — confirmed this session: the uploaded Signal-Gate-Pulse-consumer-v1 zip is byte-identical to the snapshot SignalGate-Pulse-Source-of-Truth-Audit.md was written against. No further reconciliation against divergent branches (pulse_zip, patch-N, etc.) is outstanding as of this entry — treat drift concerns from the 2026-07-15 branch-reconciliation entry as resolved unless new divergence is observed. Update 2026-08-14/15: pulse-package-rename (package rename + Phase 0.1 reconciliation + crash-diagnostic fix) has been merged into consumer-v1 — confirmed via GitHub PR UI showing "merged 4 commits into consumer-v1 from pulse-package-rename." consumer-v1 is current as of that merge.
+Last known-good build: confirmed green as of 2026-08-14/15 (see Session Log) — GitHub Actions CI passed against the merge commit before it was merged into consumer-v1: compilePulseDebugKotlin/assemblePulseDebug succeeded, check-architecture-drift.sh reported clean, unit tests 7/7 passed (0 failures/0 errors), lint 0 errors/50 warnings. A separate Crash Diagnostic emulator run additionally confirmed the renamed app installs and launches with no app-attributable crash log lines. This supersedes the prior "not yet confirmed green" note below, which described an earlier session's state.
+minSdkVersion: 29 — confirmed present in actual build.gradle this session (matches the 2026-07-15 entry's fix).
+Known broken/incomplete:
+The HEURISTIC_FLAG gray-zone persistence gap is resolved and CI-verified on 2026-08-19; remaining gray-zone notification/haptic product work is intentionally held for Phase 2 after the persisted review contract is proven.
+check-architecture-drift.sh Rule 6 doesn't scan ui/theme/, so the Cross-Cutting purity claim for Color/Theme/SignalGateTheme/Effects is currently unenforced. See Contract §9.6. Still open — untouched this session.
+NEW this session: check-architecture-drift.sh existed but was never invoked by any CI workflow — the Contract's claim of automatic enforcement was false until this session. Fixed in pulse-ci.yml; not yet confirmed green (see Session Log 2026-08-12).
+A gray-zone notification/haptic/rate-limiter feature (PulseHapticsController, PulseVibration, PulseTriggerLimiter, extended CallActionReceiver actions) was built in a prior session but never merged. It is now eligible for Phase 2.1 review because the §9.5/INV-006 persisted review-card contract is resolved; if merged, re-check it against the current CallActionReceiver, not the version it was originally written against.
+Architecture Contract version: v3 — Reconciled and adopted. The committed Architecture-Contract.md contains the reconciled v3 structure, 10 security invariants, Phase 0–7 roadmap, Definition of Done, and corrections against CI-verified source where the two prior lineages disagreed. The former draft-status wording was stale and has been removed from Architecture-Contract.md in this session.
+Security control-plane status: Phase 0 is formally closed and CI-verified on consumer-v1 as recorded in the 2026-08-18 ledger entry. Phase 1 Decision Engine Integrity is formally closed and CI-verified on commit c0b6c4a as recorded in the 2026-08-19 signed entry. Phase 2 is formally closed as recorded in the prior ledger entry. Phase 3.1, 3.2, and 3.3 are now CI-verified and closed. Phase 3.4 Source Lifecycle is the next authorized work.
+Unverified note carried over from a parallel session's ledger entry, not yet confirmed: that entry stated "Architecture Contract version: v2 — Reconciled (this entry). Amendments 0–5 are applied, not pending — see correction below; the Amendments Log in this file previously said otherwise and was wrong." This has NOT been verified against the actual Amendments Log in this file. Check the Amendments Log section before treating this as settled.
+
+## **Open Items — Live Branch Status**
+
+### ❌ Open — Delete legacy XML layouts and unused view IDs
+
+Delete 3 orphaned legacy XML layouts + 26 unused view IDs (`call_shield_overlay_enhanced.xml`, `dialog_add_blocked_number.xml`, `overlay_call_blocked.xml) — carried over, not yet independently re-verified this session.
+
+**Evidence:** The three named XML files are absent from the live branch, and no current references to those layout names were found. Their deletion is present in history under commit `c9a27e3`. However, the full claim includes 26 unused view IDs, and the live branch does not contain an authoritative closure record or an independently verifiable inventory proving all 26 were removed. The item remains open as a complete task.
+
+### ✅ Closed — Phase 0 mandatory execution evidence and Room schema version 3
+
+Continue adopted v3 Phase 0: mandatory execution evidence for 0.2/0.3/0.4/0.5/0.6; commit generated Room schema version 3; and complete 0.8 execution coverage. CSV/XLSX parser-limit, mutation-boundary, and CallActionReceiver edge-action implementation/test sources are now present. Phase 0.4 implementation is present but gate closure is intentionally pending evidence.
+
+**Evidence:** The live build sheet now records Phase 0 as complete and CI-verified on commit `956fc88`; mandatory JVM and instrumented workflows passed, and `android/app/schemas/com.signalgate.pulse.database.SignalGateDatabase/3.json` is committed. This original open-item wording is stale relative to the live branch.
+
+### ❌ Open — Migrate remaining BlocklistRepository callers
+
+Migrate remaining `BlocklistRepository` callers (`BlockedNumbersViewModel`, `ContactsViewModel`, `PendingCardViewModel`) directly onto `SecurityRuleRepository`, per that class's own deprecation note — not urgent, opportunistic.
+
+**Evidence:** Live source still imports or injects `BlocklistRepository` in all three named ViewModels. `SecurityRuleRepository` remains the authoritative boundary for the newer paths, but this caller migration has not been completed.
+
+### ❌ Open — Set up pre-push / CI-side YAML and whitespace validation filters
+
+Set up pre-push / CI-side YAML and whitespace validation filters — carried over from prior session, still not done.
+
+**Evidence:** The live repository has no active pre-push hook, `yamllint`/YAML validation step, `actionlint`, or equivalent whitespace-validation filter. The architecture drift check and `git diff --check` references do not constitute the requested dedicated validation filter.
+
+### ❌ Open — Confirm READ_PHONE_STATE necessity on a real device
+
+Live call-test `READ_PHONE_STATE` necessity: confirm on a real device whether anything still needs this permission before removing `PhoneStateReceiver`, its manifest entries, or correcting the stale onboarding description — see `TODO(call-testing)` in `OnboardingViewModel.kt`. Do not delete `PhoneStateReceiver` based on reference-search evidence alone.
+
+**Evidence:** `READ_PHONE_STATE`, `PhoneStateReceiver`, and the onboarding permission request remain in the live source. The `PhoneStateReceiver` implementation is intentionally inert, but no real-device call-test evidence was found that closes the permission decision. The item remains open.
+
+### ✅ Closed — Re-verify and merge the gray-zone notification/haptic implementation
+
+Re-verify and merge the held gray-zone notification/haptic implementation only as Phase 2 work, against the current `CallActionReceiver` and the now-proven persisted review-card contract.
+
+**Evidence:** `PulseHapticsController`, `PulseVibration`, and `PulseTriggerLimiter` are present and wired through Koin and `SignalGateCallScreeningService`. Phase 2.1 and 2.2 tests and mandatory Consumer, Instrumented, and Compose Metrics workflows passed. The gray-zone persistence ordering and limiter invariant are covered by `GrayZoneReviewabilityTest`.
+
+### ❌ Open — Resolve PermissionSettingsScreen unreachability
+
+Resolve `PermissionSettingsScreen` unreachability (Contract §9.1) — wire into `Screen.kt`/`NavGraph.kt` or delete.
+
+**Evidence:** `PermissionSettingsScreen.kt` exists, but the live reference search found no navigation or screen-owner usage beyond its own declaration. It remains unreachable and unresolved.
+
+### ❌ Open — Resolve orphaned TelemetryViewModel
+
+Resolve orphaned `TelemetryViewModel` (Contract §9.2) — wire into `CallLogScreen` or delete class plus Koin binding.
+
+**Evidence:** `TelemetryViewModel.kt` exists and has a Koin binding in `AppModule.kt`, but no consuming screen or application path was found. It remains orphaned.
+
+### ✅ Closed — Correct the app/build.gradle exportSchema documentation
+
+Fix the `app/build.gradle` doc-comment `exportSchema = false` claim to match actual `exportSchema = true` (Contract §9.3).
+
+**Evidence:** The live `app/build.gradle` documentation now states that `exportSchema = true` is already set in `@Database`, and the live `SignalGateDatabase.kt` annotation has `exportSchema = true`. The stale false-claim is no longer present.
+
+### ❌ Open — Fix ShieldStatusGlow color conversion
+
+Fix `ShieldStatusGlow.kt` to use `.toArgb()` instead of `.hashCode()` (Contract §9.4).
+
+**Evidence:** The live implementation still assigns `glowColor.hashCode()` to the Android `Paint.color` field. The requested `.toArgb()` correction is not present.
+
+### ✅ Closed — Extend architecture drift Rule 6 to scan ui/theme
+
+Extend `check-architecture-drift.sh` Rule 6 to scan `ui/theme/` (Contract §9.6).
+
+**Evidence:** The live script’s Rule 6 comments and implementation include `ui/theme` in the cross-cutting purity scope. The original open-item wording is stale relative to the current script.
+
+### ❌ Open — Add dependency/CVE scanning as a hard CI gate
+
+Add a dependency/CVE scan as a hard CI gate (Contract §10.3) — not currently enforced anywhere.
+
+**Evidence:** No active dependency vulnerability scanner, CVE scanner, secret scanner, Dependabot/CodeQL/OSV-style gate, or equivalent hard workflow step was found in the live repository. This remains open.
+
+### ✅ Closed — Build and re-verify Contract §10.2 test coverage
+
+Build/re-verify test coverage per Contract §10.2: five-tier decision matrix, fresh-install migration path, and Keystore-invalidation instrumented test.
+
+**Evidence:** The live branch contains six-tier decision coverage in `CallScreeningEngineDecisionMatrixTest` plus `CallScreeningEngineSecurityFailureTest`; `MigrationTest` exercises migration paths through versions 2, 3, and 4; and `SecurityUtilsInstrumentedTest` covers `KeystoreInvalidatedException`, recovery, and repeated invalidation cycles. The mandatory JVM and instrumented workflows execute the corresponding suites. The original open-item wording is stale relative to the live implementation and CI evidence.
+
+
+## **Removed This Session / Resolved or Stale**
+
+Confirm which branch is the actual current source of truth on GitHub — resolved, see Current State
+Re-add Apache POI dependency with log4j exclusion — this was never actually needed. Verified this session: DataSyncEngine.kt's XLSX path uses native ZipInputStream + SAX parsing with no Apache POI dependency, and no POI import exists anywhere in the current source. This was a deliberate fix (avoiding POI's MethodHandle/D8 incompatibility below API 26) already in place, not an unfinished migration. The prior Open Item description was stale — it described the pre-fix state as if still current.
+Review and approve/reject Architecture-Contract-Amendments.md, then fold approved changes — already done. The Contract document's own closing note said Amendments 0–5 were "applied and approved" as of 2026-07-15, but this file's Open Items and Amendments Log both still said "pending." That was an internal inconsistency between this file and the Contract, not an actual open task. See Amendments Log correction below.
+Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
+
+## **Session Log**
+
+*(Oldest entry on top).*
+
+
+### **2026-07-15 — Branch reconciliation + minSdk fix**
+Who: Claude (Sonnet)
+What: Traced a csvParser.parse() compile error to a real API mismatch between DataSyncEngine.kt and SecureCsvParser. Discovered extensive branch divergence across consumer-v1, consumer-v1_rename-v1, pulse_zip, and several patch-N branches (likely caused by a GitHub ruleset silently renaming rejected pushes). Found SourcesViewModel.kt and other Phase 4.x work existed in local zip exports but had never been committed to any branch. Reconciled two divergent lines of work (Phase-tracked line + independent XLSX-streaming-fix line) into one merged snapshot. Raised minSdkVersion from 24 to 29 to resolve an Apache POI/D8 dexing incompatibility (MethodHandle.invoke unsupported below API 26).
+Files touched: DataSyncEngine.kt, MainApplication.kt, build.gradle (project-level), SignalGateCallScreeningService.kt, CommunitySyncWorker.kt, plus 2 test files added (MigrationTest.kt, KoinModuleTest.kt)
+Contract consulted: no — contract wasn't available yet at time of this work
+Follow-up needed: push reconciled state to actual consumer-v1, confirm CI passes
+2026-08-13 correction note: the symptom this entry fixed (POI/D8 incompatibility) was later resolved a second, more durable way — replacing POI with native SAX parsing entirely, per the 2026-08-13 entry above. minSdkVersion 29 remains correct and unrelated to that later fix; it's a separate, still-valid constraint (RoleManager.ROLE_CALL_SCREENING itself requires API 29+).2026-07-15 — Full codebase audit + Architecture Contract review
+Who: Claude (Sonnet)
+What: Produced full source-of-truth documentation of the reconciled codebase (67 Kotlin files catalogued, all build.gradle dependencies listed, all 3 CI workflows documented, nav graph + resource ID cross-check performed). Reviewed the Architecture Contract handed off from a prior Perplexity session against actual code; found Layer 5 (Application) had zero assigned classes despite being defined, and two classes (DataSyncEngine, ReliableSourceManager) were misfiled under Layer 4. Drafted amendments (see Architecture-Contract-Amendments.md).
+Files touched: none (documentation/audit only, no source changes)
+Contract consulted: yes — this session's entire purpose was reconciling the contract against reality
+Follow-up needed: amendments need human review before being folded into the canonical contract; orphaned XML layouts identified but not yet deleted
+
+### **2026-07-15 — PhoneStateReceiver: incorrect deletion, corrected, call-test flag added**
+Who: Claude (Sonnet)
+What: Asked whether CallActionReceiver, PhoneStateReceiver, KoinWorkerFactory, SecurityUtils belonged to a different app (Multi-Path) and should be removed from Pulse. Cross-referenced manifest registrations and call sites: CallActionReceiver, KoinWorkerFactory, SecurityUtils are all actively wired into Pulse and were kept. PhoneStateReceiver had zero code references anywhere, so it was deleted — along with its manifest <receiver> block, the READ_PHONE_STATE permission, and the corresponding OnboardingViewModel permission-list entry — without first reading the file's own header comment, which explained the receiver is a deliberate, documented no-op ("landmine-defusal" for a dead PostCallNotifier/SharedPreferences bridge) and explicitly asked that its manifest presence be a deliberate human review decision, not a side effect of dead-code cleanup. Person caught this and asked to keep it. All three changes were reverted byte-for-byte against the pristine pre-edit source (verified via diff). One addition retained: a TODO(call-testing) comment added to the READ_PHONE_STATE entry in OnboardingViewModel.kt, flagging that its onboarding description describes the old pre-CallScreeningService detection mechanism and that live call testing is needed before this permission or receiver is touched again.
+Files touched: PhoneStateReceiver.kt (deleted, then restored — net: unchanged), AndroidManifest.xml (edited, then restored — net: unchanged), OnboardingViewModel.kt (net change: one TODO comment added, no logic changed)
+Contract consulted: no — this was a dead-code judgment call, not a layer-ownership question; in hindsight, reading the target file's own comments in full before removal should be treated as mandatory practice, not optional
+Follow-up needed: live call-test READ_PHONE_STATE necessity before any future removal attempt (see Open Items)
+
+### **2026-07-15 — Architecture-Contract.md created as an actual file; SESSION-START-BLOCK.md strengthened**
+Who: Claude (Sonnet)
+What: Discovered Architecture-Contract.md had never actually existed as a file — it only ever existed as text pasted into a conversation. Created it now, verbatim from the pasted content (one truncated closing sentence completed by inference — "...persistence stores, and security enforces" — flagged to the person for verification against their original source). Added two hardening rules to SESSION-START-BLOCK.md: (1) Architecture-Contract.md must be read in full before any work of any kind on this project, not just architecture-relevant work; (2) before deleting/replacing/rewriting any existing file, its full contents (including comments/TODOs) must be viewed first — grep/reference-search evidence alone is insufficient, per the PhoneStateReceiver incident logged in the prior entry.
+Files touched: Architecture-Contract.md (created), SESSION-START-BLOCK.md (strengthened)
+Contract consulted: n/a — this session's work was creating/hardening the governance documents themselves
+Follow-up needed: person should verify the completed closing sentence of Section 7 against their original contract source if they have it
+
+### **2026-07-15 — Amendments 1–5 applied to Architecture-Contract.md**
+Who: Claude (Sonnet)
+What: Person reviewed the 5 proposed amendments and approved all, on the condition that each be independently checked against "would I make this change on my own project" rather than approved by default. On review: Amendments 0, 1, 2, 3, 4 approved without reservation. Amendment 5 (Build Integrity, Section 8) approved with one flagged caveat — it governs build/dependency config rather than code architecture, and is slightly outside this contract's core OSI-layer scope; kept in this document for now since it directly addresses two real build failures from this project, but noted as a candidate to split into a separate BUILD-GOVERNANCE.md later. Applied to Architecture-Contract.md: added explicit XML-layout rule to Section 1, added Cross-Cutting row to the Section 3 layer table, added AppModule to Layer 1, moved DataSyncEngine/ReliableSourceManager from Layer 4 to a newly-created Layer 5 section, added CallInfo to Layer 4, added the full Cross-Cutting (no layer ownership) subsection with its class list, added Section 8 (Build Integrity). Verified post-edit: each class appears exactly once across the document, all 8 sections present and in order.
+Files touched: Architecture-Contract.md
+Contract consulted: yes — this session's entire purpose was amending the contract itself
+Follow-up needed: (2026-08-13 correction: this was marked "none currently open" originally, but this file's own Open Items and Amendments Log continued to list these amendments as pending for the next four weeks of entries — a real process failure, not a follow-up that was simply never logged. See 2026-08-13 entry.)
+
+### **2026-08-12 — Security Control-Plane review adopted; Phase 0.1 closed (§11.7, §11.10); CI drift-check gap found and fixed**
+Who: Claude (Sonnet)
+What: Reviewed an external Security/DevOps Director analysis of the consumer-v1 branch against actual source (not the analysis's own file descriptions) — every claim checked out: BlocklistRepository writes UnifiedEntryEntity rows directly via UnifiedEntryDao, bypassing the Bloom-index chokepoint DataSourceRepository.insertEntry() maintains for every other write path; CallActionReceiver injects PendingCardDao directly, violating Layer 1's no-DAO rule; ReliableSourceManager.syncSource() has no atomic snapshot-replace; SourcesViewModel.syncSource()/syncAllSources() fake a HEALTHY status without calling ReliableSourceManager; proguard-rules.pro has a blanket keep on the app's own package plus two stale class-name keeps; pulse-ci.yml still runs unit tests with continue-on-error: true. Drafted Architecture-Contract-v3-DRAFT.md (not yet adopted as canonical — still needs a human review pass before replacing Architecture-Contract.md) adding a new §5 Security Invariants section (INV-001 Authoritative Security State, INV-002 Last-Known-Good Security Dataset, INV-003 Explicit Security Failure), a SecurityRuleRepository mutation-boundary design (§5.2), a protected-source-deletion policy (§5.4), and a re-sequenced Phase 0 roadmap (§12) gating all further feature/UI work behind control-plane integrity work. Then implemented and closed the first two [GATE] items from that draft:
+§11.7 (mutation-boundary divergence): created SecurityRuleRepository (Layer 5) as the single authoritative entry point for manual block/allow — routes through DataSourceRepository.insertEntry() so Bloom stays synchronized; removeRule() deliberately still calls the DAO directly since Bloom filters have no delete op and a stale false-positive there can only cause an extra Room read, never a false decision. Collapsed BlocklistRepository to a 4-method deprecated facade over SecurityRuleRepository — existing callers (BlockedNumbersViewModel, ContactsViewModel, PendingCardViewModel) compile unchanged; it should not exist by the time Phase 0 closes (§12).
+§11.10 (CallActionReceiver DAO violation): swapped the direct PendingCardDao injection for the existing PendingCardRepository (was already in the codebase, just unused here) and pointed the receiver at SecurityRuleRepository directly rather than the now-deprecated BlocklistRepository.
+Updated AppModule.kt: added the SecurityRuleRepository binding, reduced BlocklistRepository's binding from 2 constructor args to 1.
+Separately discovered (not in the original review): check-architecture-drift.sh is not invoked by any of the 4 GitHub Actions workflows in .github/workflows/ (pulse-ci.yml, crash-diagnostic.yml, generate-room-schema.yml, metrics.yml) — confirmed by reading all four files. This directly contradicts Architecture-Contract.md's own reconciliation note, which asserts this script is why this contract lineage is canonical ("the one an actual machine check enforces"). The script itself is read-only (grep-based checks + exit 1; no file writes, no deletions) — verified by reading it in full. Fixed by adding a "Check Architecture Drift" step to pulse-ci.yml, placed before the Gradle build step, no continue-on-error.
+Files touched: logic/SecurityRuleRepository.kt (created), database/repositories/BlocklistRepository.kt (rewritten), CallActionReceiver.kt (rewritten), di/AppModule.kt (edited), .github/workflows/pulse-ci.yml (edited — new drift-check step added), Architecture-Contract-v3-DRAFT.md (created, draft only, not adopted)
+Contract consulted: yes — this session both consulted and drafted a revision of it; the draft (v3) has not been merged into the canonical Architecture-Contract.md and should not be treated as such until reviewed
+Follow-up needed: (1) human review + adoption of Architecture-Contract-v3-DRAFT.md to replace Architecture-Contract.md, or explicit rejection with reasons; (2) continue the v3 draft's Phase 0 sequence — 0.2 (SECURITY_FAILURE state), 0.3 (protected source lifecycle), 0.4 (real source sync), 0.5–0.6 (transactional replacement), 0.7 (signed snapshots) are all still open; (3) remaining BlocklistRepository callers should be migrated directly onto SecurityRuleRepository opportunistically, per that class's own deprecation note.
+CI verification (2026-08-13, same day, follow-up): Actual CI run confirmed clean across the board — lint-results-pulseDebug: 0 errors, 49 pre-existing warnings (none new from this session's files). Unit tests: 7/7 pass, 0 failures — KoinModuleTest.koinGraphResolvesWithoutError specifically confirmed SecurityRuleRepository registered as a Singleton and the full 30-definition Koin graph resolves with no missing/malformed bindings. The new "Check Architecture Drift" CI step ran and passed: ✓ No architecture drift detected against android/app/src/main/java/com/signalgate/multipoint, confirming both (a) the drift script is now actually wired into CI (closing the gap found this session) and (b) none of the new/rewritten files (SecurityRuleRepository.kt, BlocklistRepository.kt, CallActionReceiver.kt) trip any existing grep rule. §11.7 and §11.10 are now closed with CI evidence, not just static review.
+
+### **2026-08-13 — Governance reconciliation: two Architecture Contract lineages merged into one**
+Who: Claude (Sonnet)
+What: Discovered this project had two independently-maintained Architecture Contract lineages in simultaneous use — this one (Perplexity-originated, CI-enforced via check-architecture-drift.sh, Layer 7=UI...Layer 1=Platform-Edge numbering) and a separate one produced in a different session (SignalGate-Pulse-Architecture-Contract.md, prose-only/no CI enforcement, Layer 7=Application...Layer 1=Physical numbering — opposite direction, same underlying app). Adopted this lineage's numbering as canonical, since it's the only one an actual machine check enforces. Merged in every class the other lineage's audit had confirmed exists but this map was missing: PendingCardDao, PendingCardEntity, DigestScreen, PendingCardViewModel, NotificationChannelManager, KeystoreInvalidatedException, DatabaseResetEvent, SyncBootReceiver. Added a new §9 "Known Violations" section (this lineage had none) carrying forward the other lineage's tracked findings (PermissionSettingsScreen unreachable, orphaned TelemetryViewModel, exportSchema doc mismatch, ShieldStatusGlow .hashCode() bug) plus one new finding from this session: CallScreeningEngine's own doc comment promises gray-zone calls get digest review, but the actual write path only creates a PendingCardEntity for HEURISTIC_BLOCK — gray-zone calls never reach the digest despite the domain layer's own documented contract. Also found check-architecture-drift.sh Rule 6 doesn't scan ui/theme/ despite the Contract claiming those classes as cross-cutting-pure. Corrected this file's Open Items: removed a stale Apache POI re-add task (verified current DataSyncEngine.kt already uses native SAX parsing, no POI dependency exists), and corrected the Amendments Log below, which still said "Pending review" for five amendments the Contract's own closing note already called "applied and approved" — that was this file drifting from the Contract, not an actual open task. Added a new §10 "Feature Completion & Test Coverage" section to the Contract (this lineage had no phased roadmap equivalent), scoping the previously-built (unmerged, held) gray-zone notification/haptic/rate-limiter feature explicitly behind the newly-found digest gap fix.
+Files touched: Architecture-Contract.md (v2, reconciled — full rewrite of §4 class map with [+] markers, new §9, new §10), PROJECT_LEDGER.md (this entry; Open Items and Amendments Log corrected)
+Contract consulted: yes — this session's entire purpose was reconciling the contract against a second lineage and against verified source
+Follow-up needed: the §9.5 digest gap is now the top-priority code fix — it blocks the held gray-zone feature from resuming per §10.1. check-architecture-drift.sh itself was not yet edited to fix the Rule 6 gap (§9.6) — that's a follow-up, not done in this pass.
+
+### **2026-08-13 — Layer 2 "root of trust" callout added, following Physical-vs-Platform/Edge discussion**
+Who: Claude (Sonnet)
+What: Person asked for a deeper comparison of Track 1's "Physical" layer versus this contract's "Platform/Edge" layer, and which framing is better. Established the two schemes don't disagree everywhere — the real localized disagreements are (a) where bootstrap/receivers/workers sit (Track 1: mid-stack "Session"; this contract: bottom, "Platform/Edge") and (b) where decision engines sit (Track 1: top, "Application"; this contract: middle, "Domain"). Assessed Track 1's root-of-trust framing for the Keystore/passphrase material as more honest to what OSI numbering is supposed to convey, but recommended against re-flipping this contract's numbering — that would recreate the exact Amendment-0 problem (CI labels drifting from contract prose) the prior reconciliation fixed. Person agreed with the smaller fix: made SecureDatabase/SecurityUtils (the Keystore-wrapped SQLCipher passphrase) an explicit, visually distinct "root of trust" sub-item within Layer 2, rather than one bullet of equal weight among six. No layer reassignment, no renumbering — purely a documentation-weight fix within the existing Layer 2 scope.
+Files touched: Architecture-Contract.md (§4 Layer 2 restructured with root-of-trust callout; reconciliation note updated)
+Contract consulted: yes — this session's purpose was a Contract content discussion
+Follow-up needed: none — this was a documentation-emphasis fix, not a code or enforcement change; check-architecture-drift.sh needs no update since Rule 3 (Layer 2 → Room import ban) already covers SecureDatabase/SecurityUtils at the file level, and file-level enforcement doesn't distinguish "root of trust" from other Layer 2 members
+
+### **2026-08-13 — Reconciled two independent v3 contract lineages**
+Who: Claude (Sonnet)
+What: A second, independently-produced governance rewrite was uploaded (Architecture-Contract.md, PROJECT_LEDGER.md, SECURITY-DEVOPS-BUILD-PLAN.md from an external review, dated 2026-08-13), self-described as canonical and explicitly stating it supersedes prior contract lineages. It is materially stronger in several ways this session's own v3 draft was not — 10 security invariants (INV-001–INV-010) instead of 3, a cleaner Phase 0–7 roadmap with an explicit Phase 7 Release Candidate Gate checklist, a fuller architecture-drift enforcement checklist (§9, 10 numbered rules), and a Definition of Done section. However, that rewrite's own ledger states its source snapshot predates this session's Phase 0.1 work and that "CI was not independently rerun during this governance rewrite" — its §10.7 (security-rule mutation has multiple paths) and §10.10 (platform edge directly accesses persistence) list BlocklistRepository/CallActionReceiver as still-open violations, and its Open Items list the same as unchecked. Both are actually resolved and CI-verified in this branch (see 2026-08-13 entries below). Per that document's own closing governance rule — "if implementation reality and documentation disagree, do not silently choose one" — reconciled rather than either adopting it wholesale or discarding it. Produced a merged Architecture-Contract-v3-DRAFT.md that adopts Lineage B's structure, invariants, and roadmap wholesale, with §10.7/§10.10, Phase 0.1/0.7, and the corresponding Phase 7 checklist items corrected to reflect actual CI-verified status, plus per-invariant "Status" notes (e.g. INV-001 marked "partially satisfied," INV-009 marked "satisfied for CallActionReceiver") so the document doesn't overclaim completeness it doesn't have.
+Files touched: Architecture-Contract-v3-DRAFT.md (rewritten in full, reconciled)
+Contract consulted: yes
+Follow-up needed: (1) this reconciled draft is still not adopted as canonical — v2 remains governing; (2) the uploaded SECURITY-DEVOPS-BUILD-PLAN.md from the external rewrite was reviewed but not separately merged as a file — its content is fully represented in the reconciled contract's §11; (3) if the external review process continues in parallel sessions, it should be given this reconciled draft (or told to re-review current source) rather than working from a stale snapshot, to avoid this discrepancy recurring; (4) Phase 0.2–0.6 and 0.8 remain open — same as before this reconciliation, no new work was implemented this entry, only documentation was reconciled.
+
+### **2026-08-14 — Splash screen, cold-start timing test, package rename, reachability audit**
+Who: Claude (Sonnet)
+What:
+Splash screen: added androidx.core:core-splashscreen:1.0.1; new Theme.App.Starting (themes.xml, parented on Theme.SplashScreen, windowSplashScreenBackground/windowSplashScreenAnimatedIcon/postSplashScreenTheme); MainActivity now set to that theme in the manifest and calls installSplashScreen() before super.onCreate(). Root cause of the ~5s blank-screen was confirmed, not guessed: MainApplication.onCreate()'s runBlocking DB init (intentional, documented, NOT touched) completes before any Activity exists, so the system's starting window already covers that entire wait automatically via the manifest theme — no custom wait-loop needed for that part. Added AppReadiness (MainApplication.kt) as a MutableStateFlow safety-net gate for setKeepOnScreenCondition, in case future work adds real post-Activity-launch async work.
+Splash icon: used the existing shield_logo.png (already correctly formatted). The new shield artwork the user shared (grok_1786515763143.jpg, 784×1168) is a flat JPEG with a baked-in black background and no alpha channel — not usable as-is for windowSplashScreenAnimatedIcon or an adaptive launcher icon (needs transparent-background export + safe-zone sizing first). Flagged, not blocking.
+Instrumented timing test: StartupTimingTest.kt (androidTest) — asserts AppReadiness.isReady is true by the time MainActivity.onActivity() runs (regression guard on the Application-before-Activity ordering guarantee MainApplication's doc depends on) plus a generous 8000ms elapsed-time ceiling. Explicitly NOT a true macrobenchmark (would need a new Gradle module + baseline-profile tooling) — noted as a real Phase 5/6 upgrade path, not silently substituted.
+Package rename: com.signalgate.multipoint → com.signalgate.pulse across all 79 Kotlin files (main/androidTest/test source sets), AGP namespace in build.gradle, the Room schema-export directory (schemas/com.signalgate.multipoint.database.SignalGateDatabase → .../com.signalgate.pulse.database.SignalGateDatabase — required or MigrationTest.kt would fail to find schema files), scripts/check-architecture-drift.sh's hardcoded scan path (this one mattered most — a stale path would have made the script silently scan nothing and always report clean, a dangerous false-negative), and the CI/launch-script references in crash-diagnostic.yml/generate-room-schema.yml/verify-launch-and-capture.sh. Deliberately NOT changed: applicationId (still com.signalgate.multipoint / com.signalgate.multipoint.pulse) — that's the actual Play Store/OS package identity, a separate and more consequential decision (changing it means any existing sideloaded debug build is a different app on-device, not an update). Flagged for explicit separate confirmation. Verified twice against two independent fresh extractions of the original archive — both times check-architecture-drift.sh reported clean after the rename. Delivered as rename-to-pulse.sh (Termux-runnable) rather than 79 individual file cards, since that matches the user's actual Termux + GitHub web UI workflow far better than hand-delivered files would.
+Reachability audit (the "how do we know we've caught everything else" question): confirmed the user's swipe-right/RGB-picker/MULTI-PORT-label findings exactly (MainActivity.kt's ModalNavigationDrawer responds to edge-swipe regardless of the never-wired onOpenDrawer parameter in NavGraph.kt; GlassmorphicDrawerContent.kt has "MULTI-PORT" as a literal visible text label; SettingsScreens.kt has a functional RGB shield-color-slider section). Extended the sweep: confirmed onOpenDrawer is the only genuinely-dead no-op callback (others in ConsumerDashboardScreen/SettingsScreens are normal Compose default-parameter patterns with real values supplied by NavGraph.kt); found no other undocumented gesture handlers (one Screen.kt "swipe" hit was a doc-comment false positive, not a real gesture); found three fully orphaned data classes with zero references anywhere — BenchmarkResult, PermissionStatus, ThreatSource. PermissionStatus is very likely the other half of the already-tracked PermissionSettingsScreen unreachable-screen violation (§10.1/4.1) — same abandoned feature, two orphaned pieces, not two separate ones.
+Files touched: android/app/build.gradle, android/app/src/main/res/values/themes.xml, android/app/src/main/AndroidManifest.xml, MainActivity.kt, MainApplication.kt, StartupTimingTest.kt (created), all 79 files under the renamed com/signalgate/pulse tree, android/app/schemas/, scripts/check-architecture-drift.sh, .github/workflows/crash-diagnostic.yml, .github/workflows/generate-room-schema.yml, scripts/verify-launch-and-capture.sh
+Contract consulted: yes
+Follow-up needed: (1) user runs rename-to-pulse.sh against the real repo and confirms CI green — not yet done against the actual branch, only against fresh extractions of the uploaded archive; (2) explicit separate decision on whether to also change applicationId; (3) get a transparent-background export of the new shield artwork before using it as the splash/launcher icon; (4) menu redesign (RGB picker removal, MULTI-PORT→Pulse branding, new nav entry point) — user's own, not done here; (5) delete the three orphaned classes (BenchmarkResult, PermissionStatus, ThreatSource) once confirmed truly dead and not reserved for planned work; (6) add a formal "reachability audit" category (gestures, no-op defaults, orphaned classes/resources, cross-flavor text bleed) to the v3 draft contract's enforcement checklist — discussed, not yet written into the document itself.
+
+### **2026-08-15 — Real-device splash icon failure found; interim mitigation applied, full fix still in progress (entry themes.xml references but which was missing until now)**
+Who: user, via real-device testing (Motorola) — not from this chat session; reconstructed and logged here from the themes.xml comment left in place, since no session log entry was written at the time it happened.
+Correction (same day, from the user directly): the prior version of this entry described this as "fixed." It is not. The icon-removal change stops the specific blank-screen symptom that was observed, but the user is still actively working on the cold-start/splash item as a whole — it is in progress, not closed. This is also the actual reason no session log entry existed yet when this was first noticed: an in-progress item correctly has no closing entry. Do not mark an item "done"/"fixed" in this ledger, or imply closure via status language, until the person doing the work confirms it's actually closed — a plausible-looking interim state is not the same claim.
+What: Theme.App.Starting's windowSplashScreenAnimatedIcon was set to shield_logo.png in the 2026-08-14 splash-screen session (see that entry) on Claude's recommendation, checked only for file format/existence, not actual suitability for the SplashScreen icon slot. On real-device testing, this produced an ~8 second blank black screen with no splash visible, then a direct jump to the EULA screen — root cause: shield_logo.png is 1412×1704px (~3MB), the full hero-card raster asset used elsewhere in the app, roughly 8x oversized for what the platform SplashScreen API (API 31+) expects in this slot (~192dp within a 288dp safe zone). The oversized icon appears to have failed to render silently rather than crashing loudly or throwing a catchable exception, so neither the emulator-based Crash Diagnostic CI step nor StartupTimingTest.kt (which has still never actually been executed as an instrumented test — see the 2026-08-14/15 merge entry) caught it. Interim mitigation: windowSplashScreenAnimatedIcon removed, windowSplashScreenBackground kept alone — this is itself a fully standard, correctly-supported SplashScreen configuration, so the interim state is not broken, just incomplete relative to the originally intended branded icon. A guard comment was added directly in themes.xml explaining the failure and warning against re-adding an icon reference without confirming real SplashScreen-slot sizing and real-device testing first.
+Status: OPEN — user is actively working on this. Do not treat cold-start/splash-icon work as closed.
+Files touched: android/app/src/main/res/values/themes.xml
+Contract consulted: not directly — UI/cold-start cosmetic work, not a security-boundary or layer-ownership change.
+Follow-up needed: (1) user is continuing this work directly; check with them for current status rather than assuming the interim mitigation is the final state; (2) StartupTimingTest.kt still has never actually been executed as an instrumented test against real CI; (3) per the user's explicit direction this same day, this item is being deprioritized beneath Phase 0 core security control-plane work (see SECURITY-DEVOPS-BUILD-PLAN.md) — that prioritization is correct under Security-First and isn't itself a problem, just noting why this may sit open for a while.
+Who: Claude (Sonnet), user edited directly via GitHub web UI (not Termux) this session
+What: The dashboard's "View Recent Activity ›" TextButton (in ConsumerDashboardScreen.kt, below the SETTINGS button) navigated to Screen.Digest ("Blocked Calls" — the swipeable PendingCardEntity review queue). User reported it sat directly in the scroll path on dashboard open, in the way of just viewing the dashboard. Removed the button and its onNavigateToActivity parameter from ConsumerDashboardScreen.kt; added Screen.Digest to the nav drawer's screen list in GlassmorphicDrawerContent.kt (placed next to BlockAllowList, both being blocked/reviewed-call screens) — this reuses the drawer's existing generic onDestinationSelected routing, no new wiring needed. Updated the call site in NavGraph.kt (removed the now-unused argument) and the doc comments in both NavGraph.kt and Screen.kt describing Digest's reach paths — both previously claimed "Navigation drawer" as a working access path, which was false until this change (a pre-existing doc/reality mismatch, not introduced this session, now actually true). Deep-link access (signalgate://digest notification tap) is unaffected. Guard comments added in all three touched files noting the drawer entry is now the only in-app (non-deep-link) path to Digest, so it shouldn't be removed without adding a replacement first.
+Files touched: ui/screens/ConsumerDashboardScreen.kt, ui/components/GlassmorphicDrawerContent.kt, ui/navigation/NavGraph.kt, ui/navigation/Screen.kt
+Contract consulted: not directly — this is a Layer 7 (UI) navigation-affordance change, not a security-boundary or layer-ownership change. No check-architecture-drift.sh rule governs drawer contents or dashboard button placement.
+Follow-up needed:
+Not yet CI-verified — these edits were made directly in GitHub's web editor, not from a local checkout, so no compile/test/drift-check has run against them as of this entry. Run the "Pulse Debug" workflow (or push a trivial commit to trigger it) before trusting this compiles.
+Not tested on-device/emulator — worth confirming the drawer item actually renders and navigates correctly, and that removing the dashboard button didn't affect the dashboard's remaining layout/spacing in an unintended way.
+Noted but explicitly out of scope this session: GlassmorphicDrawerContent.kt's header still hardcodes the literal text "MULTI-PORT" — a pre-existing branding-bleed issue already tracked in the 2026-08-14 reachability-audit entry, not touched here.
+2026-08-14/15 — Merged pulse-package-rename into consumer-v1; fixed post-merge compile break and stale crash-diagnostic launch target
+Who: Claude (Sonnet), interactive session with user working from Termux (no local Gradle — all verification done via GitHub Actions CI)
+What:
+Merge conflict resolution (pulse-package-rename ← origin/consumer-v1): 8 files had real conflicts from pulse-package-rename diverging before consumer-v1's Phase 0.1 work (SecurityRuleRepository, etc.) landed: AppModule.kt, CallActionReceiver.kt, MainApplication.kt, BlocklistRepository.kt, DataSourceRepository.kt, CallScreeningEngine.kt, DashboardViewModel.kt, OnboardingWizardScreen.kt, plus PROJECT_LEDGER.md itself (3 blocks). Each file was inspected individually before resolving — some were simple stale-import fixes; several (DataSourceRepository.kt, CallScreeningEngine.kt, DashboardViewModel.kt, OnboardingWizardScreen.kt) were genuine unions where origin added an import the already-merged function bodies actually required.
+Post-merge compile break (caught by CI, not predicted): first CI run of the merge commit failed compilePulseDebugKotlin with ~40 "Unresolved reference" errors. Root cause: 4 files auto-merged as clean "new file" additions from consumer-v1 (SecurityRuleRepository.kt, SettingKeys.kt, SettingsViewModel.kt, OnboardingViewModel.kt) were never inspected individually (no conflict markers = staged and trusted) and still had package com.signalgate.multipoint... — never run through the rename since they didn't exist on the branch the rename script operated against. A repo-wide grep also caught proguard-rules.pro (4 -keep rules pointing at the now-nonexistent multipoint package — would have silently failed to protect pulse-package classes from R8 stripping in a release build; debug CI never runs ProGuard, so this wouldn't have surfaced as a build failure). build.gradle's two applicationId lines also matched the grep but were confirmed correct/deliberate and left untouched. Fixed all affected files, re-verified no multipoint references or leftover conflict markers remained anywhere under android/app/, re-pushed.
+CI verification, second run — fully green: compile succeeded; check-architecture-drift.sh reported ✓ No architecture drift detected; unit tests 7/7 passed with 0 failures/0 errors, including KoinModuleTest.koinGraphResolvesWithoutError confirming the full Koin graph resolves cleanly under com.signalgate.pulse; lint reported 0 errors, 50 warnings (pre-existing dependency/style notices).
+crash-diagnostic.yml stale launch target found and fixed (branch fix-crash-diagnostic-launch-target, merged into pulse-package-rename before the PR): a manually-triggered Crash Diagnostic run against pulse-package-rename showed cmp=com.signalgate.multipoint.pulse/com.signalgate.multipoint.MainActivity in logcat — the app that actually launched was the stale pre-rename build. Root cause: verify-launch-and-capture.sh's hardcoded launch target in crash-diagnostic.yml (line 49) still named com.signalgate.multipoint.MainActivity, a component that no longer exists post-rename. Fixed to com.signalgate.multipoint.pulse/com.signalgate.pulse.MainActivity — applicationId (before the slash) deliberately left unchanged, only the activity class corrected. Re-ran twice; both confirmed the correct component launching with zero app-attributable E/FATAL log lines.
+Merged. PR opened base=consumer-v1, compare=pulse-package-rename, merged by user — confirmed via GitHub UI. consumer-v1 now contains the completed rename, Phase 0.1 reconciliation, the compile fix, and the crash-diagnostic fix, all CI-verified before merge.
+Files touched: di/AppModule.kt, CallActionReceiver.kt, MainApplication.kt, database/repositories/BlocklistRepository.kt, database/repositories/DataSourceRepository.kt, logic/CallScreeningEngine.kt, ui/dashboard/DashboardViewModel.kt, ui/onboarding/OnboardingWizardScreen.kt (conflict resolution); logic/SecurityRuleRepository.kt, database/repositories/SettingKeys.kt, ui/screens/SettingsViewModel.kt, ui/onboarding/OnboardingViewModel.kt, proguard-rules.pro (stale-package fixup); .github/workflows/crash-diagnostic.yml (launch-target fix); PROJECT_LEDGER.md
+Contract consulted: not directly — merge/rename/CI-tooling session, not an architectural change. No new classes, no layer reassignment, no new dependency.
+Follow-up needed:
+§9.5 (gray-zone PendingCardEntity), §9.6 (drift-check ui/theme/ gap), and the held haptics feature are unaffected by tonight's session — still open exactly as previously logged.
+No instrumented/UI tests ran this session — StartupTimingTest.kt still has never actually executed. The crash-diagnostic emulator run confirms the app launches without crashing, a weaker claim than confirming the splash timing assertion passes.
+SecurityUtilsTest.kt remains a placeholder stub — unchanged tonight.
+If a future session reverts or regenerates crash-diagnostic.yml, proguard-rules.pro, or the 4 stale-package files from an older snapshot/backup, the multipoint regression will reappear — see the guard comments added directly in those files this session.
+
+### **2026-08-16 — Architecture Contract v3 adoption status corrected and signed**
+Who: Manus AI, following explicit user confirmation
+What: Confirmed against the live consumer-v1 branch that Architecture-Contract-v3-DRAFT.md is absent and the committed Architecture-Contract.md contains the reconciled v3 contract. Per user direction, Architecture-Contract.md is now treated as the adopted binding contract. Removed obsolete draft-status language from the contract’s revision note, §13 governance text, and the supersession statement in §13. Updated this ledger’s governing-document and Current State records and removed the obsolete open item asking whether to adopt the draft.
+Files touched: Architecture-Contract.md, PROJECT_LEDGER.md
+Layers touched: Cross-cutting governance/documentation only; no application layer, dependency, persistence, security, or UI code changed.
+Contract consulted: yes — full contract reviewed before editing.
+Security impact: documentation/governance correction only; no runtime behavior changed and no Phase 0 gate was marked complete.
+Handoff to next developer: continue from Phase 0 as the sole active gate. Treat Architecture-Contract.md and SECURITY-DEVOPS-BUILD-PLAN.md as aligned operational authority; verify each Phase 0 checkbox against live source and mandatory test evidence before marking it complete. Do not infer completion from stale ledger wording.
+Signature: Manus AI — 2026-08-16
+
+### **2026-08-16 — Phase 0.6 explicit SECURITY_FAILURE path implemented; mandatory execution pending**
+Who: Manus AI
+What: Re-read Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md, and PROJECT_LEDGER.md before changing source. Updated CallScreeningEngine so an outer repository/decision-engine exception returns a typed CallInfo with CallTier.SECURITY_FAILURE and ScreeningAction.SECURITY_FAILURE instead of buildDefaultInfo() / CLEAN_UNKNOWN / ALLOW. Preserved the existing SignalGateCallScreeningService boundary: its explicit Android CallResponse policy remains separate and currently rings through for SECURITY_FAILURE while writing a failure audit record. Added a focused JVM regression test asserting the tier, domain action, and SECURITY_FAILURE status.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/CallScreeningEngine.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineSecurityFailureTest.kt; SECURITY-DEVOPS-BUILD-PLAN.md
+Layers touched: Layer 4 Domain (failure semantics), test source, and governance documentation. No new dependency or layer reassignment.
+Contract consulted: yes — full relevant source files and governing documents were read before editing.
+Validation: check-architecture-drift.sh passed and git diff --check passed. Local Gradle/JVM execution could not start because this sandbox has no Android SDK configured; mandatory CI execution is therefore still required. No Phase 0 exit gate was closed solely on static inspection.
+Build-sheet status: 0.6 implementation marked complete with regression execution pending; 0.2 and 0.3 recorded as implemented with mandatory execution evidence pending; 0.4, 0.5, and 0.8 remain open.
+To-do / heads-up: run the mandatory instrumented workflow and unit test in CI; do not mark 0.2, 0.3, 0.6, or Phase 0 fully complete until required behavioral evidence is green. Continue auditing 0.4 last-known-good transactional activation and 0.5 hard rejection of parser/resource-limit violations. Do not resume Phase 1 or broad UI work.
+Signature: Manus AI — 2026-08-16
+
+### **2026-08-16 — Phase 0.5 parser limits hardened; mandatory execution and XLSX coverage pending**
+Who: Manus AI
+What: Re-read the current Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md, PROJECT_LEDGER.md, DataSyncEngine.kt, and SecureCsvParser.kt before editing. Changed SecureCsvParser so exceeding the valid-row limit throws CsvResourceLimitExceededException instead of silently stopping at two million rows. Changed DataSyncEngine so CSV limit failures, XLSX row-limit failures, and XLSX shared-string-limit failures propagate to the caller rather than returning partial candidate datasets. Added SecureCsvParserLimitTest.kt with a generated streaming input to prove the CSV hard-failure path without constructing the full input in memory.
+Files touched: android/app/src/main/java/com/signalgate/pulse/data/security/SecureCsvParser.kt; android/app/src/main/java/com/signalgate/pulse/logic/DataSyncEngine.kt; android/app/src/test/kotlin/com/signalgate/pulse/data/security/SecureCsvParserLimitTest.kt; SECURITY-DEVOPS-BUILD-PLAN.md
+Layers touched: Layer 2 Security/Parsing, test source, and governance documentation. No new dependency or layer reassignment.
+Contract consulted: yes — full relevant files and governing documents were read before editing.
+Validation: architecture-drift and git diff --check passed. Local Gradle execution could not start because this sandbox has no Android SDK configured; mandatory CI execution is still required. XLSX limit paths do not yet have dedicated regression tests, so this item is implementation-complete but not gate-complete.
+Build-sheet status: 0.5 implementation marked complete with regression execution pending; partial-result exit criterion marked implemented but not fully evidenced. Phase 0 remains gated.
+To-do / heads-up: add XLSX row-limit and shared-string-limit regression coverage, run JVM and instrumented CI, and ensure no sync path persists callback-emitted partial rows after an exception. Continue 0.4 audit; do not resume Phase 1 or broad UI work.
+Signature: Manus AI — 2026-08-16
+
+### **2026-08-16 — Phase 0.4 minimum last-known-good source activation implemented; migration/schema/behavioral evidence pending**
+Who: Manus AI, following explicit user scope confirmation
+What: Re-read Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md, PROJECT_LEDGER.md, and every affected implementation/test file before editing. Added nullable SourceEntity fields lastAttemptedSync and lastAcceptedSnapshot with a Room 2→3 migration. Added SourceDao attempt/accept writes. Extended SecurityRuleRepository as the single Layer 5 decision-affecting mutation boundary: it records an attempt outside the transaction, atomically deletes/replaces one source snapshot and records acceptance, preserves the previous active set on failure, and rebuilds Bloom state only after commit with safe Room-read fallback. Removed the obsolete generic updateSourceSyncStatus writer so sync status cannot be fabricated outside the accepted-snapshot boundary. Routed ReliableSourceManager through the atomic replacement result and added SourceSyncUseCase; SourcesViewModel and DashboardViewModel no longer mark existing rows HEALTHY without a real fetch/activation outcome.
+Files touched: android/app/src/main/java/com/signalgate/pulse/database/entities/DatabaseEntities.kt; android/app/src/main/java/com/signalgate/pulse/database/daos/DatabaseDAOs.kt; android/app/src/main/java/com/signalgate/pulse/database/SignalGateDatabase.kt; android/app/src/main/java/com/signalgate/pulse/database/SecureDatabase.kt; android/app/src/main/java/com/signalgate/pulse/logic/SecurityRuleRepository.kt; android/app/src/main/java/com/signalgate/pulse/logic/ReliableSourceManager.kt; android/app/src/main/java/com/signalgate/pulse/logic/SourceSyncUseCase.kt; android/app/src/main/java/com/signalgate/pulse/database/repositories/DataSourceRepository.kt; android/app/src/main/java/com/signalgate/pulse/di/AppModule.kt; android/app/src/main/java/com/signalgate/pulse/ui/screens/SourcesViewModel.kt; android/app/src/main/java/com/signalgate/pulse/ui/dashboard/DashboardViewModel.kt; android/app/src/androidTest/kotlin/com/signalgate/pulse/database/MigrationTest.kt; android/app/src/androidTest/kotlin/com/signalgate/pulse/logic/SourceActivationTransactionTest.kt; SECURITY-DEVOPS-BUILD-PLAN.md
+Layers touched: Layer 2 persistence/schema, Layer 5 application mutation and sync boundary, Layer 6 UI orchestration, instrumented tests, and governance documentation. No Phase 3 hash/signature/count/state-machine fields were added.
+Contract consulted: yes — adopted Architecture-Contract.md and the live source comments were reviewed before each affected edit.
+Validation: check-architecture-drift.sh and git diff --check passed. Local Gradle validation is blocked by the sandbox's missing Android SDK. The repository currently has schema versions 1 and 2 only; generated schema version 3 must be produced by SDK-capable CI/developer tooling before the migration gate can close. No Phase 0 exit gate was marked fully complete solely from static review.
+Build-sheet status: 0.4 implementation marked complete with migration, generated-schema, and behavioral execution pending. 0.8 remains open.
+To-do / heads-up: run compile/unit/instrumented CI; commit the generated Room 3.json artifact; execute MigrationTest and SourceActivationTransactionTest; then verify 0.2/0.3/0.5/0.6 evidence and complete 0.8 before Phase 0 can close. Do not resume Phase 1 or broad UI work.
+Signature: Manus AI — 2026-08-16
+
+### **2026-08-17 — CallDecision compilation regression corrected; remote CI re-run pending**
+Who: Manus AI
+What: Verified against the live consumer-v1 branch that CallDecision was not moved into a new file by Phase 0.4. DataSourceRepository.CallDecision remains the repository result data class, while the former SignalGateCallScreeningService.CallDecision enum was removed and replaced by the Layer 4 domain enum ScreeningAction. CallScreeningEngine.kt still referenced the removed service-nested enum at eight sites and retained an obsolete Android service import. Replaced those references with ScreeningAction.ALLOW/BLOCK/SCREEN/SECURITY_FAILURE and removed the service dependency from the engine. No behavior or Phase 0 scope was otherwise changed.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/CallScreeningEngine.kt; SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md
+Layers touched: Layer 4 domain decision engine and governance documentation. This correction restores the intended Layer 4 → Layer 1 boundary; no new dependency or layer reassignment.
+Contract consulted: yes — adopted Architecture-Contract.md, current build plan, ledger, CallInfo.kt, ScreeningAction.kt, CallScreeningEngine.kt, DataSourceRepository.kt, and the service boundary were reviewed before editing.
+Validation: check-architecture-drift.sh and git diff --check passed; grep confirms no SignalGateCallScreeningService.CallDecision references remain. Local Gradle compilation remains unavailable because the sandbox has no Android SDK. The prior remote CI run failed on this unresolved reference; the correction requires a fresh CI run before compile/test evidence can be considered valid.
+Build-sheet status: Phase 0.6 wording now explicitly records ScreeningAction as the engine domain type and the six-state test matrix. No Phase 0 gate was closed.
+To-do / heads-up: commit and push this correction, then verify fresh Consumer CI and instrumented-test results. Continue treating Phase 0 as gated; do not resume Phase 1 or broad UI work.
+Signature: Manus AI — 2026-08-17
+
+### **2026-08-17 — Phase 0.6 unit-test CallDecision compilation regression corrected; remote CI re-run pending**
+Who: Manus AI
+What: Read the complete failing CallScreeningEngineSecurityFailureTest.kt from the live branch. The production correction had already replaced the removed SignalGateCallScreeningService.CallDecision enum with the domain-level ScreeningAction, but the regression test still imported the Android service and asserted against the removed nested type. Removed that import and changed the assertion to ScreeningAction.SECURITY_FAILURE, matching CallInfo.callDecision and the production engine.
+Files touched: android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineSecurityFailureTest.kt; PROJECT_LEDGER.md
+Layers touched: Phase 0.6 Layer 4 regression test and governance documentation only. No production behavior, dependency, schema, or Phase 0 scope changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, CallInfo.kt, ScreeningAction.kt, CallScreeningEngine.kt, and the complete failing test were reviewed before editing.
+Validation: check-architecture-drift.sh and git diff --check passed; no stale SignalGateCallScreeningService.CallDecision references remain in production or test code. Local Gradle execution remains unavailable because the sandbox has no Android SDK. The correction requires fresh remote Consumer CI and unit-test execution.
+Build-sheet status: Phase 0.6 remains implementation-complete with regression execution pending; no Phase 0 gate was closed.
+To-do / heads-up: commit and push this test correction, then verify fresh Consumer CI and unit-test results. Continue treating Phase 0 as gated.
+Signature: Manus AI — 2026-08-17
+
+### **2026-08-17 — Phase 0.5 bounded XLSX hard-failure coverage added; execution evidence pending**
+Who: Manus AI
+What: Re-read the adopted Architecture-Contract.md, current SECURITY-DEVOPS-BUILD-PLAN.md, PROJECT_LEDGER.md, DataSyncEngine.kt, and SecureCsvParserLimitTest.kt before editing. Added injectable ParserLimits to DataSyncEngine with production defaults unchanged, so tests can exercise XLSX row and shared-string ceilings with small bounded archives. Exposed the existing typed RowLimitExceededException and SharedStringsLimitExceededException for focused assertions. Added DataSyncEngineXlsxLimitTest.kt covering both overflow paths and proving they throw instead of returning partial candidate datasets.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/DataSyncEngine.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/DataSyncEngineXlsxLimitTest.kt; SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md
+Layers touched: Layer 2 security parsing, JVM regression tests, and governance documentation. No CI workflow, schema, dependency, or Phase 3 policy change.
+Contract consulted: yes — full relevant implementation, test, build-sheet, and ledger contents were reviewed before editing.
+Validation: check-architecture-drift.sh and git diff --check passed. The CI workflow was explicitly left unchanged per current scope. Local Gradle execution remains unavailable because the sandbox has no Android SDK; execution evidence remains pending.
+Build-sheet status: Phase 0.5 now has implementation and regression sources for CSV, XLSX row, and XLSX shared-string hard failures. No Phase 0 gate was closed.
+To-do / heads-up: commit and push this parser/test correction. Continue Phase 0 only; do not resume Phase 1 or broad UI work.
+Signature: Manus AI — 2026-08-17
+
+### **2026-08-17 — Phase 0 mutation-boundary regression coverage added; execution evidence pending**
+Who: Manus AI
+What: Read the complete live SecurityRuleRepository and CallActionReceiver implementations before adding focused Phase 0.8 evidence. Added SecurityRuleRepositoryMutationBoundaryTest.kt covering manual block construction through DataSourceRepository, manual allow construction through the same boundary, and normalized manual-rule removal through the authoritative DAO. This verifies the Layer 5 mutation contract without introducing a second writer or changing production behavior.
+Files touched: android/app/src/test/kotlin/com/signalgate/pulse/logic/SecurityRuleRepositoryMutationBoundaryTest.kt; SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md
+Layers touched: Layer 5 application-boundary regression test and governance documentation. No production code, dependency, schema, or CI workflow changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, SecurityRuleRepository.kt, CallActionReceiver.kt, and existing test conventions were reviewed before editing.
+Validation: check-architecture-drift.sh and git diff --check passed. Local Gradle execution remains unavailable because the sandbox has no Android SDK; execution evidence remains pending. Remaining Phase 0 gaps are mandatory execution evidence, generated Room schema version 3, and focused edge-action behavioral coverage.
+Build-sheet status: 0.8 now has focused mutation-boundary regression source; it remains open. No Phase 0 gate was closed.
+To-do / heads-up: commit and push this regression coverage, then continue auditing edge-action coverage without advancing beyond Phase 0.
+Signature: Manus AI — 2026-08-17
+
+### **2026-08-17 — Phase 0.7 edge-action behavioral coverage added; execution evidence pending**
+Who: Manus AI, following explicit user scope approval
+What: Re-read the complete CallActionReceiver before applying the approved minimum seam. Extracted the existing validation and allowlist/dismiss side effects into an `internal suspend fun handleAction` in the same file. The receiver remains the Android ingress owner; no new service, interface, Koin binding, dependency, or layer was introduced. Added four JVM tests covering missing phone rejection, missing action rejection, unrelated-action rejection, and valid ACTION_NOT_SPAM routing through SecurityRuleRepository and PendingCardRepository with the expected toast outcome.
+Files touched: android/app/src/main/java/com/signalgate/pulse/CallActionReceiver.kt; android/app/src/test/kotlin/com/signalgate/pulse/CallActionReceiverBehaviorTest.kt; SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md
+Layers touched: Layer 1 Android ingress, Layer 5 repository boundary calls, JVM regression tests, and governance documentation. No schema, CI workflow, dependency, or Phase 3 policy change.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, CallActionReceiver.kt, SecurityRuleRepository.kt, PendingCardRepository.kt, and existing instrumented-test conventions were reviewed before editing.
+Validation: check-architecture-drift.sh and git diff --check passed. Local Gradle execution remains unavailable because the sandbox has no Android SDK; the four tests remain execution-gated. The seam is intentionally same-file and internal, not a new application service.
+Build-sheet status: 0.7 now has behavioral regression sources and 0.8 records the edge-action tests; no Phase 0 gate was closed.
+To-do / heads-up: commit and push this edge-action coverage, then package the original branch snapshot and all produced artifacts when Phase 0 work is complete. Continue treating Phase 0 as gated.
+Signature: Manus AI — 2026-08-17
+
+### **2026-08-17 — SecurityUtils placeholder open item reconciled; existing JVM and instrumented coverage confirmed**
+Who: Manus AI
+What: Read the complete live SecurityUtilsTest.kt and verified it is not a placeholder: it contains JVM assertions for non-empty keystore constants and the minimum 32-byte passphrase contract. The companion SecurityUtilsInstrumentedTest.kt provides the Android Keystore-dependent round-trip, corruption, invalidation, reset, and recovery coverage. Removed the stale ledger open item; no source code changed.
+Files touched: PROJECT_LEDGER.md
+Layers touched: Security test governance only. No production behavior, dependency, schema, CI workflow, or Phase 0 scope changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, SecurityUtilsTest.kt, and the instrumented test were reviewed.
+Validation: source inspection only; local Gradle execution remains unavailable because the sandbox has no Android SDK. Phase 0 execution evidence remains pending.
+Build-sheet status: no Phase 0 gate was closed; the stale placeholder note is removed from the live ledger.
+To-do / heads-up: continue Phase 0 evidence reconciliation and package the branch artifacts only after the Phase 0 implementation pass is complete.
+Signature: Manus AI — 2026-08-17
+
+### **2026-08-17 — Crash Diagnostic Google/system log ownership investigated; no Pulse remediation justified**
+Who: Manus AI
+What: Read the complete live Crash Diagnostic workflow and launch/capture script, inspected the Pulse manifest/build/resource references, and cross-checked AGSA, Chimera, and Android font-loading terminology. Confirmed the supplied log came from the GitHub Actions API 33 Google APIs emulator, not the user's physical device. The ChimeraModuleSetList.pb and AGSA AssistantConnector messages belong to Google/Play-services subsystems; FontLog/Bugle belongs to Google/system font/message activity; BlockstoreStorage is a system reaction to the Pulse package installation/update. No Pulse source reference to Blockstore, downloadable fonts, AGSA/Assistant, or Chimera was found. Added an auditable trace artifact with ownership classification and device-troubleshooting commands.
+Files touched: artifacts/crash-diagnostic-log-trace-2026-08-17.md; PROJECT_LEDGER.md
+Layers touched: Diagnostic evidence and governance only. No production code, dependency, schema, CI workflow, or Phase 0 status changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, crash-diagnostic.yml, verify-launch-and-capture.sh, AndroidManifest.xml, build.gradle, and relevant live source references were reviewed.
+Validation: source ownership inspection and external terminology cross-check completed. The Crash Diagnostic run succeeded and showed no app-attributable Pulse crash. The attached raw log remains supporting evidence; no remediation is justified from these lines alone.
+Build-sheet status: unchanged; Phase 0 remains gated on its existing execution/schema evidence.
+To-do / heads-up: for physical-device follow-up, capture PID-correlated logcat and inspect Google package ownership with adb dumpsys/pm commands; do not modify Pulse based on emulator/system noise.
+Signature: Manus AI — 2026-08-17
+
+### **2026-08-17 — CI gate reconciliation; stale continue-on-error note closed**
+Who: Manus AI, following user clarification
+What: Re-read the complete live `pulse-ci.yml` and `pulse-instrumented-tests.yml` at consumer-v1 commit 36f56fe. Prior session notes incorrectly carried `continue-on-error: true` as an open item against the JVM unit-test step, based on an older ZIP rather than the live branch. A full search confirms there is no active `continue-on-error` key in either workflow; only comments reference its prior existence. `pulse-ci.yml` runs `:app:testPulseDebugUnitTest --stacktrace` as a hard-failing step, and `pulse-instrumented-tests.yml` runs `:app:connectedPulseDebugAndroidTest --no-daemon --stacktrace` as a hard-failing step.
+Files touched: PROJECT_LEDGER.md
+Layers touched: CI governance documentation only. No code, workflow, dependency, schema, or Phase 0 implementation changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, and both live workflow files were reviewed.
+Validation: exact workflow read and full `continue-on-error` search passed. No code change was needed. Both unit-test and instrumented-test gates are hard-gated on the live branch.
+Build-sheet status: no Phase 0 checkbox changed; this stale-note reconciliation removes a false blocker, while behavioral execution and Room schema evidence remain separately open.
+To-do / heads-up: do not reintroduce the older ZIP’s advisory-gate assumption; use consumer-v1 at 36f56fe or later as the source of truth.
+Signature: Manus AI — 2026-08-17
+
+### **2026-08-17 — Obsolete Gemini review configuration removed**
+Who: Manus AI, following explicit user approval
+What: Read the complete `.gemini/config.yaml` and `.gemini/styleguide.md`, then searched the live repository for all `.gemini`, `config.yaml`, `styleguide.md`, and Gemini references. `config.yaml` contained only the inactive Gemini pull-request review configuration and obsolete Architecture Contract v1/style-guide instructions; it had no legitimate non-Gemini use. Removed the entire `.gemini/` directory, including `config.yaml` and `styleguide.md`.
+Files touched: .gemini/config.yaml (deleted); .gemini/styleguide.md (deleted); PROJECT_LEDGER.md
+Layers touched: Repository administration and governance documentation only. No production code, dependency, schema, CI workflow, or Phase 0 implementation changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, complete Gemini files, and repository-wide reference search were reviewed before deletion.
+Validation: the directory is absent and no remaining `.gemini`, `config.yaml`, `styleguide.md`, or Gemini references were found outside Git history. The cleanup is intentionally limited to obsolete review configuration.
+Build-sheet status: unchanged; no Phase 0 checkbox changed.
+To-do / heads-up: if automated review is reintroduced, implement it from the adopted Architecture Contract and build-plan invariants rather than restoring this obsolete general-purpose style guide.
+Signature: Manus AI — 2026-08-17
+
+### **2026-08-17 — Compose metrics analyzer updated to Pulse-era implementation**
+Who: Manus AI, following explicit user approval
+What: Compared the eight-file ZIP contents against the live branch. The archive contained an unintended ninth file, `analyze-compose-metrics-1.sh`, which was excluded from installation. Re-read the complete live destination and replaced only `tools/metrics-analysis/analyze_metrics.py` with the approved incoming version, preserving the existing filename and all repository references. The replacement updates Multi-Port branding to Pulse, aligns critical UI components with the current security surface, and makes missing/empty Compose metrics a visible nonzero configuration failure instead of allowing misleading zero-data conclusions.
+Files touched: tools/metrics-analysis/analyze_metrics.py; PROJECT_LEDGER.md
+Layers touched: Metrics tooling and governance documentation only. No Android production code, dependency, schema, CI workflow, or unrelated ZIP file was changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, live analyzer, incoming analyzer, metrics workflow, metrics shell wrapper, and all analyzer references were reviewed before replacement.
+Validation: incoming/live SHA-256 hashes match after replacement; Python bytecode compilation passed; missing-directory execution failed nonzero as intended; a minimal valid metrics directory produced a report and JSON output; git diff --check passed. The unintended `analyze-compose-metrics-1.sh` remains outside the repository and was not installed.
+Build-sheet status: unchanged; no Phase 0 checkbox changed.
+To-do / heads-up: retain the live filename `tools/metrics-analysis/analyze_metrics.py`; future replacements must preserve this path unless all callers are deliberately migrated.
+Signature: Manus AI — 2026-08-17
+
+### **2026-08-18 — Pre-0.4 ZIP naming changes merged without regressing live Phase 0 code**
+Who: Manus AI, following explicit user instruction
+What: Treated the supplied ZIP as a pre-0.4 snapshot and diffed each remaining file against the live branch before editing. Preserved the live two-dependency `SourcesViewModel` and changed only its `Multi-Port` → `Pro/Enterprise` comment wording; the ZIP's one-dependency version was not installed. Applied only verified comment/string changes to `SourcesScreen.kt`, `GlassmorphicDrawerContent.kt`, `OnboardingWizardScreen.kt`, `SignalGateTheme.kt`, and `ic_signal_gate_logo.xml`.
+Files touched: android/app/src/main/java/com/signalgate/pulse/ui/screens/SourcesViewModel.kt; android/app/src/main/java/com/signalgate/pulse/ui/screens/SourcesScreen.kt; android/app/src/main/java/com/signalgate/pulse/ui/components/GlassmorphicDrawerContent.kt; android/app/src/main/java/com/signalgate/pulse/ui/onboarding/OnboardingWizardScreen.kt; android/app/src/main/java/com/signalgate/pulse/ui/theme/SignalGateTheme.kt; android/app/src/main/res/drawable/ic_signal_gate_logo.xml; PROJECT_LEDGER.md
+Layers touched: UI naming/comments and governance documentation only. The Phase 0 `SourceSyncUseCase` dependency, real atomic sync calls, onboarding outer-navigation routes, Digest drawer path, theme values, and vector geometry were preserved.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, AppModule.kt, NavGraph.kt, Screen.kt, all live destinations, all incoming files, and per-file diffs were reviewed before editing.
+Validation: focused diff contains only the six intended comment/string changes; `SourceSyncUseCase` imports, constructor dependency, and sync calls remain present; onboarding still navigates through `dashboard`/`onboarding`; `Screen.Digest` remains in the drawer; the excluded `analyze-compose-metrics-1.sh` was not installed; `git diff --check` and `check-architecture-drift.sh` passed.
+Build-sheet status: unchanged; no Phase 0 checkbox changed.
+To-do / heads-up: the ZIP was confirmed to be pre-0.4. Any future file drops from it require per-file diff/merge review; do not blindly replace live files that contain newer security or dependency-boundary work.
+Signature: Manus AI — 2026-08-18
+
+### **2026-08-18 — Pulse-only terminology correction after ZIP merge review**
+Who: Manus AI, following explicit user clarification
+What: Corrected the recent ZIP-merge comments that used `Pro/Enterprise` or `Enterprise/Multi-Port` terminology. The current product positioning is SignalGate Pulse as the accessible, set-and-forget member of the SignalGate trilogy, not a lower-grade edition and not an Enterprise rename. Updated only the affected naming/comment strings in `SourcesViewModel.kt`, `SourcesScreen.kt`, `OnboardingWizardScreen.kt`, and `ic_signal_gate_logo.xml`; the existing `PULSE` and `SignalGate Pulse` strings in the drawer/theme were already correct.
+Files touched: android/app/src/main/java/com/signalgate/pulse/ui/screens/SourcesViewModel.kt; android/app/src/main/java/com/signalgate/pulse/ui/screens/SourcesScreen.kt; android/app/src/main/java/com/signalgate/pulse/ui/onboarding/OnboardingWizardScreen.kt; android/app/src/main/res/drawable/ic_signal_gate_logo.xml; PROJECT_LEDGER.md
+Layers touched: UI comments/resource documentation and governance documentation only. No Phase 0 implementation, dependency wiring, navigation behavior, vector geometry, or runtime string behavior changed.
+Contract consulted: yes — adopted Architecture-Contract.md, current build sheet, ledger, live files, and the prior focused diff were reviewed before correction.
+Validation: no added `Pro/Enterprise`, `Enterprise/Multi-Port`, `Multi-Port`, or `Multi-Point` terminology remains in the changed lines; `SourceSyncUseCase` imports, constructor dependency, and sync calls remain present; onboarding outer navigation guards remain present; `git diff --check` and `check-architecture-drift.sh` passed.
+Build-sheet status: unchanged; no Phase 0 checkbox changed.
+To-do / heads-up: information-gathering questions are non-mutating by default. Product naming in comments and strings must be reconciled against current Pulse positioning rather than inferred from a pre-0.4 ZIP.
+Signature: Manus AI — 2026-08-18
+
+### **2026-08-19 — Phase 1 Decision Engine Integrity formally closed**
+Who: Manus AI, following the explicit Phase 1 exit-gate instruction
+What: Committed and pushed the validated one-line `ScreeningAction` import correction in `GrayZoneReviewabilityTest.kt` as commit `c0b6c4a`. No production behavior changed in this final fix. The pre-existing Phase 1.3 persistence seam now has mandatory end-to-end evidence: `HEURISTIC_FLAG` produces an explicit audit record and `PendingCardEntity`, the repository exposes it through `PendingCardViewModel`, and `DigestScreen` renders the card and review count.
+Files touched in the Phase 1 closure record: `android/app/src/androidTest/kotlin/com/signalgate/pulse/GrayZoneReviewabilityTest.kt`; `SECURITY-DEVOPS-BUILD-PLAN.md`; `Architecture-Contract.md`; `PROJECT_LEDGER.md`.
+Layers touched: domain/application consequence contract, platform-edge persistence execution seam, persistence/repository flow, presentation, UI test coverage, and governance documentation. The final commit itself changed only the androidTest import; the documentation reconciliation records the already-implemented structure and does not alter runtime semantics.
+Contract consulted: yes — adopted `Architecture-Contract.md`, the live build sheet, the live ledger, the decision contract, edge service, and complete gray-zone test were read before closure edits.
+Validation: mandatory `Pulse Consumer CI` run `32230362641` passed on `c0b6c4a`; mandatory `Pulse Instrumented Tests` run `32230362598` passed on `c0b6c4a`; `Compose Metrics CI` run `32230362578` also passed. The instrumented run includes `GrayZoneReviewabilityTest`; JVM coverage includes the six-tier decision matrix, security-failure path, explicit consequence contract, and edge execution tests. Phase 1 exit criteria are all checked in the build sheet: six deterministic tiers, Bloom/database equivalence across Phase 0.2 states, end-to-end gray-zone reviewability, explicit consequences, and no edge-layer semantic invention.
+To-do / heads-up to next developer: Phase 2.1 may now begin. Re-check the held `PulseHapticsController`/`PulseVibration` implementation against the current `CallActionReceiver`; notification/haptic dispatch must remain independent of domain policy and must not alter the decision, audit record, or required review-card existence. Do not treat this closure as completion of Phase 2 notification/privacy work.
+Signature: Manus AI — 2026-08-19
+
+
+### **2026-08-19 — Phase 2.1 notification/haptics readiness check**
+Who: Manus AI, following Phase 1 closure and explicit instruction to begin Phase 2.1 only after persisted gray-zone review was proven.
+What: Re-read the live `CallActionReceiver.kt`, `ScreeningDecision.kt`, and `SignalGateCallScreeningService.kt`, then searched the tracked `consumer-v1` tree and workspace for `PulseHapticsController`, `PulseVibration`, and `PulseTriggerLimiter`. The held implementation is not present in the live branch or available workspace artifacts; only `NotificationChannelManager.kt` is currently tracked under the notification area. No speculative replacement or new service layer was created.
+Files touched: `PROJECT_LEDGER.md` only.
+Layers touched: governance documentation only. The current receiver remains the Phase 0.7 boundary: it owns only `ACTION_NOT_SPAM`, depends on `PendingCardRepository` and `SecurityRuleRepository`, and exposes the existing internal validation seam.
+Contract consulted: yes — adopted `Architecture-Contract.md`, the current build sheet, the signed Phase 1 closure entry, the decision consequence contract, and the complete live receiver were reviewed.
+Validation: Phase 1 remains closed and CI-verified on `c0b6c4a`/`1131661`. Phase 2.1 is authorized but blocked from implementation until the held source files or an approved artifact are supplied. Notification/haptic code must consume explicit decision policy and must never alter the domain decision, audit record, or required review-card persistence.
+To-do / heads-up: provide the held `PulseHapticsController`, `PulseVibration`, and `PulseTriggerLimiter` files (or identify their archive/commit). Once supplied, diff them against the current receiver and architecture contract before installation.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 2.1 notification/haptics integration prepared for CI**
+Who: Manus AI, following receipt of the three held source files from the owner.
+What: Installed `PulseHapticsController.kt`, `PulseVibration.kt`, and `PulseTriggerLimiter.kt` under `ui/notifications/`. Added the normal `android.permission.VIBRATE` declaration to `AndroidManifest.xml`, registered `PulseHapticsController` and `PulseTriggerLimiter` as Koin singletons in `notificationModule`, and wired them into `SignalGateCallScreeningService`. The service now completes the explicit audit/review-card persistence path before consulting UX rate limiting; HEURISTIC_BLOCK dispatches its explicit block notification and pulse, while HEURISTIC_FLAG uses the limiter to co-throttle its review notification and haptic. Optional notification/haptic failures are logged without rewriting the completed domain decision as SECURITY_FAILURE.
+Files touched: `android/app/src/main/AndroidManifest.xml`; `android/app/src/main/java/com/signalgate/pulse/ui/notifications/PulseHapticsController.kt`; `PulseTriggerLimiter.kt`; `PulseVibration.kt`; `android/app/src/main/java/com/signalgate/pulse/di/AppModule.kt`; `android/app/src/main/java/com/signalgate/pulse/SignalGateCallScreeningService.kt`; `android/app/src/test/kotlin/com/signalgate/pulse/di/KoinModuleTest.kt`; `android/app/src/test/kotlin/com/signalgate/pulse/ui/notifications/PulseTriggerLimiterTest.kt`; `PROJECT_LEDGER.md`.
+Layers touched: Layer 1 service dispatch, cross-cutting decision-policy consumption, UI notification/haptics package, Koin composition, manifest declaration, and JVM test coverage. No domain decision or persisted security consequence was changed.
+Contract consulted: yes — adopted `Architecture-Contract.md`, Phase 1 closure records, current service, current Koin module, current notification-channel manager, and all three supplied source files were read before integration.
+Validation: `git diff --check` passed. The focused Gradle test could not run locally because the sandbox lacks the Android SDK; mandatory GitHub CI is required for compile/lint/test confirmation. The supplied lint report’s two `MissingPermission` errors are addressed by the manifest declaration; pre-existing warnings were not changed intentionally.
+To-do / heads-up: inspect CI for compile, lint, JVM, and instrumented results on this integration commit. Confirm Phase 2.1 behavior against the current receiver before any later notification-action expansion; the limiter remains a UX throttle and must never suppress audit or review-card persistence.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 2.1 notification/haptics integration CI-verified**
+Who: Manus AI, following the Phase 2.1 integration push.
+What: The complete Phase 2.1 integration from commit `63e7dd7` passed the mandatory CI gates. The supplied haptics, vibration-pattern, limiter, manifest, Koin, service, and focused limiter-test changes were accepted without lint errors.
+Validation evidence: `Pulse Consumer CI` run `32244130376` passed build, architecture drift, JVM unit tests, lint, artifact upload, and compose-metrics verification. `Pulse Instrumented Tests` run `32244130346` passed the emulator suite and artifact upload. `Compose Metrics CI` run `32244130337` passed. The supplied `MissingPermission` lint blocker was cleared by `android.permission.VIBRATE`; the remaining warnings were non-blocking and unchanged by design.
+Boundary verification: `SignalGateCallScreeningService` persists the explicit decision consequences before UX dispatch. `PulseTriggerLimiter` gates only notification/haptic UX; it cannot suppress the decision, audit record, or required review card. Koin resolves both new singletons, and the receiver remains unchanged as the current Phase 0.7 application boundary.
+To-do / heads-up: Phase 2.1 notification/haptic implementation is now CI-verified. Future notification-action changes must be reviewed against the current `CallActionReceiver`, and rate limiting must remain a UX throttle rather than a security control.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 2.2 rate-limiting invariant test added**
+Who: Manus AI, following the owner’s instruction to move to Phase 2.2.
+What: Added `rateLimitedReviewUx_doesNotSuppressAuditOrReviewCardPersistence` to `GrayZoneReviewabilityTest`. The test executes the service persistence seam for two identical HEURISTIC_FLAG outcomes, consults `PulseTriggerLimiter` only after each persistence operation, verifies the first UX dispatch is allowed and the repeated dispatch is suppressed, then asserts that both call-log audit records and both required undismissed review cards remain present. Existing JVM limiter tests continue to cover cooldown, reset, non-rate-limited block policies, and NONE policies.
+Invariant: `PulseTriggerLimiter` is a UX throttle only. It cannot suppress the domain decision, `CallLogEntry`, or `PendingCardEntity` required by `ScreeningDecision.reviewCardRequired`. The production service ordering and the new emulator test prove persistence precedes limiter consultation.
+Files touched: `android/app/src/androidTest/kotlin/com/signalgate/pulse/GrayZoneReviewabilityTest.kt`; `PROJECT_LEDGER.md`.
+Validation: `git diff --check` passed. Local Gradle execution remains unavailable because the sandbox lacks the Android SDK; mandatory remote JVM and instrumented CI are required for final confirmation.
+To-do / heads-up: run and inspect the mandatory CI workflows for the new test commit. Do not mark Phase 2.2 complete until the instrumented invariant test is green.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 2.2 rate-limiting invariant CI-verified and closed**
+Who: Manus AI, following the Phase 2.2 test push.
+What: The rate-limiting boundary is now CI-verified. The repeated HEURISTIC_FLAG UX dispatch was suppressed by `PulseTriggerLimiter`, while both audit records and both required `PendingCardEntity` review cards remained persisted. The domain decision remained `SCREEN`; the limiter had no access to or control over decision or persistence consequences.
+Validation evidence: `Pulse Consumer CI` run `32248702045` passed architecture drift, build, JVM unit tests, lint, artifact upload, and compose-metrics verification. `Pulse Instrumented Tests` run `32248701979` passed the emulator suite, including `rateLimitedReviewUx_doesNotSuppressAuditOrReviewCardPersistence` and the complete gray-zone Digest path. `Compose Metrics CI` run `32248701987` passed.
+Closure: Phase 2.2 is complete. `PulseTriggerLimiter` is documented and tested as a UX throttle, not a security control. No Phase 1 decision or persisted-consequence invariant was weakened.
+To-do / heads-up: Future limiter changes must preserve the same ordering and invariant test. Any new notification action should be reviewed against the current `CallActionReceiver` before implementation.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 2.3 notification actions and Phase 2.4 privacy prepared for CI**
+Who: Manus AI, following the owner’s instruction to advance from Phase 2.2.
+What: Phase 2.3 was audited against the live `CallActionReceiver` and its existing behavioral tests. The supported notification action validates ingress data, then routes allowlisting through `SecurityRuleRepository` and digest dismissal through `PendingCardRepository`; no receiver-owned feature persistence or direct DAO access exists. The existing `CallActionReceiverBehaviorTest` covers incomplete and unrelated actions plus supported repository routing, so no new action or receiver production code was invented.
+Phase 2.4 implementation: blocked-call and review notifications now use `VISIBILITY_PRIVATE`, never render the raw phone number, and attach a redacted `VISIBILITY_PUBLIC` version for lock-screen and mirrored surfaces. Screening-service and limiter diagnostics no longer emit raw phone numbers. Notification builders were extracted into internal test seams, and `NotificationPrivacyTest` verifies private visibility, redacted public versions, and the preserved Not Spam action.
+Contract alignment: INV-004 external notification-action input remains validated at the edge; INV-007’s operational-log and user-visible notification privacy requirements are now explicit in the notification implementation. Deep-link routing remains the existing `signalgate://digest` path and carries no raw number.
+Files touched: `SECURITY-DEVOPS-BUILD-PLAN.md`; `android/app/src/main/java/com/signalgate/pulse/SignalGateCallScreeningService.kt`; `android/app/src/main/java/com/signalgate/pulse/ui/notifications/PulseTriggerLimiter.kt`; `android/app/src/test/kotlin/com/signalgate/pulse/NotificationPrivacyTest.kt`; `PROJECT_LEDGER.md`.
+Validation: `git diff --check` passed. Mandatory CI remains required; local Gradle execution is unavailable because the sandbox lacks the Android SDK.
+To-do / heads-up: run mandatory JVM, lint, instrumented, and metrics workflows for this commit. Do not treat Phase 2.3 or 2.4 as closed until the privacy test and existing receiver-boundary tests pass in CI.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 2.4 privacy test correction after CI feedback**
+Who: Manus AI, following mandatory Consumer CI run `32253631311`.
+What: The privacy implementation compiled and linted, but `NotificationPrivacyTest.reviewNotification_isPrivateAndRedactedOnLockScreenAndMirrors` failed because Robolectric exposes the no-action notification’s `actions` array as null. This was a test-observation issue, not a privacy or production behavior failure. The assertions now treat the Android platform array as nullable while still requiring the blocked notification’s action and the review notification’s lack of actions.
+Validation: Production privacy behavior remains unchanged: private visibility, redacted public versions, no raw phone number in rendered content, and no raw phone number in the changed operational logs. `git diff --check` passed. Mandatory CI is being rerun on this correction.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 2.3/2.4 CI-verified and closed**
+Who: Manus AI, following corrected commit `4fd665a`.
+What: The focused Robolectric null-action-array correction passed. Phase 2.3 is closed: `CallActionReceiverBehaviorTest` proves invalid actions are rejected before repository access and the supported notification action routes allowlisting through `SecurityRuleRepository` and card dismissal through `PendingCardRepository`; no receiver-owned feature persistence or direct DAO access exists. Phase 2.4 is closed: notification privacy tests prove private visibility, redacted public versions, absence of raw phone numbers from rendered notification content, and preserved blocked-call action behavior. Screening-service and limiter operational logs no longer emit raw phone numbers.
+Validation evidence: `Pulse Consumer CI` run `32254152945` passed architecture drift, build, JVM tests including `NotificationPrivacyTest`, lint, artifact upload, and compose-metrics verification. `Pulse Instrumented Tests` run `32254152984` passed the emulator suite. `Compose Metrics CI` run `32254152979` passed. The first consumer run `32253631311` failed only on Robolectric’s nullable no-action array observation; production code compiled and linted, and the focused assertion fix was pushed as `4fd665a`.
+Closure: Phase 2.3 and Phase 2.4 are complete. INV-004 action validation and application/repository routing remain intact. INV-007 privacy behavior is explicit for operational logs, lock-screen content, and notification mirroring. Phase 3 is the next gated phase.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 2 formally closed; Phase 3.1 opened**
+Who: Manus AI, following the owner’s instruction to advance from the completed notification/product phase.
+Closure: Phase 2.1 haptics, 2.2 rate limiting, 2.3 notification actions, and 2.4 privacy are all complete and CI-verified. Final Phase 2.3/2.4 evidence is Consumer CI `32254152945`, Instrumented CI `32254152984`, and Compose Metrics CI `32254152979`; the signed closure commit is `b2fb334`. The build sheet now records Phase 2 as formally CLOSED.
+Phase 3.1 opening: The next source-of-truth audit will trace `DataSyncEngine`, parser/security parsing, `ReliableSourceManager`, `SourceSyncUseCase`, `SecurityRuleRepository`, and activation persistence. The required separation is bounded raw parsing → schema validation → canonicalization → security sanity checks → snapshot activation, while preserving Phase 0.5 hard-failure and last-known-good invariants. No Phase 3.2–3.4 implementation will be treated as complete until 3.1’s boundary and tests pass in mandatory CI.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 3.1 parser/validator separation prepared for CI**
+Who: Manus AI, following the Phase 3.1 source-pipeline audit.
+What: `SecureCsvParser` now owns bounded raw CSV extraction only. It no longer sanitizes records or mutates Bloom state. `SourceRecordValidator` owns canonicalization and phone-field security length validation. `DataSyncEngine` and `ReliableSourceManager` route CSV and FTC mirror records through that validator before constructing candidate entries; snapshot activation remains exclusively in `SecurityRuleRepository.replaceSourceSnapshot`.
+Preservation: XLSX hard row/shared-string limits remain inside `DataSyncEngine` and continue to throw typed failures. CSV’s hard row limit remains inside `SecureCsvParser`; callers must discard callbacks when the parser throws. Bloom population remains downstream in `DataSourceRepository.insertEntries`, preserving the authoritative mutation chokepoint.
+Tests: Updated `SecureCsvParserLimitTest` for the raw parser API and added `SourceRecordValidatorTest` covering canonicalization, length rejection, and parser-before-validator ordering. DI now constructs `SecureCsvParser()` without a Bloom dependency.
+Validation: `git diff --check` passed. Local Android Gradle execution is unavailable because the sandbox lacks the Android SDK. Mandatory CI is required before marking Phase 3.1 complete.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 3.2 snapshot sanity checks prepared for CI**
+Who: Manus AI, following the Phase 3.1 CI-verified parser/validator separation.
+What: Added `SnapshotSanityValidator` as the explicit candidate gate before `SecurityRuleRepository.replaceSourceSnapshot`. It validates content type, UTF-8 encoding, bounded bytes, record and accepted-record ranges, maximum raw field length, duplicate accounting, malformed-record ratio, freshness, and catastrophic accepted-count changes against the last active source count. `ReliableSourceManager` now captures metadata for FTC JSON and streamed CSV candidates, bounds FTC body reads, counts streamed CSV bytes, and rejects invalid encoding before parsing.
+Tests: Added `SnapshotSanityValidatorTest` covering acceptance, content type, encoding, byte/record/field limits, malformed ratio, freshness, and catastrophic count changes. Existing Phase 0.5 parser hard-limit tests remain in place.
+Boundary: A rejected candidate throws before `replaceSourceSnapshot`; no active entries, accepted timestamp, or derived Bloom state can change. Duplicate records are deduplicated deterministically and accounted for rather than treated as a decision rule.
+Validation: `git diff --check` passed. Local Android Gradle execution is unavailable because the sandbox lacks the Android SDK. Mandatory CI is required before marking Phase 3.2 complete.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 3.1 and 3.2 CI-verified; Phase 3.3 opened**
+Who: Manus AI, following the mandatory CI gates for the source-pipeline work.
+Closure: Phase 3.1 parser/validator separation passed Consumer CI `32256017818`, Instrumented CI `32256017902`, and Compose Metrics CI `32256017967` on commit `035d570`. Phase 3.2 snapshot sanity checks passed Consumer CI `32257006586`, Instrumented CI `32257006994`, and Compose Metrics CI `32257006268` on commit `94818f8`.
+Result: The source pipeline now has bounded raw parsing, shared canonicalization/field validation, explicit snapshot candidate sanity checks, and atomic activation remains downstream in `SecurityRuleRepository`. Snapshot sanity rejects bad content type/encoding, byte and record limits, excessive fields, malformed ratios, stale candidates, and catastrophic count changes; duplicate records are deterministic and accounted for.
+Phase 3.3 opening: Authenticity is now the active gate. The current FTC mirror uses GitHub raw HTTPS; this is transport security, not artifact authenticity. The next implementation must introduce a signed snapshot/manifest or hash verification path only where the operational source can publish the corresponding artifact, and must verify before activation. No authenticity claim may be recorded without a test proving tamper rejection.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 3.3 manifest verifier implemented; mirror publication blocked on repository access**
+Who: Manus AI, following the approved P-256 authenticity design and the owner-provided `DNC_SIGNING_PRIVATE_KEY` secret name.
+What: Replaced the temporary hash-sidecar verifier design with `ArtifactAuthenticityVerifier` and `SourceAuthenticityTrustAnchor`. The FTC path now fetches `dnc-numbers.json.manifest.json`, requires algorithm `SHA256withECDSA`, validates the SHA-256 payload hash and signedAt freshness window, verifies the detached Base64 DER ECDSA signature against the embedded P-256 SPKI public key, and only then proceeds to `SnapshotSanityValidator` and `SecurityRuleRepository.replaceSourceSnapshot`. FCC remains deliberately HTTPS-transport-only because it is third-party infrastructure outside the controlled signing pipeline.
+Tests: Added manifest parsing, valid P-256 signature, payload tamper, algorithm rejection, stale/future manifest, and malformed-manifest vectors with a test-only public-key seam. No private key is present in the Pulse repository.
+Mirror: Updated the controlled mirror workflow to accept `DNC_SIGNING_PRIVATE_KEY` as PEM or Base64 DER, sign the finalized JSON bytes with OpenSSL `SHA256withECDSA`, and publish a deterministic manifest. The connected GitHub identity currently lacks write permission to `avignonbo-jpg/signalgate-dnc-mirror`; push was rejected with HTTP 403. The mirror change is therefore prepared locally but not live, and Phase 3.3 cannot close until the manifest is published by the mirror repository.
+Validation: App and mirror diffs pass static whitespace checks; local Android Gradle execution remains unavailable because the sandbox lacks the Android SDK. Mandatory CI is required after the mirror artifact and app commit are available.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 3.3 authenticity CI validation completed; mirror publication remains blocked**
+Who: Manus AI, following mandatory GitHub Actions runs for commit `4e6e2d6`.
+What: Consumer CI `32287636576`, Instrumented Tests `32287636596`, and Compose Metrics CI `32287636574` all completed successfully. The verifier suite now passes its valid P-256 signature, tamper, unsupported-algorithm, stale/future, and malformed-manifest vectors. This validates the app-side authenticity implementation and its JVM test execution, but does not prove live FTC synchronization because the signed mirror manifest is not yet published.
+Decision: Do not mark Phase 3.3 closed and do not advance to Phase 3.4 until the mirror workflow is pushed by an identity with write permission, the manifest is reachable, and an end-to-end sync confirms acceptance before activation.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 3.3 test-provider correction after CI feedback**
+Who: Manus AI, following Consumer CI `32286208347`.
+What: The new manifest verifier compiled, but all five `ArtifactAuthenticityVerifierTest` methods failed during shared test-field initialization because the JVM provider did not accept the generic EC `initialize(256)` request. The test-only key generation now explicitly requests `ECGenParameterSpec("secp256r1")`, matching the production P-256 design. No production behavior changed.
+Validation: The failure was isolated to test setup at the key-generation line; the correction preserves generated P-256 keys and detached `SHA256withECDSA` coverage. Mandatory CI rerun is required.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 3.3 JVM Base64 test compatibility correction after CI feedback**
+Who: Manus AI, following Consumer CI `32286767291`.
+What: After the explicit `secp256r1` correction, all five verifier tests still failed during shared test-field initialization because the test imported `android.util.Base64`, whose methods are unavailable in local JVM tests. The test now uses `java.util.Base64` only; production Android code remains unchanged.
+Validation: The failure was isolated to the test-only public-key/signature encoding line. The test still exercises the production verifier through its test-key seam and detached `SHA256withECDSA` vectors. Mandatory CI rerun is required.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 3.3 production Base64 compatibility correction after CI feedback**
+Who: Manus AI, following Consumer CI `32287280407`.
+What: The remaining valid-signature test failed because production `ArtifactAuthenticityVerifier` still called `android.util.Base64`, which is not implemented in local JVM tests. Since the app minimum API is 29, production verification now uses `java.util.Base64.getDecoder()`, available on the supported platform and executable in JVM tests. No trust boundary, key, algorithm, or lifecycle behavior changed.
+Validation: Only the two production Base64 decode calls and import changed. The verifier continues to reject malformed/empty signatures through its existing fail-closed exception path. Mandatory CI rerun is required.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 3.3 authenticity formally closed; live signed manifest verified**
+Who: Manus AI, following the owner-triggered mirror workflow run.
+What: Mirror workflow run `32302233508` succeeded after the corrected workflow was placed on `dnc-mirror-pulse`. The live branch now contains `dnc-numbers.json.manifest.json` alongside `dnc-numbers.json`.
+Validation: The published manifest hash `52fbc5f32a202fb666527d0d02500566cf21335156c2453553d342cc8658ac78` exactly matches the downloaded snapshot. OpenSSL verified the detached `SHA256withECDSA` signature as `Verified OK` against the same P-256 public trust anchor embedded in `SourceAuthenticityTrustAnchor.kt`. The manifest uses `SHA256withECDSA` and a current `signedAt` timestamp. Combined with successful Consumer CI `32287636576`, Instrumented Tests `32287636596`, and Compose Metrics CI `32287636574`, the app-side authenticity implementation and live artifact are proven.
+Closure: Phase 3.3 is closed. Phase 3.4 Source Lifecycle is authorized next; no lifecycle-state implementation has been started by this entry.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Contract stale-reference reconciliation: CallOverlayViewModel and SignalGateMode**
+Who: Manus AI, following a live `consumer-v1` source-of-truth scan at commit `186a1f4`.
+Finding: Neither `CallOverlayViewModel` nor `SignalGateMode` exists in the current Kotlin source, Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md, or repository-wide tracked content. The historical removal is evidenced by commits `613b1f0` (deleted `CallOverlayViewModel.kt`), `119ec8f` (deleted `SignalGateMode.kt`), and `bd8a18d` (removed the obsolete `CallOverlayViewModel` Koin binding).
+Disposition: Resolved. No code change was needed. The absence was not visible as a distinct prior ledger entry, so this reconciliation is recorded explicitly here.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 3 closure**
+Who: Manus AI, after live source, schema, and mandatory CI validation.
+Result: Phase 3.3 authenticity, Phase 3.4 source lifecycle, and Phase 3.5 fake-sync resolution are complete. The signed FTC mirror manifest was published and cryptographically verified against the Pulse P-256 trust anchor. The lifecycle state machine now distinguishes attempted, syncing, accepted, stale, failed, rejected, and disabled source states; accepted metadata is committed only with atomic snapshot activation. Consumer, instrumented, and Compose Metrics CI passed. All Phase 3 exit criteria are checked off in `SECURITY-DEVOPS-BUILD-PLAN.md`.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 3.4 lifecycle implementation prepared for CI**
+Who: Manus AI, following the Phase 3.4 source-pipeline audit.
+What: Added explicit `SourceLifecycleState` values ENABLED, SYNCING, HEALTHY, STALE, FAILED, REJECTED, and DISABLED; persisted lifecycle state, snapshot version, snapshot hash, accepted record count, and lifecycle reason on `SourceEntity`; added Room migration 3→4 and registered it in `SecureDatabase`.
+Boundary: `SecurityRuleRepository` remains the only snapshot activation boundary. It records SYNCING before fetch, commits accepted metadata only inside the existing atomic replacement transaction, rejects empty candidates without deleting active entries, and records FAILED/REJECTED outcomes. `ReliableSourceManager` maps operational failures with an existing accepted snapshot to STALE, while rejected candidates remain REJECTED. SourcesScreen now observes explicit lifecycle state and safe metadata without rendering phone-number payloads. SourcesViewModel and DashboardViewModel remain routed through SourceSyncUseCase.
+Tests: Extended migration and atomic-activation instrumented coverage for v4 defaults, accepted metadata, failed replacement, empty-candidate rejection, last-known-good preservation, and lifecycle states. Consumer CI `32306315653`, Compose Metrics CI `32306315731`, and Instrumented CI `32306315748` passed for commit `c3c5b59`. Generated Room schema `4.json` was recovered from Consumer CI `32307077748`; the temporary schema-artifact upload was removed from `pulse-ci.yml` before final closure. `git diff --check` passes.
+Signature: Manus AI — 2026-08-19
+
+
+---
+
+# **AMENDMENTS LOG**
+
+---
+
+Date proposed
+Amendment
+Status
+2026-07-15
+Relabel check-architecture-drift.sh to match this contract's layer numbering
+Applied (corrected 2026-08-13 — previously shown as "Pending review," which contradicted this Contract's own closing note)
+2026-07-15
+Reassign DataSyncEngine, ReliableSourceManager from Layer 4 → Layer 5
+Applied (corrected 2026-08-13)
+2026-07-15
+Add missing classes to ownership map (AppModule, CallInfo, etc.)
+Applied (corrected 2026-08-13 — further classes added on top this session, see §4 [+] markers in the Contract)
+2026-07-15
+Add "Cross-Cutting" category for data models/utils
+Applied (corrected 2026-08-13)
+2026-07-15
+Close XML-layout loophole explicitly
+Applied (corrected 2026-08-13)
+2026-07-15
+Add Build Integrity clause (Section 8)
+Applied, scope caveat still standing (corrected 2026-08-13)
+
+### **2026-08-17 — Phase 0.4 source-attempt recording made fail-closed; focused test diagnostic strengthened**
+Who: Manus AI
+What: Re-read the complete live SourceActivationTransactionTest.kt, DatabaseDAOs.kt, SecurityRuleRepository.kt, DatabaseEntities.kt, and the current ledger before editing. Verified that SourceDao.recordSyncAttempt() already used the correct `id` parameter and `WHERE id = :id` predicate; no shadowing or parameter-name defect was found. Changed recordSyncAttempt() to return Room's affected-row count. SecurityRuleRepository now requires exactly one source row to be updated before entering atomic snapshot replacement and returns SnapshotActivationResult.Failed if the attempt cannot be recorded, preventing silent security-state divergence. Updated SourceActivationTransactionTest.kt to retain the Long returned by insertSource(), assert it is positive, and explicitly convert it to the SourceEntity Int key type.
+Files touched: android/app/src/main/java/com/signalgate/pulse/database/daos/DatabaseDAOs.kt; android/app/src/main/java/com/signalgate/pulse/logic/SecurityRuleRepository.kt; android/app/src/androidTest/kotlin/com/signalgate/pulse/logic/SourceActivationTransactionTest.kt; PROJECT_LEDGER.md
+Layers touched: Layer 2 persistence DAO contract, Layer 5 application mutation boundary, instrumented regression test, and governance documentation. No new layer, dependency, schema version, or Phase 3 policy was introduced.
+Contract consulted: yes — adopted Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md, PROJECT_LEDGER.md, and all complete affected source/test files were reviewed before editing.
+Validation: grep confirmed there is one live recordSyncAttempt call and its SQL parameter binding is exact. git diff --check passed. Local Gradle execution remains unavailable because the sandbox has no Android SDK; mandatory connectedPulseDebugAndroidTest evidence is still required. No Phase 0 checkbox was closed.
+Build-sheet status: Phase 0.4 remains gated pending mandatory migration/schema/behavioral execution evidence. The focused test now reports invalid source identity and zero-row attempt updates explicitly instead of allowing them to pass silently.
+To-do / heads-up: run the focused instrumented test in CI, inspect the affected-row result if it still fails, obtain and commit generated Room schema 3.json, and continue Phase 0 only. Do not advance to Phase 1.
+Signature: Manus AI — 2026-08-17
+
+### **2026-08-17 — Room schema version 3 generated by CI and added to source control**
+Who: Manus AI
+What: Verified the live Room configuration: `@Database(version = 3, exportSchema = true)` is enabled in SignalGateDatabase.kt; KSP writes to `android/app/schemas`; and the schema directory is exposed to androidTest assets for MigrationTestHelper. The sandbox could not run KSP because no Android SDK is installed, so the dedicated `Generate Room Schema 2` workflow was dispatched on consumer-v1. CI run 32099857069 completed successfully and generated the authoritative version 3 schema artifact. Copied only the generated 3.json into the existing schema directory; schema 1.json and 2.json were not overwritten.
+Files touched: android/app/schemas/com.signalgate.pulse.database.SignalGateDatabase/3.json; PROJECT_LEDGER.md
+Layers touched: Room persistence/schema governance and documentation only. No migration SQL, entity definition, runtime behavior, dependency, or Phase 0 policy was changed.
+Contract consulted: yes — adopted Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md, PROJECT_LEDGER.md, build.gradle, SignalGateDatabase.kt, and the live schema directory were reviewed.
+Validation: CI schema-generation workflow 32099857069 passed. Generated 3.json declares version 3 and includes nullable `last_attempted_sync` and `last_accepted_snapshot` columns. Local `git diff --check` passed. The artifact is now available for MigrationTestHelper baseline validation; mandatory behavioral CI evidence remains separate and Phase 0 is still gated.
+Build-sheet status: the generated-schema portion of Phase 0.4 is now satisfied in source control; no Phase 0 exit checkbox was marked complete until the full required migration and behavioral evidence is green.
+To-do / heads-up: commit and push 3.json, then verify the connected instrumented test and remaining Phase 0 evidence. Continue Phase 0 only; do not advance to Phase 1.
+Signature: Manus AI — 2026-08-17
+
+### **2026-08-18 — Phase 0 Security Control-Plane Integrity Gate formally closed**
+Who: Manus AI, following explicit user authorization to close Phase 0 and advance
+What: Reconciled SECURITY-DEVOPS-BUILD-PLAN.md against the live consumer-v1 branch and mandatory CI evidence. The complete Phase 0 matrix passed on commit 956fc88: JVM workflow run 32099978930 passed the parser-limit, security-failure, mutation-boundary, and edge-action regression classes; instrumented workflow run 32099978903 passed Bloom-authority, source-lifecycle, Room migration, source-deletion cascade, and atomic source-activation coverage. The CI-generated Room schema version 3 artifact is committed at android/app/schemas/com.signalgate.pulse.database.SignalGateDatabase/3.json. The architecture-drift gate and git diff --check passed. Updated all Phase 0 item statuses and all eight Phase 0 exit criteria to complete; reconciled stale continue-on-error wording in the build sheet. No Phase 1 implementation was mixed into the closure commit.
+Files touched: SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md
+Layers touched: Security governance documentation and evidence reconciliation only. No runtime code, dependency, schema, CI workflow, or policy implementation changed in this closure step.
+Contract consulted: yes — adopted Architecture-Contract.md, the complete build plan, current ledger, live CI workflows, generated schema artifact, and downloaded JVM/instrumented result reports were reviewed.
+Evidence: JVM run 32099978930 succeeded at https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32099978930; instrumented run 32099978903 succeeded at https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32099978903; instrumented test log reported OK (27 tests); relevant JUnit XML suites reported failures=0 and errors=0; schema 3.json declares version 3 and both nullable source-activation timestamp columns.
+Build-sheet status: Phase 0.1 through 0.8 and all eight Phase 0 exit criteria are checked complete. Phase 1 is now the active phase; its five exit criteria remain open and no Phase 1 work is claimed by this entry.
+To-do / heads-up: begin Phase 1 only from its stated Decision Engine Integrity scope. First priority is the deterministic six-state decision matrix and the diagnosed HEURISTIC_FLAG persisted-review gap. Do not resume Phase 2 or broad UI work until Phase 1 exits.
+Signature: Manus AI — 2026-08-18
+
+### **2026-08-18 — Phase 1.1 decision-matrix foundation added**
+Who: Manus AI
+What: Audited the live CallScreeningEngine, ScreeningAction, CallTier, DataSourceRepository, UnifiedEntryDao, and existing Phase 0 decision tests against Phase 1.1. The audit found that both priority-ordered authoritative DAO queries included disabled sources because they lacked an `s.isEnabled = 1` predicate. Added the predicate to exact-entry and block-pattern queries so source disablement cannot continue to affect screening decisions. Added deterministic JVM engine mapping coverage for ALLOWLISTED, FEDERAL_BLOCK, HEURISTIC_BLOCK, HEURISTIC_FLAG, CLEAN_UNKNOWN, normalization, and the existing SECURITY_FAILURE contract. Added instrumented Room coverage for manual-allow versus external-block precedence, source priority, exact versus pattern matching, normalization, disabled exact/pattern sources, and malformed/empty input.
+Files touched: android/app/src/main/java/com/signalgate/pulse/database/daos/DatabaseDAOs.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineDecisionMatrixTest.kt; android/app/src/androidTest/kotlin/com/signalgate/pulse/database/repositories/DecisionMatrixRepositoryTest.kt; PROJECT_LEDGER.md
+Layers touched: Layer 3 persistence query authority and Layer 4 decision-engine regression coverage. No Phase 0 code or schema was changed.
+Contract consulted: yes — Architecture-Contract.md, SECURITY-DEVOPS-BUILD-PLAN.md Phase 1.1, live decision types, repository, DAO queries, and existing Phase 0 tests were read before changes.
+Validation: `git diff --check` passed; `check-architecture-drift.sh` passed. Local Gradle execution was attempted but cannot proceed because the sandbox has no Android SDK (`SDK location not found`). Mandatory JVM and instrumented CI execution is required before this Phase 1.1 work is considered verified.
+Coverage status: the six domain outcomes are now represented across the existing Phase 0.6 failure test and the new deterministic engine matrix tests. Repository combinations requiring Room are represented in the new instrumented suite; the diagnosed Phase 1.3 HEURISTIC_FLAG persisted-review consequence remains intentionally separate and open.
+To-do / heads-up: commit and push this focused Phase 1.1 change, then verify the mandatory JVM and connected instrumented workflows. Do not advance to Phase 1.2 or Phase 2 until the Phase 1.1 matrix is green and its evidence is recorded.
+Signature: Manus AI — 2026-08-18
+
+### **2026-08-18 — Phase 1.1 compiler correction**
+Who: Manus AI
+What: Mandatory JVM CI run 32104513436 reached `compilePulseDebugUnitTestKotlin` and identified one test-fixture defect: `repositoryReturning()` invoked the suspend `DataSourceRepository.getCallDecision()` stubbing API from a non-suspend helper. Changed only that helper to `suspend`; no production logic or coverage scope changed.
+Files touched: android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineDecisionMatrixTest.kt; PROJECT_LEDGER.md
+Validation: failure reproduced from CI log at line 112, corrected at source. `git diff --check` remains required before publication. CI rerun is required; Phase 1.1 remains unverified until both mandatory workflows are green.
+Signature: Manus AI — 2026-08-18
+
+### **2026-08-18 — Phase 1.1 normalization-vector correction**
+Who: Manus AI
+What: Corrected one failing JVM matrix assertion from CI run 32104877363. The live CallScreeningEngine strips formatting but does not invent a country code; the test had supplied a national-format number while asserting an E.164 `+1` result. The vector now supplies `+1 (555) 123-4567` and asserts the engine’s actual canonical lookup value `+15551234567`. No production behavior was changed.
+Evidence: CI run 32104877363 compiled successfully and executed all seven new engine tests; six passed and only the incorrect normalization expectation failed. The failure was `expected +15551234567 but was 5551234567`, which identified a test assumption rather than a runtime defect.
+Files touched: android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineDecisionMatrixTest.kt; PROJECT_LEDGER.md
+To-do / heads-up: rerun mandatory JVM and instrumented CI. Phase 1.1 remains open until both workflows are green.
+Signature: Manus AI — 2026-08-18
+
+### **2026-08-18 — Phase 1.1 decision matrix verified complete**
+Who: Manus AI
+What: Mandatory CI verification completed for the Phase 1.1 decision matrix after the focused normalization-vector correction. JVM workflow 32105252683 passed on commit be22b9a; the new CallScreeningEngineDecisionMatrixTest ran 7 tests with failures=0/errors=0, and the existing security-failure regression ran with failures=0/errors=0. Instrumented workflow 32105252778 passed on the same commit; the emulator reported OK (33 tests), including DecisionMatrixRepositoryTest. The source-disablement fix in UnifiedEntryDao now excludes disabled sources from exact and pattern decision queries. The first CI attempt exposed and corrected a test-fixture suspension issue; the second exposed and corrected an invalid assumption that the engine invents a country code for national-format input. No production normalization behavior was changed.
+Files touched since prior Phase 1.1 entry: android/app/src/test/kotlin/com/signalgate/pulse/logic/CallScreeningEngineDecisionMatrixTest.kt; PROJECT_LEDGER.md
+Evidence: JVM run https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32105252683 passed; instrumented run https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32105252778 passed. Downloaded artifacts verified the named result counts above.
+Status: Phase 1.1 is complete and CI-verified. Phase 1 overall remains open; 1.2 decision consequences and 1.3 HEURISTIC_FLAG persisted-review behavior are not closed by this entry.
+To-do / heads-up: begin Phase 1.2 only after preserving the six-state matrix and its precedence assumptions. Keep Phase 1.3 separate: the known service behavior currently persists review cards for HEURISTIC_BLOCK but not HEURISTIC_FLAG, which is an explicit next-phase issue rather than a reason to distort the matrix.
+Signature: Manus AI — 2026-08-18
+
+### **2026-08-18 — Phase 1.2 explicit decision-consequence contract implemented**
+Who: Manus AI
+What: Applied the user-approved Phase 1.2 consequence matrix. Added immutable `ScreeningDecision` with explicit call action, audit requirement, review-card requirement, policy-semantic notification policy, policy-semantic haptic policy, and security-failure state. Added `NotificationPolicy` values `NONE`, `BLOCK_REVIEW`, and `REVIEW_AVAILABLE`; added `HapticPolicy` values `NONE`, `BLOCK_PULSE`, and `REVIEW_PULSE`. `SECURITY_FAILURE` remains a distinct domain action and is not aliased to ALLOW; the Android edge policy continues to ring through deliberately.
+The approved consequence table is encoded as: ALLOWLISTED = no audit/review/notification/haptic; FEDERAL_BLOCK = audit only; HEURISTIC_BLOCK = audit + review card + BLOCK_REVIEW + BLOCK_PULSE; HEURISTIC_FLAG = audit + review card + REVIEW_AVAILABLE + REVIEW_PULSE; CLEAN_UNKNOWN = audit only; SECURITY_FAILURE = audit + explicit failure, with no review/notification/haptic.
+Edge change: `SignalGateCallScreeningService` now reads `CallInfo.screeningDecision`, maps its call action, gates audit writes with `auditRequired`, creates review cards from `reviewCardRequired`, and branches notification behavior on `notificationPolicy` rather than `CallTier`. `CallInfo` now carries the immutable contract with a compatibility-derived default for existing fixtures.
+Tests: Added `ScreeningDecisionConsequencesTest` covering all six states and rejecting construction of SECURITY_FAILURE as ordinary ALLOW. No Phase 1.3 end-to-end digest changes were made.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/ScreeningDecision.kt; android/app/src/main/java/com/signalgate/pulse/CallInfo.kt; android/app/src/main/java/com/signalgate/pulse/SignalGateCallScreeningService.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/ScreeningDecisionConsequencesTest.kt; PROJECT_LEDGER.md
+Validation: `git diff --check` passed; `check-architecture-drift.sh` passed. Local Gradle execution was attempted and blocked only by the sandbox lacking an Android SDK (`SDK location not found`). Mandatory JVM and instrumented CI validation is required before Phase 1.2 can be marked complete.
+To-do / heads-up: inspect the CI compile/test result and add edge-execution tests if CI or review identifies an uncovered consequence dispatch path. Phase 1.3 remains gated behind this contract and will separately verify HEURISTIC_FLAG persistence through the digest.
+Signature: Manus AI — 2026-08-18
+
+### **2026-08-18 — Phase 1.2 contract CI verification**
+Who: Manus AI
+What: Mandatory CI completed successfully for the explicit consequence contract on commit 244e1eb. JVM workflow 32191065136 passed. `ScreeningDecisionConsequencesTest` executed 7 tests with failures=0/errors=0; `CallScreeningEngineDecisionMatrixTest` executed 7 tests with failures=0/errors=0; `CallScreeningEngineSecurityFailureTest` executed 1 test with failures=0/errors=0. Instrumented workflow 32191065135 passed with `OK (33 tests)`.
+Evidence: JVM https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32191065136; instrumented https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/32191065135. Downloaded JUnit XML confirms zero failures/errors for the named JVM suites.
+Status: The immutable policy contract and compilation are CI-verified. Phase 1.2 is not yet fully closed because dedicated edge-execution tests for service response/audit/review-card/notification policy have not been added; this is intentionally retained as an open verification item rather than inferred from contract tests.
+To-do / heads-up: add focused edge-executor tests or a minimal testable application seam, then rerun both mandatory workflows before marking Phase 1.2 complete. Phase 1.3 remains gated.
+Signature: Manus AI — 2026-08-18
+
+### **2026-08-19 — ScreeningServiceEdgeExecutionTest coroutine compatibility correction**
+Who: Manus AI
+What: The first CI run for `ScreeningServiceEdgeExecutionTest` failed at compilation because Pulse declares `kotlinx-coroutines-android` but does not declare `kotlinx-coroutines-test`; `kotlinx.coroutines.test.runTest` was therefore unavailable. The test also called suspend repository methods from non-suspend test bodies. Replaced all eight `runTest` wrappers with the project-supported `kotlinx.coroutines.runBlocking` and retained the suspend calls inside those coroutine bodies. No production code or dependency was changed.
+Evidence: Failed JVM run 32201506025 identified the exact compiler errors. Static validation after the correction passed `git diff --check` and `check-architecture-drift.sh`; no `runTest` or `kotlinx.coroutines.test` references remain in the test.
+Status: Focused test source is corrected locally; mandatory CI rerun is required before closing the edge-execution verification item.
+To-do / heads-up: monitor the targeted JVM test on the next consumer-v1 CI run. If compilation passes, inspect the test result count and artifact paths; if the test fails at runtime, fix only the evidence-supported edge behavior.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — ScreeningServiceEdgeExecutionTest JUnit return-type correction**
+Who: Manus AI
+What: The runBlocking conversion compiled, but CI run 32202481391 reported `InvalidTestClassError`: three JUnit methods returned a non-Unit value because the final Mockito `verify(...)` expression became the generic return value of `runBlocking`. Constrained all eight coroutine test bodies to `runBlocking<Unit>`, preserving the test logic and making every JUnit method return void/Unit as required by JUnit4. No production code or dependency was changed.
+Evidence: Failed JVM run 32202481391; downloaded `test-results` artifact identified `reviewCardRequired_false_doesNotWritePendingCard`, `allowlisted_doesNotWritePendingCard_andDoesNotWriteCallLog`, and `heuristicBlock_allConsequenceFieldsAreCorrect` as the invalid methods. Static validation after correction passed `git diff --check` and `check-architecture-drift.sh`; only `kotlinx.coroutines.runBlocking` remains and no `runTest`/`kotlinx.coroutines.test` references remain.
+Status: Correction is ready for mandatory CI rerun.
+To-do / heads-up: inspect the next targeted JVM result for actual test execution and artifact availability. Do not close the Phase 1.2 edge-execution item until the targeted class passes.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 1.2 formally closed**
+Who: Manus AI
+What: Phase 1.2, Make decision consequences explicit, is formally complete. The immutable `ScreeningDecision` contract carries call action, audit requirement, review-card requirement, notification policy, haptic policy, and security-failure state. The edge service executes those fields rather than reverse-engineering consequences from `CallTier`.
+Evidence: Same-commit mandatory JVM workflow 32202859358 passed. `ScreeningDecisionConsequencesTest` and `ScreeningServiceEdgeExecutionTest` passed; the targeted edge-execution class executed 22 tests with failures=0/errors=0. Same-commit mandatory instrumented workflow 32202859350 passed. Architecture drift and whitespace validation passed before publication.
+Status: Build sheet 1.2 marked complete. Phase 1.3 remains open and is now the active gate: prove HEURISTIC_FLAG persists through audit, PendingCardEntity, repository, PendingCardViewModel, and DigestScreen. Phase 1 is not closed and Phase 2 remains gated.
+Signature: Manus AI — 2026-08-19
+
+### **2026-08-19 — Phase 1.3 gray-zone persistence implementation**
+Who: Manus AI
+What: Began Phase 1.3 after pushing the formal Phase 1.2 closure. Added an internal suspend persistence seam in `SignalGateCallScreeningService` so the edge executes `auditRequired` and `reviewCardRequired` through the real `CallLogRepository` and `PendingCardRepository` boundaries. The seam preserves notification/haptic dispatch as a later policy consumer and avoids asynchronous sleeps in tests. Reconciled stale PendingCardEntity, PendingCardDao, and DigestScreen documentation to include both HEURISTIC_BLOCK and HEURISTIC_FLAG review-required decisions. Added Compose UI test dependencies and created `GrayZoneReviewabilityTest` covering decision → audit record → PendingCardEntity → repository Flow → PendingCardViewModel → DigestScreen.
+Evidence status: Static source edits are complete; mandatory JVM/instrumented CI is required. Local Android execution remains unavailable because the sandbox lacks an Android SDK.
+Status: Phase 1.3 remains open pending compilation, runtime, and UI test evidence. Phase 1 exit criteria and Phase 2 remain gated.
+To-do / heads-up: run mandatory CI, inspect exact GrayZoneReviewabilityTest counts and any Compose/runtime failures, then fix only evidence-supported defects. Do not mark Phase 1 complete until the full exit matrix is green.
+Signature: Manus AI — 2026-08-19
