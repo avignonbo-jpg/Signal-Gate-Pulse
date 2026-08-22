@@ -104,6 +104,20 @@ android {
         pickFirst 'lib/arm64-v8a/libc++_shared.so'
         pickFirst 'lib/x86/libc++_shared.so'
         pickFirst 'lib/x86_64/libc++_shared.so'
+
+        // Startup fix (2026-08-22): SecureDatabase's System.loadLibrary("sqlcipher")
+        // was blocking the main thread for ~4.9s on cold start (confirmed via
+        // StrictMode DiskReadViolation + ZipFile$Source.initCEN in the trace —
+        // see crash-diagnostic-log-trace). Root cause: with native libs left
+        // compressed in the APK, the classloader has to open the whole APK as a
+        // ZipFile/JarFile and scan its central directory just to locate
+        // libsqlcipher.so, instead of the OS mmap'ing it directly. This does NOT
+        // touch MainApplication's runBlocking DB init, which is a separate,
+        // deliberate constraint (Architecture Contract §2) — this only fixes how
+        // expensive loadLibrary() is before that block even runs.
+        jniLibs {
+            useLegacyPackaging = false
+        }
     }
 
     flavorDimensions "version"
