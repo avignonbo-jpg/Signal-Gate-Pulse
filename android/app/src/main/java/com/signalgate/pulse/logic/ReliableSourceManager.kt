@@ -333,7 +333,7 @@ class ReliableSourceManager(
             maxObservedFieldLength = maxFieldLength,
             malformedRecordCount = malformed,
             fetchedAt = body.fetchedAt,
-            expectedContentTypes = setOf("application/json"),
+            expectedContentTypes = setOf("application/json", "text/plain"),
             snapshotVersion = json.optString("generated_at", null),
             snapshotHash = sha256Hex(body.bytes)
         )
