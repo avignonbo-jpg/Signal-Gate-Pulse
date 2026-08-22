@@ -1,6 +1,7 @@
 SignalGate Pulse — Security & DevOps Build Plan
 Status: Active build authority
 Date: 2026-08-14 (extracted and updated from the adopted Architecture-Contract.md §11)
+Revision: 2026-08-20 — Phases 0-3 unchanged (closed, CI-verified, historical record preserved verbatim below). Phase 4 gained a new leading gate (4.0) plus two new trailing sections (4.8, 4.9) from a full-scope security/architecture review spanning persistence, decision path, security boundary, sync/parsing, Android edge behavior, DI, onboarding, manifests, ProGuard, CI, schemas, and the test suite. Phase 5/6 sections were expanded in place with the same review's concrete CI/release findings rather than renumbered, to avoid disturbing existing cross-references. Do not resume 4.1-4.7 as the primary focus until 4.0's exit criteria are met — see that section for why.
 Branch: consumer-v1
 
 Governing contract: Architecture-Contract.md (v3 — Security Integrity Gate, adopted)
@@ -157,6 +158,90 @@ Phase 3 exit criteria — ✅ COMPLETE, CI-verified 2026-08-19
 
 Phase 4 — Architecture and Product Completion
 
+4.0 Edge Execution & Control-Plane Hardening — NEW GATE, opened 2026-08-20, from a full-scope security/architecture review (persistence, decision path, security boundary, sync/parsing, Android edge behavior, DI, onboarding, manifests, ProGuard, CI, schemas, test suite)
+
+Why this sits ahead of 4.1: Phase 0/1 proved security state cannot diverge and decisions are explicit. This review found the same invariant class violated at a layer those phases didn't reach — the Android CallScreeningService edge boundary itself, plus two real correctness gaps in the Bloom/DB and source-identity model underneath it. Per this document's own stated build order (control-plane integrity before product completion), 4.0 gates ahead of 4.1-4.7's UI/product work, the same way Phase 0 gated ahead of everything else. Do not resume 4.1-4.7 work concurrently with 4.0.2/4.0.3 below.
+
+4.0.1 CallScreeningService response guarantee and deadline architecture — OPEN, highest priority in this phase
+
+Two related defects in `SignalGateCallScreeningService.onScreenCall()`:
+
+Problem A — silent non-response: `details.handle?.schemeSpecificPart ?: return` can exit the function without ever calling `respondToCall()`. Android's CallScreeningService contract requires a response within 5 seconds; if none arrives, the framework unbinds and the call proceeds as if allowed. A null/malformed handle currently produces exactly the implicit-ALLOW failure mode Phase 0.6 was built to eliminate, just from a different entry point that Phase 0.6's test coverage doesn't reach.
+
+Problem B — unstructured concurrency: `CoroutineScope(Dispatchers.Default).launch { ... }` creates a new unmanaged scope per call with no structured cancellation, no lifecycle relationship to the service, no concurrency limit, and no deadline enforcement. Decision, response, DB persistence, notification, and haptic dispatch all currently run inside that same coroutine, so a slow persistence write can push the response itself past the platform's 5-second deadline.
+
+Required shape:
+```
+onScreenCall()
+    -> extract + normalize
+    -> bounded decision path
+    -> respondToCall()          <- HARD DEADLINE, response never waits on what follows
+    -> async consequences
+           - audit
+           - pending card
+           - notification
+           - haptic
+```
+The response must not be able to block on persistence, notification, or haptic work succeeding or failing. A null/invalid handle must produce an explicit, audited response (SECURITY_FAILURE or an explicit safe-default), never a silent `return`.
+
+Exit test (required, not optional): a JVM/instrumented test proving the screening response is still produced when persistence blocks or throws, and a second test proving a null/invalid handle produces an explicit audited response rather than a silent return. See 4.9.A/4.9.B/4.9.C below for the full set.
+
+4.0.2 SourceType policy enum, source-identity bug, and Sources-screen/Contacts wiring audit — OPEN
+
+Three findings collapse into one workstream because they're the same underlying gap: `SourceEntity.type` is an unvalidated string, and the code that should treat MANUAL/CONTACTS/FTC/FCC differently instead infers identity from `priority == 100`, which is not a stable identity discriminator (a future user-created source at priority 100 would be silently misclassified as MANUAL).
+
+Required: add a domain-layer sealed class/enum making deletability and disableability compiler-checked facts rather than a comment:
+```kotlin
+enum class SourceType(val isDeletable: Boolean, val isDisableable: Boolean) {
+    MANUAL(isDeletable = false, isDisableable = false),
+    CONTACTS(isDeletable = false, isDisableable = false),
+    FTC(isDeletable = false, isDisableable = true),
+    FCC(isDeletable = false, isDisableable = true),
+    USER(isDeletable = true, isDisableable = true)
+}
+```
+Replace `priority == 100` identity checks with an explicit `sourceRole`/`SourceType` discriminator. Does not necessarily require an immediate schema migration if the value can be derived robustly from existing seeded data, but `priority` must stop being the identity signal anywhere it currently is one.
+
+Live-testing finding this connects to (owner-reported, 2026-08-20): on-device, the FTC DNC source shows Healthy/1797 entries and Sync Now visibly works. FCC Consumer Complaints shows a sync spinner that runs, then resolves to Never/0 entries/Unknown status — consistent with either a misconfigured or placeholder FCC endpoint URL, or a fetch failure that's silently swallowed before status is written back. Separately, both manual-type sources (Manual User Rules, Contacts Allow List) show the same Never/0/Unknown symptom when Sync Now is tapped — but these are `MANUAL`-type sources that should never be going through a network sync path at all; they should reflect their row counts directly. This is the strongest available signal that Contacts import may not actually be wired into `DataSourceRepository`/the sync-status system, i.e. the Phase 4.3 Contacts-boundary item below may be a functional bug, not only an architectural-purity item. Investigate before treating 4.3 as cosmetic.
+
+Where a deletion guard was added this cycle: `DataSourceRepository.deleteSource()` (not `SourceDao` — Room codegen has no policy awareness, so the guard can only live at the repository call-site today). This closes the primary attack surface for an accidental protected-source deletion via the intended path, but does not close it for any future code that calls `SourceDao.deleteSource()` directly, bypassing the repository. The `SourceType` enum above is what turns this from a convention into a compiler-checked fact; a DB-level `CHECK` constraint is optional defense-in-depth on top of it, not a substitute for it.
+
+4.0.3 Bloom/database transactional decoupling — OPEN
+
+`SecurityRuleRepository.replaceSourceSnapshot()` performs a Room transaction (delete old rows, insert new rows) and mutates the Bloom filter as part of the same insert call. The Room transaction can roll back; the Bloom filter cannot. A failed transaction can therefore leave Bloom bits referencing records that were never actually committed — the derived index is not transactionally coupled to the authoritative database it's supposed to derive from.
+
+Required: make the ordering explicit and enforced, not just documented:
+```
+DB transaction -> commit -> rebuild Bloom
+```
+Split `DataSourceRepository.insertEntries()` (which currently mutates both DB and Bloom in one call) into `insertEntriesAuthoritative()` (DB only) and `rebuildDerivedIndexes()` (Bloom only, called strictly post-commit). This is the same "Bloom is derived, DB is truth" principle Phase 0.2 already established for the read path; this closes the equivalent gap on the write path.
+
+4.0.4 Disabled-source sync semantics — OPEN
+
+`CommunitySyncWorker` calls `reliableSourceManager.syncAllFederalSources()`, which appears to sync hardcoded federal sources regardless of their current `isEnabled` state. This is not an active decision-correctness bug today — the authoritative DAO queries already filter `s.isEnabled = 1`, so a disabled source's entries can't affect a decision — but it violates the source lifecycle model's own stated semantics and wastes bandwidth/battery/network quota on data that's then discarded. `syncSource()` should explicitly skip disabled sources unless the call is a deliberate manual refresh.
+
+4.0.5 EULA/onboarding persistence reliability — supersedes 4.2 below; keep both entries, this one is the concrete finding
+
+The existing 4.2 item ("move EULA acceptance behind ViewModel/application boundaries") undersold the actual defect. Current implementation calls `context.getSharedPreferences(...)` directly inside `OnboardingWizardScreen`, and `prefs.edit().apply()` is asynchronous — the screen navigates away immediately after calling `apply()`, before persistence is confirmed. This means onboarding can advance past the EULA screen without the acceptance actually being durably written yet.
+
+Required shape:
+```
+UI -> OnboardingViewModel -> SettingRepository / dedicated AgreementRepository -> await persistence -> success -> navigation
+```
+Store `agreement_id`, `agreement_version`, `accepted_at` as a coherent record, not three unrelated preference keys. Exit test: write fails -> onboarding does not advance (see 4.9.G).
+
+4.0.6 SecurityRuleRepository scope review — OPEN, evaluate before implementing
+
+`SecurityRuleRepository` now owns manual mutation, snapshot activation, sync attempt/failure state, DAO access, normalization, transaction orchestration, and Bloom rebuild coordination — it has become the project's de facto security super-object. Before adding more responsibility to it (as 4.0.2's SourceType work and 4.0.3's Bloom split both would), evaluate whether it should split into narrower boundaries, e.g. `SecurityRuleMutationRepository` / `SnapshotActivationService` / `SourceLifecycleRepository`. This is a design decision, not a mechanical fix — do not implement a split without confirming the resulting boundaries still preserve INV-001 (one authoritative mutation boundary); a split done carelessly could recreate the exact multi-writer problem Phase 0.1 closed.
+
+4.0 exit criteria (all required before 4.1-4.7 resume as the primary focus)
+[ ] CallScreeningService guarantees exactly one response per invocation, including null/invalid-handle and persistence-failure paths, with tests
+[ ] Response is decoupled from persistence/notification/haptic completion (hard deadline preserved under slow-persistence test)
+[ ] SourceType enum exists and priority==100 is no longer used as source identity anywhere
+[ ] FCC source sync failure root-caused (bad URL vs. silent fetch failure) and either fixed or explicitly documented as not-yet-implemented
+[ ] Contacts import confirmed wired to DataSourceRepository/sync-status, or confirmed broken and tracked as its own fix
+[ ] Bloom mutation is provably post-commit-only (insertEntriesAuthoritative/rebuildDerivedIndexes split, with a rollback test)
+
 4.1 Orphans and unreachable UI
 
 Resolve PermissionSettingsScreen and TelemetryViewModel: wire them to justified owners or remove them.
@@ -193,6 +278,26 @@ The blocking init itself was not touched — it's a deliberate, documented safet
 4.7 Package identity cleanup — ✅ DONE, 2026-08-14, ahead of this phase
 Also not originally scoped, also completed early: renamed the Kotlin source package from com.signalgate.multipoint to com.signalgate.pulse across all 79 files, plus the AGP namespace, the Room schema-export directory, and the drift-check script's scan path (this last one mattered most — a stale path there would have made the script silently scan nothing and always report clean, a dangerous false-negative). applicationId was deliberately left unchanged — that's the actual Play Store/device package identity, a separate and more consequential decision than the source package name, still pending explicit confirmation.
 
+4.8 Performance and reliability hardening — NEW, from the 2026-08-20 review
+
+4.8.1 Pattern-matching hot path — OPEN. On a Bloom positive-prefix result, the current path calls `entryDao.getAllBlockPatternsWithPriority()` and iterates every pattern in Kotlin (`patterns.firstOrNull { normalized.startsWith(it.phoneNumber) }`). At scale (tens of thousands of patterns) this defeats the point of having Bloom as a fast-pass inside a call-screening service with a hard response deadline (see 4.0.1). Move prefix selection into SQL (`WHERE :number LIKE phoneNumber || '%' ORDER BY priority DESC LIMIT 1`, or an equivalent bounded strategy) so Bloom's role stays "no possible prefix -> skip DB" / "possible -> let SQL find only real candidates," not "possible -> load everything."
+
+4.8.2 DataSyncEngine is not actually streaming — OPEN. Despite its own comments describing it as memory-safe, `parseCsvFile()` accumulates the full dataset into `mutableListOf<UnifiedEntryEntity>()` before returning; XLSX parsing does the same. At the documented 2,000,000-row ceiling (Phase 0.5), this is a real memory risk, not a theoretical one. Change the API shape to genuinely stream: `parse(..., onBatch: suspend (List<UnifiedEntryEntity>) -> Unit)`, parsing one record at a time, batching ~500-1000, handing each batch to the authoritative repository, then discarding it before the next batch. This also fixes 4.8.3 below for free, since the batch boundary becomes the natural insert boundary.
+
+4.8.3 Chunked-but-not-batched insert — OPEN. The current insert path does `entries.chunked(CHUNK_SIZE).forEach { chunk -> chunk.forEach { entry -> dataSourceRepository.insertEntry(entry) } }` — this chunks the in-memory list but still issues one `INSERT` (and one Bloom mutation) per row. `DataSourceRepository.insertEntries()` already exists and accepts a list; use it. Combine with 4.0.3's authoritative/derived split so a batch insert is one DB transaction followed by one Bloom rebuild, not N of each.
+
+4.8.4 XLSX shared-string limit needs a byte budget, not just a count — OPEN. `MAX_SHARED_STRINGS = 2,000,000` bounds count but not memory — two million Kotlin `String` objects plus parser/ZIP overhead can consume hundreds of MB even under the count ceiling. Add `maxExpandedSharedStringBytes` and `maxCellLength` alongside the existing count limit, so the actual security principle is "don't let the parser consume an unsafe amount of memory," not just "don't exceed a row count."
+
+4.9 Failure-choreography test coverage — NEW, from the 2026-08-20 review. Roughly 25 test files already exist with strong coverage of the security control-plane; this set specifically targets failure paths under load/latency/malformed-input that the existing suite doesn't yet exercise. None of these are optional relative to 4.0/4.8 above — they are how 4.0/4.8 get to be more than a read-through claim.
+
+4.9.A CallScreeningService deadline test — decision path is artificially slowed; response still happens within the platform deadline. Covers 4.0.1.
+4.9.B Null-handle test — `details.handle == null`; asserts an explicit safe response is produced, is audited, and the function never silently returns. Covers 4.0.1.
+4.9.C Service exception test — an unexpected exception during screening produces `SECURITY_FAILURE`, never `BLOCK` and never a silent non-response. Extends the existing Phase 0.6 engine-level test to the actual service entry point.
+4.9.D Snapshot failure + Bloom contamination test — a candidate snapshot's DB transaction fails; asserts the prior decision-relevant state is preserved AND that no stale Bloom bit from the failed candidate can affect a subsequent decision. Covers 4.0.3.
+4.9.E Disabled-source sync test — a disabled source is skipped by the sync worker's automatic path (not a manual refresh); decision output is unaffected either way. Covers 4.0.4.
+4.9.F Bounded-batch streaming test — using a test double, proves the parser processes in bounded batches without materializing the entire dataset in memory. Does not require literally 2M rows. Covers 4.8.2.
+4.9.G EULA persistence-failure test — persistence write fails; onboarding does not advance past the EULA screen. Covers 4.0.5.
+
 Phase 5 — Mandatory Security CI
 5.1 Test gating
 Remove continue-on-error: true from required tests in pulse-ci.yml. A required failure must fail CI. Reconciled 2026-08-17: no active continue-on-error key exists in either pulse-ci.yml or pulse-instrumented-tests.yml; both the JVM unit-test and instrumented-test steps are hard-failing. Branch-protection enforcement is a separate repository-policy decision and is not implied by workflow step behavior.
@@ -203,11 +308,17 @@ Mandatory CI must cover: Android Keystore, SQLCipher open/close, Keystore invali
 5.3 Static/architecture checks
 Run architecture drift checks as required gates — done, 2026-08-13. Expand the script to enforce the contract's edge-to-DAO and UI-persistence restrictions more completely (the contract's §9 lists 10 target rules; the script currently enforces rules 1–7, not 8–10 — those remaining rules describe target enforcement for violations that are already fixed in source, so the gap is about catching a regression, not an active hole today).
 
+5.3.1 Structural weakness in the drift script — NEW, from the 2026-08-20 review. The script is grep-based and mostly detects `import ...` statements rather than actual call-site relationships, so it can't enforce the strongest version of "one authoritative mutation boundary" — a future contributor could introduce `database.unifiedEntryDao().insertEntries(...)` through a path the current rules don't cover, and the script would report clean. Tighten it to scan specifically for the mutation method names (`insertEntry`, `insertEntries`, `deleteEntry`, `deleteEntriesBySourceId`, `updateEntry`) and flag any occurrence outside an explicit file allowlist (currently: `SecurityRuleRepository`, `DataSourceRepository`). This is closer to the actual invariant than the current import-based check.
+
+5.3.2 Ledger-enforcement CI gate — NEW. To let an automated agent (e.g. Manus) work against this repo without silent drift, add a CI check that fails the build when a commit touches production `.kt` files but `PROJECT_LEDGER.md`'s Session Log entry count doesn't increase in the same PR. Crude, but it turns "forgot to log the session" from a norm someone can skip under time pressure into a hard CI failure — directly answers "how do I stop drift/fibbing/silent-failure-to-log."
+
 5.4 Dependency and secret scanning
-Add vulnerability scanning with explicit severity policy and exception ownership. Add secret scanning for repository and build artifacts. Neither exists yet.
+Add vulnerability scanning with explicit severity policy and exception ownership. Add secret scanning for repository and build artifacts. Neither exists yet. Concretely: add Dependabot or OSV-Scanner as a scheduled + PR-triggered workflow with a defined severity threshold that fails CI (not just reports), plus a documented exception-ownership process for any accepted risk rather than a silent allowlist.
 
 5.5 GitHub Actions hardening
 Use least-privilege permissions. Pin third-party actions to immutable commit SHAs where practical. Do not permit workflow conveniences to weaken release security.
+
+5.5.1 Concrete gap, 2026-08-20 review: `pulse-ci.yml`, `crash-diagnostic.yml`, and `generate-room-schema.yml` still reference `actions/checkout@v4`, `actions/setup-java@v4`, and `reactivecircus/android-emulator-runner@v2` by tag, not commit SHA. `metrics.yml` already declares `permissions: contents: read` at the workflow level — the same minimal-permissions block is missing from the other three workflows and should be added everywhere a workflow doesn't need write access.
 
 5.6 Known gap found 2026-08-14 — missing script
 scripts/verify-launch-and-capture.sh is referenced by .github/workflows/crash-diagnostic.yml but does not actually exist in the current consumer-v1 checkout, despite existing in an earlier archive of this project. That workflow is very likely broken right now, independent of anything else in this plan. Needs its own investigation — either restore the script or fix the workflow.
@@ -217,6 +328,14 @@ Phase 6 — Release Hardening
 Replace broad -keep class com.signalgate.pulse.** { *; }-style rules with narrow, justified rules. Remove stale legacy rules. Validate the minified release build on device/emulator.
 
 Confirmed 2026-08-15: the rename merge's post-merge cleanup caught and fixed every stray com.signalgate.multipoint reference in proguard-rules.pro — it would have silently failed to protect any pulse-package class from R8 stripping in a release build, and debug CI never runs ProGuard, so this specific breakage wouldn't have surfaced as a build failure on its own. proguard-rules.pro now correctly reads com.signalgate.pulse.** throughout, with a guard comment warning against reverting it. That fix was mechanical (package path only) and does not address this item's actual substance, which remains fully open: the blanket -keep class com.signalgate.pulse.** { *; } still defeats most of R8's value for the app's own package, and both stale class-name keeps are still present unchanged — com.signalgate.pulse.CallScreeningService (the real class is SignalGateCallScreeningService) and com.signalgate.pulse.ui.SettingsFragment (no Compose-era equivalent exists).
+
+Confirmed again, 2026-08-20 review: both stale rules are still present verbatim, plus an unrelated `extends androidx.fragment.app.Fragment` reference with no Compose-era equivalent. The blanket `-keep class com.signalgate.pulse.** { *; }` makes essentially all narrower rules redundant right now — it's safe-ish but defeats most of R8's purpose. Clean this as one focused pass: remove the two stale class-name keeps, remove the dead Fragment reference, and narrow the blanket keep to the specific entry points that actually need protection (manifest-declared components, Room entities/DAOs if reflection-accessed, Parcelable implementations).
+
+6.5 Manifest permission audit — NEW, from the 2026-08-20 review
+
+Pulse's manifest currently requests: READ_PHONE_STATE, READ_PHONE_NUMBERS, ANSWER_PHONE_CALLS, READ_CALL_LOG, WRITE_CALL_LOG, READ_CONTACTS, POST_NOTIFICATIONS. Android's current CallScreeningService guidance is that apps filtering calls should rely on the service's own supplied call details rather than declaring READ_PHONE_STATE; some of the above may be justified by other product functionality (call-history/contacts), but none should be carried forward merely because an earlier architecture used them.
+
+Audit each permission against: exact class using it -> exact feature requiring it -> runtime necessity -> Play policy justification. Do not resolve this from documentation alone; cross-reference against the still-open "Confirm READ_PHONE_STATE necessity on a real device" item (Open Items, this document's companion ledger) — that item and this audit are the same underlying question and should close together, not separately.
 
 6.2 Signing
 CI release signing must fail closed when credentials are absent. Release keys must remain outside source control and developer logs.
@@ -243,6 +362,10 @@ A release candidate may be promoted only when all of the following are true:
 [ ] R8 release build is validated
 [ ] SBOM/checksum/provenance/signing artifacts exist
 [ ] Manifest/exported-component/privacy reviews are complete
+[ ] CallScreeningService guarantees exactly one response per invocation under null-handle and slow-persistence conditions, with passing tests (4.0.1 / 4.9.A-C)
+[ ] Bloom mutation is provably post-commit-only, with a rollback/contamination test passing (4.0.3 / 4.9.D)
+[ ] SourceType is the enforced source-identity discriminator; priority is not used for identity anywhere (4.0.2)
+[ ] Manifest permissions are individually justified against actual runtime use (6.5)
 Non-goals / deliberate constraints
 Do not reintroduce Apache POI solely to simplify parsing. The native ZipInputStream + SAX approach correctly avoids POI's MethodHandle/D8-dexing incompatibility below API 26.
 Do not use TLS pinning as a substitute for source-artifact authenticity (see 3.3).
