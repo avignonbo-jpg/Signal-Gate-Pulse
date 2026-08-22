@@ -34,7 +34,9 @@ class MainActivity : ComponentActivity() {
                 if (!recorded) {
                     recorded = true
                     StartupDiagnostics.mark(StartupDiagnostics.Event.ACTIVITY_FIRST_FRAME)
-                    window.decorView.viewTreeObserver.removeOnDrawListener(this)
+                    window.decorView.post {
+                        window.decorView.viewTreeObserver.removeOnDrawListener(this)
+                    }
                 }
             }
         })
