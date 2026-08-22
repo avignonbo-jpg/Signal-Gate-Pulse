@@ -1,5 +1,6 @@
 package com.signalgate.pulse.database.repositories
 
+import com.signalgate.pulse.StartupDiagnostics
 import com.signalgate.pulse.data.security.BloomFilterEngine
 import com.signalgate.pulse.data.security.SanitizationEngine
 import com.signalgate.pulse.database.daos.SourceDao
@@ -353,6 +354,7 @@ class DataSourceRepository(
      * double-inserting, since both filters are cleared first.
      */
     suspend fun rehydrateBloomFilters() {
+        StartupDiagnostics.mark(StartupDiagnostics.Event.BLOOM_REHYDRATION_BEGIN)
         bloomReady = false
         bloomFilter.clear()
         patternBloomFilter.clear()
@@ -364,6 +366,7 @@ class DataSourceRepository(
             }
         }
         bloomReady = true
+        StartupDiagnostics.mark(StartupDiagnostics.Event.BLOOM_READY)
     }
 
     /**

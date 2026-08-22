@@ -638,3 +638,13 @@ Evidence status: Static source edits are complete; mandatory JVM/instrumented CI
 Status: Phase 1.3 remains open pending compilation, runtime, and UI test evidence. Phase 1 exit criteria and Phase 2 remain gated.
 To-do / heads-up: run mandatory CI, inspect exact GrayZoneReviewabilityTest counts and any Compose/runtime failures, then fix only evidence-supported defects. Do not mark Phase 1 complete until the full exit matrix is green.
 Signature: Manus AI — 2026-08-19
+
+2026-08-22 — Cold-process startup checkpoint instrumentation prepared
+Who: SignalGate Analyst 2
+What: Added privacy-safe monotonic `STARTUP_CHECKPOINT` markers for Application.onCreate, Koin startup, Keystore initialization, encrypted-preference retrieval, SQLCipher setup, Room open/migration completion, migrations 1→2/2→3/3→4, synchronous source seeding, Bloom rehydration/readiness, CallScreeningService creation, screening dependency/decision-engine readiness, decision start, Activity onCreate/content set, and first Activity draw.
+Files touched: android/app/src/main/java/com/signalgate/pulse/StartupDiagnostics.kt; MainApplication.kt; MainActivity.kt; SignalGateCallScreeningService.kt; database/SecureDatabase.kt; database/SignalGateDatabase.kt; database/repositories/DataSourceRepository.kt; di/AppModule.kt; security/SecurityUtils.kt; PROJECT_LEDGER.md
+Safety boundary: No startup sequencing was weakened. `initializeDatabase()` remains synchronous and completes required source seeding before AppReadiness is set or screening dependencies can be used. Bloom rehydration remains deferrable because the authoritative Room path is used while Bloom is not ready. Markers contain fixed event names and monotonic elapsed milliseconds only; no phone numbers, keys, preference values, database contents, or exception payloads are logged.
+Validation: `git diff --check` passed. Local Gradle compilation could not execute because the sandbox has no Android SDK; mandatory CI and real-device capture remain required. The existing StartupTimingTest remains a coarse regression guard and does not itself satisfy the real-device baseline exit criterion.
+Status: Instrumentation is prepared; no measured real-device baseline exists yet. Activity and direct Telecom-created CallScreeningService cold-process captures are still required before the startup measurement exit criterion can close.
+To-do / heads-up: Build through mandatory CI, install on a representative real device, capture repeated fresh-install and existing-database Activity and direct screening-service runs, then classify each checkpoint as mandatory, deferrable, parallelizable, cacheable, or a sequencing artifact without relaxing the authoritative-database invariant.
+Signature: SignalGate Analyst 2 — 2026-08-22

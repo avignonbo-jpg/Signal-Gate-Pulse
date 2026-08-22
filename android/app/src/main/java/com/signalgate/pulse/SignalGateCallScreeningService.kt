@@ -29,6 +29,11 @@ import timber.log.Timber
 
 class SignalGateCallScreeningService : TelecomCallScreeningService() {
 
+    override fun onCreate() {
+        super.onCreate()
+        StartupDiagnostics.mark(StartupDiagnostics.Event.SCREENING_SERVICE_ON_CREATE)
+    }
+
     private val screeningEngine: CallScreeningEngine by inject()
     private val callLogRepository: CallLogRepository by inject()
     private val pendingCardRepository: PendingCardRepository by inject()
@@ -47,6 +52,15 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
 
         CoroutineScope(Dispatchers.Default).launch {
             try {
+                // Force resolution of every service dependency before the decision
+                // begins so the measured readiness marker includes Koin resolution.
+                val engine = screeningEngine
+                val auditRepository = callLogRepository
+                val reviewRepository = pendingCardRepository
+                pulseHapticsController
+                pulseTriggerLimiter
+                StartupDiagnostics.mark(StartupDiagnostics.Event.SCREENING_DEPENDENCIES_READY)
+                StartupDiagnostics.mark(StartupDiagnostics.Event.SCREENING_DECISION_ENGINE_READY)
                 // screeningEngine.screenCall() catches its own internal errors and
                 // returns a typed ScreeningAction.SECURITY_FAILURE CallInfo rather
                 // than throwing (§0.6) — so a thrown exception reaching this catch
@@ -54,7 +68,8 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                 // audit write, notification), not in decisioning itself. Both paths
                 // are handled the same way below: fail safe, never as a disguised
                 // ALLOW/CLEAN_UNKNOWN.
-                val callInfo = screeningEngine.screenCall(phoneNumber, details)
+                StartupDiagnostics.mark(StartupDiagnostics.Event.SCREENING_DECISION_BEGIN)
+                val callInfo = engine.screenCall(phoneNumber, details)
                 val decision = callInfo.screeningDecision
                 respondToCall(details, toCallResponse(decision.callAction))
                 // Persist every explicit consequence before consulting the UX limiter.
@@ -62,8 +77,8 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                 executeDecisionConsequences(
                     callInfo = callInfo,
                     decision = decision,
-                    callLogRepository = callLogRepository,
-                    pendingCardRepository = pendingCardRepository
+                    callLogRepository = auditRepository,
+                    pendingCardRepository = reviewRepository
                 )
                 try {
                     dispatchDecisionUx(callInfo, decision)

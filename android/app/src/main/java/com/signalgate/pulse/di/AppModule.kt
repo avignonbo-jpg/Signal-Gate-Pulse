@@ -32,6 +32,7 @@ import com.signalgate.pulse.ui.viewmodels.ContactsViewModel
 import com.signalgate.pulse.ui.viewmodels.LogcatViewModel
 import com.signalgate.pulse.ui.viewmodels.TelemetryViewModel
 import com.signalgate.pulse.workers.CommunitySyncWorker
+import com.signalgate.pulse.StartupDiagnostics
 import com.signalgate.pulse.data.security.BloomFilterEngine
 import com.signalgate.pulse.data.security.PrecedenceEngine
 import com.signalgate.pulse.data.security.SecureCsvParser
@@ -294,10 +295,12 @@ val appModule = listOf(
  * real risk to the CallScreeningService response window at production scale.
  */
 suspend fun initializeDatabase(context: Context) {
+    StartupDiagnostics.mark(StartupDiagnostics.Event.SOURCE_SEED_BEGIN)
     val koin = org.koin.core.context.GlobalContext.get()
     val sourceDao = koin.get<SourceDao>()
     val settingDao = koin.get<SettingDao>()
     DatabaseInitializer.seedRequiredSources(context, sourceDao, settingDao)
+    StartupDiagnostics.mark(StartupDiagnostics.Event.SOURCE_SEED_END)
 }
 
 /**

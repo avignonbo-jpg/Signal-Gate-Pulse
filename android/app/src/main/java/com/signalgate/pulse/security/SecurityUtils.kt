@@ -1,5 +1,7 @@
 package com.signalgate.pulse.security
 
+import com.signalgate.pulse.StartupDiagnostics
+
 import android.content.Context
 import android.os.Build
 import android.os.StrictMode
@@ -88,7 +90,10 @@ object SecurityUtils {
      * not silently regenerate around it.
      */
     fun getDatabasePassphrase(context: Context): ByteArray {
+        StartupDiagnostics.mark(StartupDiagnostics.Event.KEYSTORE_INIT_BEGIN)
         val secretKey = getOrCreateKeystoreKey()
+        StartupDiagnostics.mark(StartupDiagnostics.Event.KEYSTORE_INITIALIZED)
+        StartupDiagnostics.mark(StartupDiagnostics.Event.ENCRYPTED_PREFS_READ_BEGIN)
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
         val existingCiphertext = prefs.getString(PREF_CIPHERTEXT, null)
@@ -96,11 +101,13 @@ object SecurityUtils {
 
         if (existingCiphertext != null && existingIv != null) {
             try {
-                return decrypt(
+                val passphrase = decrypt(
                     secretKey,
                     Base64.decode(existingCiphertext, Base64.NO_WRAP),
                     Base64.decode(existingIv, Base64.NO_WRAP)
                 )
+                StartupDiagnostics.mark(StartupDiagnostics.Event.ENCRYPTED_PREFS_READ_END)
+                return passphrase
             } catch (e: android.security.keystore.KeyPermanentlyInvalidatedException) {
                 // Android's own explicit signal that this key can never be used again.
                 // Must be caught before InvalidKeyException below — it's a subclass.
@@ -123,7 +130,9 @@ object SecurityUtils {
         }
 
         // No passphrase stored yet — first install. Expected, safe to generate silently.
-        return generateAndPersistPassphrase(secretKey, prefs)
+        val passphrase = generateAndPersistPassphrase(secretKey, prefs)
+        StartupDiagnostics.mark(StartupDiagnostics.Event.ENCRYPTED_PREFS_READ_END)
+        return passphrase
     }
 
     /**

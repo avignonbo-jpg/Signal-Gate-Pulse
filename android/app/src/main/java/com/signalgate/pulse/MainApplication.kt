@@ -59,6 +59,7 @@ class MainApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
 
+        StartupDiagnostics.mark(StartupDiagnostics.Event.APPLICATION_ON_CREATE_BEGIN)
         val startupBeginMs = System.currentTimeMillis()
         fun elapsed() = System.currentTimeMillis() - startupBeginMs
 
@@ -77,18 +78,22 @@ class MainApplication : Application(), Configuration.Provider {
 
         Timber.tag("SignalGate").i("STARTUP: onCreate begin, elapsed=0ms")
 
+        StartupDiagnostics.mark(StartupDiagnostics.Event.KOIN_START_BEGIN)
         startKoin {
             androidLogger()
             androidContext(this@MainApplication)
             modules(appModule)
         }
 
+        StartupDiagnostics.mark(StartupDiagnostics.Event.KOIN_STARTED)
         Timber.tag("SignalGate").i("STARTUP: Koin started, elapsed=${elapsed()}ms")
 
+        StartupDiagnostics.mark(StartupDiagnostics.Event.DATABASE_INIT_BEGIN)
         runBlocking {
             try {
                 Timber.tag("SignalGate").i("STARTUP: DB init begin, elapsed=${elapsed()}ms")
                 initializeDatabase(this@MainApplication)
+                StartupDiagnostics.mark(StartupDiagnostics.Event.DATABASE_INIT_END)
                 Timber.tag("SignalGate").i("STARTUP: DB init end, elapsed=${elapsed()}ms")
             } catch (e: Exception) {
                 Timber.e(
@@ -119,6 +124,8 @@ class MainApplication : Application(), Configuration.Provider {
         // in case a future change adds real post-Activity-launch async work, not
         // because anything today needs the extra wait.
         AppReadiness.isReady.value = true
+        StartupDiagnostics.mark(StartupDiagnostics.Event.APP_READINESS_TRUE)
+        StartupDiagnostics.mark(StartupDiagnostics.Event.APPLICATION_ON_CREATE_END)
 
         Timber.tag("SignalGate").i("STARTUP: AppReadiness=true, total elapsed=${elapsed()}ms")
     }

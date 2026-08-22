@@ -1,6 +1,7 @@
 package com.signalgate.pulse
 
 import android.os.Bundle
+import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.padding
@@ -18,12 +19,25 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        StartupDiagnostics.mark(StartupDiagnostics.Event.ACTIVITY_ON_CREATE_BEGIN)
         // Must be called before super.onCreate() per the SplashScreen API contract.
         // See AppReadiness (MainApplication.kt) and Theme.App.Starting (themes.xml).
         val splashScreen = installSplashScreen()
         splashScreen.setKeepOnScreenCondition { !AppReadiness.isReady.value }
 
         super.onCreate(savedInstanceState)
+
+        window.decorView.viewTreeObserver.addOnDrawListener(object : ViewTreeObserver.OnDrawListener {
+            private var recorded = false
+
+            override fun onDraw() {
+                if (!recorded) {
+                    recorded = true
+                    StartupDiagnostics.mark(StartupDiagnostics.Event.ACTIVITY_FIRST_FRAME)
+                    window.decorView.viewTreeObserver.removeOnDrawListener(this)
+                }
+            }
+        })
 
         setContent {
             SignalGateTheme {
@@ -85,5 +99,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        StartupDiagnostics.mark(StartupDiagnostics.Event.ACTIVITY_CONTENT_SET)
     }
 }

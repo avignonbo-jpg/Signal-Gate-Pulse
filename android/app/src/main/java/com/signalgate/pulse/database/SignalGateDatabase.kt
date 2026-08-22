@@ -1,6 +1,7 @@
 package com.signalgate.pulse.database
 
 import androidx.room.Database
+import com.signalgate.pulse.StartupDiagnostics
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -69,6 +70,7 @@ abstract class SignalGateDatabase : RoomDatabase() {
  */
 val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
+        StartupDiagnostics.mark(StartupDiagnostics.Event.MIGRATION_1_2_BEGIN)
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS pending_cards (
@@ -88,6 +90,7 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL(
             "CREATE INDEX IF NOT EXISTS index_pending_cards_timestamp ON pending_cards (timestamp)"
         )
+        StartupDiagnostics.mark(StartupDiagnostics.Event.MIGRATION_1_2_END)
     }
 }
 
@@ -98,8 +101,10 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
  */
 val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
+        StartupDiagnostics.mark(StartupDiagnostics.Event.MIGRATION_2_3_BEGIN)
         db.execSQL("ALTER TABLE sources ADD COLUMN last_attempted_sync INTEGER")
         db.execSQL("ALTER TABLE sources ADD COLUMN last_accepted_snapshot INTEGER")
+        StartupDiagnostics.mark(StartupDiagnostics.Event.MIGRATION_2_3_END)
     }
 }
 
@@ -110,10 +115,12 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
  */
 val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
+        StartupDiagnostics.mark(StartupDiagnostics.Event.MIGRATION_3_4_BEGIN)
         db.execSQL("ALTER TABLE sources ADD COLUMN lifecycle_state TEXT NOT NULL DEFAULT 'ENABLED'")
         db.execSQL("ALTER TABLE sources ADD COLUMN snapshot_version TEXT")
         db.execSQL("ALTER TABLE sources ADD COLUMN snapshot_hash TEXT")
         db.execSQL("ALTER TABLE sources ADD COLUMN accepted_record_count INTEGER")
         db.execSQL("ALTER TABLE sources ADD COLUMN lifecycle_reason TEXT")
+        StartupDiagnostics.mark(StartupDiagnostics.Event.MIGRATION_3_4_END)
     }
 }

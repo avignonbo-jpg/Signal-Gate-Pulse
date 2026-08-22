@@ -2,6 +2,8 @@ package com.signalgate.pulse.database
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
+import com.signalgate.pulse.StartupDiagnostics
 import com.signalgate.pulse.security.DatabaseResetEvent
 import com.signalgate.pulse.security.KeystoreInvalidatedException
 import com.signalgate.pulse.security.SecurityUtils
@@ -22,6 +24,7 @@ object SecureDatabase {
     }
 
     fun getDatabase(context: Context): SignalGateDatabase {
+        StartupDiagnostics.mark(StartupDiagnostics.Event.SQLCIPHER_INIT_BEGIN)
         // Updated per Architecture Contract Step 0.1:
         // Replaced hardcoded passphrase with Android Keystore derivation.
         val passphrase = try {
@@ -54,9 +57,17 @@ object SecureDatabase {
         System.loadLibrary("sqlcipher")
 
         val factory = SupportOpenHelperFactory(passphrase)
+        StartupDiagnostics.mark(StartupDiagnostics.Event.SQLCIPHER_FACTORY_READY)
         val singleThreadExecutor = Executors.newSingleThreadExecutor()
+        StartupDiagnostics.mark(StartupDiagnostics.Event.ROOM_OPEN_MIGRATION_BEGIN)
 
         return Room.databaseBuilder(context, SignalGateDatabase::class.java, DB_NAME)
+            .addCallback(object : RoomDatabase.Callback() {
+                override fun onOpen(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    super.onOpen(db)
+                    StartupDiagnostics.mark(StartupDiagnostics.Event.ROOM_OPEN_MIGRATION_END)
+                }
+            })
             .openHelperFactory(factory)
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .setQueryExecutor(singleThreadExecutor)
