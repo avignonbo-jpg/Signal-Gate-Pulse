@@ -24,6 +24,8 @@ import com.signalgate.pulse.ui.notifications.PulseTriggerLimiter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 import org.koin.android.ext.android.inject
 import timber.log.Timber
 
@@ -47,7 +49,22 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
     }
 
     override fun onScreenCall(details: Call.Details) {
-        val phoneNumber = details.handle?.schemeSpecificPart ?: return
+        // Phase 4.0.1 fix (2026-08-25): this used to be
+        // `details.handle?.schemeSpecificPart ?: return` — a bare return here
+        // never called respondToCall(), and Android treats a non-response
+        // within its ~5s deadline as the call proceeding: an implicit ALLOW
+        // reached through a path that bypassed every SECURITY_FAILURE
+        // machinery below entirely (the null case exited before the
+        // try/catch that feeds handleSecurityFailure() even started).
+        // Confirmed live against source before this fix, not assumed stale —
+        // see PROJECT_LEDGER.md for the verification.
+        val handleSchemeSpecificPart = details.handle?.schemeSpecificPart
+        if (handleSchemeSpecificPart == null) {
+            Timber.e("SECURITY_FAILURE — onScreenCall received a null/malformed Call.Details.handle")
+            handleSecurityFailure(details, phoneNumber = "UNKNOWN_MALFORMED_HANDLE")
+            return
+        }
+        val phoneNumber = handleSchemeSpecificPart
         Timber.d("onScreenCall: screening request received")
 
         CoroutineScope(Dispatchers.Default).launch {
@@ -68,8 +85,21 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                 // audit write, notification), not in decisioning itself. Both paths
                 // are handled the same way below: fail safe, never as a disguised
                 // ALLOW/CLEAN_UNKNOWN.
+                //
+                // Phase 4.0.1 fix (2026-08-25): explicit deadline around the
+                // decision call itself. Android's own CallScreeningService
+                // contract is ~5s; this is intentionally set well under that so
+                // a timeout here is caught by the same catch block below and
+                // produces an explicit, audited SECURITY_FAILURE response —
+                // rather than letting a hang consume the whole platform
+                // deadline and produce a silent implicit-ALLOW non-response.
+                // TimeoutCancellationException is a CancellationException, so
+                // it's caught by `catch (e: Exception)` below like any other
+                // failure — that's deliberate here (a fire-and-forget
+                // CoroutineScope launch, not structured concurrency where
+                // re-throwing cancellation would matter).
                 StartupDiagnostics.mark(StartupDiagnostics.Event.SCREENING_DECISION_BEGIN)
-                val callInfo = engine.screenCall(phoneNumber, details)
+                val callInfo = withTimeout(3_500) { engine.screenCall(phoneNumber, details) }
                 val decision = callInfo.screeningDecision
                 respondToCall(details, toCallResponse(decision.callAction))
                 // Persist every explicit consequence before consulting the UX limiter.
@@ -88,6 +118,9 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                     // domain outcome as SECURITY_FAILURE.
                     Timber.e(e, "Optional screening UX dispatch failed")
                 }
+            } catch (e: TimeoutCancellationException) {
+                Timber.e(e, "SECURITY_FAILURE — screening decision exceeded internal deadline")
+                handleSecurityFailure(details, phoneNumber)
             } catch (e: Exception) {
                 Timber.e(e, "SECURITY_FAILURE — unhandled screening error")
                 handleSecurityFailure(details, phoneNumber)
