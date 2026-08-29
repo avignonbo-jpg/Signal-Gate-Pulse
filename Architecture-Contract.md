@@ -1,24 +1,23 @@
-SignalGate Pulse Architecture Contract (v3 — Security Integrity Gate)
-This document defines the binding target architecture and security-governance contract for SignalGate Pulse. It is the binding contract for all future changes: any new code, refactor, feature, or bug fix must preserve these rules or explicitly revise this contract first.
-Revision note (2026-08-13, reconciled): This contract merges two independent v3 lineages produced the same day and reconciles both against the actual current source, per the shared governance principle both lineages independently arrived at: if implementation reality and documentation disagree, do not silently choose one — record the discrepancy, inspect the actual code, and update accordingly.
-Lineage A (this session, 2026-08-12–13): added a 3-invariant Security Invariants section, a SecurityRuleRepository mutation-boundary design, and implemented + CI-verified Phase 0.1 against real code (SecurityRuleRepository created, BlocklistRepository collapsed to a facade, CallActionReceiver migrated off direct DAO access — confirmed via Koin graph resolution, lint, and check-architecture-drift.sh).
-Lineage B (external governance rewrite, 2026-08-13): reviewed a consumer-v1 snapshot independently and produced a materially better-structured document — 10 invariants instead of 3, a cleaner Phase 0–7 roadmap, a full architecture-enforcement checklist, and a Definition of Done section. Its own ledger states plainly: "CI was not independently rerun during this governance rewrite" and its source snapshot predates Lineage A's Phase 0.1 work — so its §10.7 ("security-rule mutation has multiple paths") and §10.10 ("platform edge directly accesses persistence") are listed as open violations that are actually already resolved and CI-verified in the current branch.
-This reconciled contract takes Lineage B's structure and invariant set (materially stronger) and corrects the specific items that Lineage B couldn't have known were already fixed. Everything else in Lineage B is adopted as-is. The reconciled v3 contract is adopted and binding as this Architecture-Contract.md.
-1. Scope
-SignalGate Pulse is a single-activity Compose application with navigation handled entirely in Compose, not through multiple activities or XML-driven navigation flows. The app already has MainActivity as the single host for the Compose UI tree and NavGraph as the app's navigation entry point. The architecture must remain centered on this structure.
+SignalGate Pulse Architecture Contract (v4 — Final Target Architecture)
+This document defines the binding target architecture and security-governance contract for SignalGate Pulse. It is the binding contract for all future changes: any new code, refactor, feature, or bug fix must preserve these rules or explicitly revise this contract first, per §13's single-lineage rule inherited from v3.
+Revision note (this session, superseding v3 2026-08-13): v3 stated Phase 0.2–0.6 as open. This session verified, by reading full source files (not headers) and by a confirmed 25/25-passing instrumented CI run, that 0.2, 0.3, 0.4, 0.5, and 0.6 are now implemented and — for 0.2 specifically — CI-green with direct evidence (TEST-emulator-5554...xml, tests="25" failures="0" errors="0", including BloomAuthoritativeDecisionTest's 7 cases). The others (0.3-0.6) have strong source-level evidence (described per-item below) and matching test files now exist in the branch per the independent Source-of-Truth Branch Audit, but this session did not independently re-run each of those CI jobs — that distinction is marked explicitly per item rather than blurred, per §13's own governance rule. Phases 1-7 are carried forward from v3 unchanged except where this session found direct evidence of completion (noted inline); they were not re-audited file-by-file this session.
+This document also resolves one internal documentation conflict found this session: AppModule.kt's own doc comments used literal OSI terms (L2 "Data Link" for OkHttp/TLS, L4 "Network" for sanitization, L6 "Presentation Logic" for decision logic) that contradict both real OSI semantics and this contract's Layer 1-7 numbering. §3 below is the single canonical layer mapping; AppModule.kt's comments should be corrected to reference it by name (Layer 1-7) rather than inventing a second, conflicting OSI scheme — tracked as Known Violation §10.13.
+Scope
+SignalGate Pulse is a single-activity Compose application with navigation handled entirely in Compose, not through multiple activities or XML-driven navigation flows. MainActivity is the single host for the Compose UI tree; NavGraph (SignalGateNavGraph) is the app's navigation entry point, confirmed this session to own 8 declared routes with Dashboard as start destination. The architecture must remain centered on this structure.
 This contract covers UI, dependency injection, persistence, domain logic, security boundaries, and ownership of classes across OSI-style layers.
-No .xml layout files may exist under res/layout/ unless actively inflated by Kotlin code (via setContentView, findViewById, or ViewBinding) and explicitly listed here as a grandfathered exception. Any layout XML with zero references in src/main/java for more than one release cycle must be deleted, not retained "in case it's needed." Current grandfathered exceptions: none. (Enforced automatically by scripts/check-architecture-drift.sh, Rule 7.)
-No new user-facing feature or UI work may be started while Phase 0 (§11) has open gate items. As of 2026-08-13: Phase 0.1 and 0.7 (the mutation-boundary and edge-DAO items) are closed and CI-verified. Phase 0.2–0.6 remain open.
-2. Required target architecture
+No .xml layout files may exist under res/layout/ unless actively inflated by Kotlin code and explicitly listed here as a grandfathered exception. Current grandfathered exceptions: none. (Enforced by scripts/check-architecture-drift.sh, Rule 7.)
+No new user-facing feature or UI work may be started while Phase 0 (§11) has open gate items. As of this session: 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, and 0.7 are implemented at the source level (0.2 additionally CI-confirmed this session). 0.8 (regression-test completeness/mandatory-gate status across all of Phase 0) remains the one item this session did not fully close — see §11.
+Required target architecture
 Single activity: MainActivity is the only UI activity host.
 Compose navigation: NavGraph owns route wiring and start-destination selection.
-Koin for DI: Koin is the sole dependency injection framework for app wiring.
+Koin for DI: Koin is the sole dependency injection framework for app wiring. Confirmed this session: appModule = databaseModule, repositoryModule, engineModule, viewModelModule, notificationModule, workerModule, resolved in that order from MainApplication.onCreate().
 Room for persistence: SignalGateDatabase is the Room database, with access routed through SecureDatabase.
-One ViewModel per screen: every screen must have a dedicated ViewModel, and screen state must not be shared by ad hoc cross-screen ViewModel reuse.
+One ViewModel per screen: every screen must have a dedicated ViewModel, and screen state must not be shared by ad hoc cross-screen ViewModel reuse. (Exception under active resolution: TelemetryViewModel and RecentCallsViewModel both transform CallLogRepository data for overlapping purposes with no screen currently wired to TelemetryViewModel — see §10.2.)
 No direct DAO access from UI or Platform/Edge: UI layer and Layer 1 code must depend on ViewModels or application-boundary classes only. ViewModels depend on repositories, not DAOs.
 No direct database construction outside the secure path: SecureDatabase is the sole authorized construction path for the encrypted Room database.
-One authoritative path for every decision-affecting mutation: see INV-001 and §5.2.
-3. Layer ownership
+One authoritative path for every decision-affecting mutation: see INV-001 and §5.2. Confirmed this session: DataSourceRepository.insertEntry()/insertEntries() is the single write chokepoint pairing the DAO write with Bloom-filter maintenance and sanitization; SecurityRuleRepository is the single application-layer entry point above it for manual mutation, snapshot replacement, and sync-attempt/failure recording.
+Layer ownership (canonical OSI-style mapping — supersedes any other layer numbering in source comments, see Known Violation §10.13)
+The numbering direction intentionally mirrors OSI's own logic: Layer 1 is the layer closest to the raw, untrusted "wire" (Android's own callback/broadcast/intent surface — the analog of physical/data-link ingress); Layer 7 is the layer closest to the user (Compose UI — the analog of the application layer). This is a deliberate architectural analogy for this app, not a literal reuse of OSI's seven named protocol layers, and no class comment should claim otherwise (per §10.13).
 Layer
 Owns
 Does not own
@@ -29,261 +28,160 @@ Layer 6 - Presentation
 ViewModels, screen state assembly, UI event translation, permission-step orchestration
 Room entities, DAO calls, transport/parsing internals, database construction
 Layer 5 - Application
-Use-case style orchestration, flow coordination, cross-repository rules, sync execution, the authoritative security-rule mutation boundary (SecurityRuleRepository, implemented)
+Use-case style orchestration, flow coordination, cross-repository rules, sync execution, the authoritative security-rule mutation boundary (SecurityRuleRepository)
 UI rendering, Android widget composition, direct persistence details
 Layer 4 - Domain
-Policy engines and decision logic such as call-risk and precedence evaluation, the explicit SECURITY_FAILURE decision state (planned, Phase 0.6)
+Policy engines and decision logic - call-risk and precedence evaluation, the explicit SECURITY_FAILURE decision state, the immutable ScreeningDecision consequence contract
 Android framework classes, UI state, Room annotations, navigation logic
 Layer 3 - Persistence
 Repositories, DAO interfaces, Room entities, database schema, seeding primitives
 Compose UI, screen logic, direct platform permissions, parsing policies, decision-affecting business rules
 Layer 2 - Security/Parsing
-Sanitization, secure CSV parsing, secure database entry points, integrity-sensitive helpers, Keystore-invalidation handling
+Sanitization, secure CSV/XLSX parsing, secure database entry points, integrity-sensitive helpers, Keystore-invalidation handling, artifact authenticity verification
 UI rendering, route decisions, screen state, business presentation
 Layer 1 - Platform/Edge
-Activity host, BroadcastReceivers, Service entry points, WorkManager workers, Application bootstrap, notification-channel registration
-Screen composition, business rules, repository policy, direct DAO access (closed as of Phase 0.1/0.7), direct feature orchestration
+Activity host, BroadcastReceivers, Service entry points, WorkManager workers, Application bootstrap, notification-channel registration, startup diagnostics
+Screen composition, business rules, repository policy, direct DAO access, direct feature orchestration
 Cross-Cutting
 Plain data carriers and pure/stateless utility functions, importable from any layer
 Business logic, Android framework dependencies beyond basic types, side effects, persistence, security decisions
-4. Class ownership map
-[+] = confirmed to exist in source but previously unlisted. [RESOLVED] = a tracked violation that has since been fixed and CI-verified.
+Class ownership map
+[+] = confirmed to exist in source this session but previously unlisted or unverified. [RESOLVED] = a tracked violation fixed and (at minimum) source-verified this session; CI status noted per item.
 Layer 1 - Platform/Edge
 MainActivity
 MainApplication
-SignalGateCallScreeningService
-CallActionReceiver — [RESOLVED, Phase 0.1/0.7, CI-verified 2026-08-13] now depends on SecurityRuleRepository/PendingCardRepository only; no direct DAO injection.
+SignalGateCallScreeningService — confirmed this session to own: decision dispatch via toCallResponse(), typed SECURITY_FAILURE fail-safe handling via handleSecurityFailure(), decision-consequence persistence via executeDecisionConsequences(), and best-effort UX dispatch via dispatchDecisionUx(), in that order — persistence always completes before UX dispatch is attempted, and a UX dispatch failure is caught separately so it can never retroactively become a SECURITY_FAILURE. Addition, 2026-08-25: onScreenCall()'s entry point also now handles a null/malformed Call.Details.handle explicitly via handleSecurityFailure() before this pipeline even begins, instead of a bare return that bypassed all of the above — see §10.9.
+CallActionReceiver — [RESOLVED, Phase 0.1/0.7] depends on SecurityRuleRepository/PendingCardRepository only; no direct DAO injection.
 PhoneStateReceiver
 CommunitySyncWorker
-SyncBootReceiver [+] — BOOT_COMPLETED/MY_PACKAGE_REPLACED receiver that re-schedules CommunitySyncWorker
+SyncBootReceiver — BOOT_COMPLETED/MY_PACKAGE_REPLACED receiver that re-schedules CommunitySyncWorker
 KoinWorkerFactory
 AppModule
-NotificationChannelManager [+] — single registration point for all notification channels
+NotificationChannelManager — single registration point for all notification channels
+StartupDiagnostics [+, new this session] — object emitting fixed-name, PII-free startup checkpoint markers (process start through first frame, Koin start, Keystore/SQLCipher/Room migration stages, Bloom rehydration, screening-service readiness). Confirmed this session to carry only event names and elapsed milliseconds, never phone numbers, database contents, keys, or exception payloads — satisfies INV-007 by construction. Backs StartupTimingTest. Not present in the Source-of-Truth Branch Audit's 83-file count; the branch snapshot audited had 83 main files, this session's snapshot has 84 — recorded here as a discrepancy per §13 rather than silently reconciled.
 Layer 2 - Security/Parsing
-Root of trust: SecureDatabase and SecurityUtils own the Android Keystore-wrapped SQLCipher passphrase — the one piece of state every other class in this layer, and every layer above it, transitively depends on. KeystoreInvalidatedException and DatabaseResetEvent are part of this same root-of-trust cluster.
+Root of trust: SecureDatabase and SecurityUtils own the Android Keystore-wrapped SQLCipher passphrase. KeystoreInvalidatedException and DatabaseResetEvent are part of this same root-of-trust cluster.
 SecureDatabase — root of trust
 SecurityUtils — root of trust
-KeystoreInvalidatedException [+] — root-of-trust recovery path
-DatabaseResetEvent [+] — root-of-trust recovery path
+KeystoreInvalidatedException — root-of-trust recovery path
+DatabaseResetEvent — root-of-trust recovery path
 SanitizationEngine
 SecureCsvParser
 DatabaseInitializer
-BoundedXlsxParser (target, not yet extracted) — the parsing half of DataSyncEngine, to be split out per Phase 0.5 so bound violations become hard rejections rather than partial successes.
+ArtifactAuthenticityVerifier — verifies downloaded source artifacts against cryptographic authenticity metadata (manifest/digest). Backs INV-002/3.3.
+SourceAuthenticityTrustAnchor — trusted authenticity configuration consumed by ArtifactAuthenticityVerifier.
+SnapshotSanityValidator — structural/content sanity checks on imported snapshots before activation.
+SourceRecordValidator — per-record validation for imported source records.
+BoundedXlsxParser (still not a separately extracted class — the XLSX-parsing half of DataSyncEngine continues to live inside DataSyncEngine.kt as XlsxParseException/RowLimitExceededException/SharedStringsLimitExceededException handling. Confirmed this session: limit violations throw rather than return a partial/truncated result — DataSyncEngine.kt's own doc states "the exception propagates so callers cannot activate a partial result," satisfying Phase 0.5/INV-002's hard-failure requirement even without the extraction. Extraction into a separate class remains a structural nicety, not a blocking gap.)
 Layer 3 - Persistence
 Database: SignalGateDatabase
-DAOs: SourceDao, UnifiedEntryDao, CallLogDao, SettingDao, SyncHistoryDao, PendingCardDao [+]
-Entities: SourceEntity (extended target: snapshotVersion/snapshotHash/lastAcceptedSnapshot/lastSuccessfulSync/lastAttemptedSync, Phase 3), UnifiedEntryEntity, CallLogEntry, SettingEntry, SyncHistoryEntry, PendingCardEntity [+]
+DAOs: SourceDao, UnifiedEntryDao, CallLogDao, SettingDao, SyncHistoryDao, PendingCardDao
+Entities: SourceEntity, UnifiedEntryEntity, CallLogEntry, SettingEntry, SyncHistoryEntry, PendingCardEntity
 Repositories: CallLogRepository, DataSourceRepository, PendingCardRepository, SettingRepository, SyncHistoryRepository
-BlocklistRepository — [DEPRECATED FACADE, Phase 0.1 complete, CI-verified 2026-08-13]. Previously wrote to UnifiedEntryDao directly (§10.7, now resolved). Now a thin 4-method pass-through to SecurityRuleRepository. Kept only so existing ViewModel callers (BlockedNumbersViewModel, ContactsViewModel, PendingCardViewModel) didn't need to change in the same commit — should not exist by the time Phase 0 fully closes.
+BlocklistRepository — thin facade over SecurityRuleRepository, retained only for existing ViewModel callers (BlockedNumbersViewModel, ContactsViewModel, PendingCardViewModel).
 Layer 4 - Domain
-BloomFilterEngine — derived, disposable, rebuildable, non-authoritative index (INV-001). A Bloom-state loss is a performance event; a Bloom/database divergence is a security incident.
+BloomFilterEngine — derived, disposable, rebuildable, non-authoritative index (INV-001). Confirmed this session (source + 25/25-passing BloomAuthoritativeDecisionTest on emulator): a cold, warm, post-mutation, post-source-replacement, rebuilt, or reset Bloom state always yields an optimized decision identical to the authoritative DB decision, in every tested condition. bloomReady gates trust in either filter; the entire clear-to-rebuild window is treated as untrusted, not just its start.
 PrecedenceEngine
 CallRiskEvaluator
 CallScreeningEngine
-CallInfo (CallTier enum + data class) — currently five-tier: ALLOWLISTED / FEDERAL_BLOCK / HEURISTIC_BLOCK / HEURISTIC_FLAG (gray-zone) / CLEAN_UNKNOWN. Target (Phase 0.6): six-tier, adding SECURITY_FAILURE per INV-003.
+CallInfo (CallTier enum + data class) — six-tier: ALLOWLISTED / FEDERAL_BLOCK / HEURISTIC_BLOCK / HEURISTIC_FLAG / CLEAN_UNKNOWN / SECURITY_FAILURE. [RESOLVED, Phase 0.6] SECURITY_FAILURE is a structurally distinct tier, not a variant of CLEAN_UNKNOWN.
+ScreeningAction [+] — domain-only action enum (ALLOW/BLOCK/SCREEN/SECURITY_FAILURE) with no android.telecom dependency. The Android CallResponse policy is derived from it exclusively inside SignalGateCallScreeningService.toCallResponse() — the one function in the app permitted to make that translation, satisfying §0.6's "define the Android CallResponse policy separately from the domain decision."
+ScreeningDecision, NotificationPolicy, HapticPolicy [+] — the immutable decision-and-consequence contract envisioned by former Phase 1.5. Confirmed this session: ScreeningDecision carries tier, callAction, auditRequired, reviewCardRequired, notificationPolicy, hapticPolicy, and securityFailure, with an init block that hard-requires securityFailure == (tier == SECURITY_FAILURE) == (callAction == SECURITY_FAILURE) — the SECURITY_FAILURE-not-ALLOW and SECURITY_FAILURE-not-CLEAN_UNKNOWN invariants are now enforced by the type itself, not just by convention at each call site.
+SourceLifecycleState, SnapshotMetadata [+] — ENABLED/SYNCING/HEALTHY/STALE/FAILED/REJECTED/DISABLED, matching the states former Phase 3.4 specified. SnapshotMetadata (version, hash, acceptedRecordCount) is committed only alongside an accepted snapshot.
 Layer 5 - Application
-ReliableSourceManager — target scope (Phase 3): full SourceState lifecycle, transactional snapshot replacement.
-DataSyncEngine — parsing/validation orchestration; "accept partial result on limit-exceeded" behavior is superseded by INV-002 (Phase 0.5, not yet implemented).
-SecurityRuleRepository [IMPLEMENTED, CI-verified 2026-08-13] — the single authoritative entry point for manual security-rule mutation. Implemented surface: addManualBlock(), addManualAllow(), removeRule(), getAllUserRules(). importSourceSnapshot()/replaceSourceRules()/rebuildDerivedIndexes() are Phase 3/0.2 targets, not yet built.
-SourceSyncUseCase (target, not yet built) — wraps ReliableSourceManager so SourcesViewModel can no longer report HEALTHY without an actual sync (Phase 3).
+ReliableSourceManager — confirmed this session to hold a fixed, hardcoded federal source list (FTC Do Not Call Registry via REST API, FCC Consumer Complaints via CSV with a documented primary/fallback URL pair) rather than reading arbitrary user-added sources. Per SourcesViewModel's own doc comment, the free-text "Add Source" (CSV/URL/XLSX) UI flow was removed because ReliableSourceManager never consumed anything it produced — Pulse's actual source model is fixed: MANUAL (contacts + post-call decisions), FTC, and FCC. This narrows the practical scope of INV-008/Phase 0.3/0.8 considerably: there is no general user-defined source type to protect against in the current product, only the three fixed types.
+DataSyncEngine — parsing/validation orchestration; hard-fails (throws) rather than returning partial results on any bounded-limit violation (row count, shared-strings size) — confirmed this session.
+SecurityRuleRepository — [RESOLVED, Phase 0.1, extended Phase 0.4 this session] the single authoritative entry point for every decision-affecting mutation. Confirmed surface this session: addManualBlock(), addManualAllow(), removeRule(), getAllUserRules() (Phase 0.1), plus replaceSourceSnapshot(), beginSourceSync(), recordSourceFailure() (Phase 0.4/INV-002, new this session). replaceSourceSnapshot() records the sync attempt before the transaction, requires a non-empty candidate set, performs delete-then-insert entirely inside database.withTransaction {}, and only rebuilds the Bloom filter (a non-blocking, best-effort step) after a successful commit — a failed candidate can never touch the previously accepted entries.
+SourceSyncUseCase [+] — thin wrapper exposing syncSource(), syncSources(), syncAllFederalSources() over ReliableSourceManager. Confirmed wired into SourcesViewModel and DashboardViewModel this session — this closes the former open violation where SourcesViewModel fabricated HEALTHY status without a real sync; SourcesViewModel's own doc comment now states "this method never fabricates HEALTHY."
 Layer 6 - Presentation
-DashboardViewModel
+DashboardViewModel — now takes SourceSyncUseCase (real sync boundary, confirmed this session).
 BlockedNumbersViewModel
 RecentCallsViewModel
 PendingCardViewModel
 OnboardingViewModel
-SourcesViewModel — [VIOLATION, open] syncSource()/syncAllSources() currently update lastSynced/HEALTHY without invoking ReliableSourceManager. Resolution: Phase 3.
+SourcesViewModel — [RESOLVED this session] real sync path confirmed (see SourceSyncUseCase above); the former "Add Source" custom flow was deliberately removed rather than fixed, since the product's source model is fixed (see ReliableSourceManager above).
 SettingsViewModel
-ContactsViewModel — directly invokes ContactsContract/ContentResolver/Cursor; P2 hardening item (Phase 4), not P0.
+ContactsViewModel — directly invokes ContactsContract/ContentResolver/Cursor; still open as a Phase 4 hardening item, not re-verified this session.
 LogcatViewModel
-TelemetryViewModel
+TelemetryViewModel — [STILL OPEN, confirmed this session] registered in Koin (viewModelModule) but not instantiated by any screen — grepped this session across ui/, zero call sites outside its own class body. See §10.2.
 Layer 7 - UI
 MainActivity hosts
-NavGraph
+NavGraph — confirmed this session: 8 routes (dashboard, sources, call_log, block_list, settings, logcat, onboarding, digest), digest additionally reachable via the signalgate://digest deep link, matching the intent-filter declared on MainActivity.
 Screen
-Screens and composables: ConsumerDashboardScreen, CallLogScreen, BlockAllowListScreen, SettingsScreen, LogcatViewerScreen, OnboardingWizardScreen, DigestScreen, SourcesScreen, PermissionSettingsScreen, and all reusable Compose components
-Cross-Cutting (no layer ownership)
-Plain data carriers and stateless utility functions may be imported by any layer without violating layer-boundary rules, provided they contain no business logic, no Android framework dependencies beyond basic types, and no side effects. If a "utility" class ever gains a dependency on a repository, DAO, or Context, it must be reclassified into the appropriate layer immediately — this is a drift signal, not a convenience.
+Screens and composables: ConsumerDashboardScreen, CallLogScreen, BlockAllowListScreen, SettingsScreen, LogcatViewerScreen, OnboardingWizardScreen, DigestScreen, SourcesScreen, and all reusable Compose components.
+PermissionSettingsScreen — [STILL OPEN, confirmed this session] a real, substantial screen (Step 1.10 — surfaces runtime permissions, ROLE_CALL_SCREENING, and battery-optimization status) that has no route in NavGraph.kt/Screen.kt — grepped this session, zero references outside its own file. See §10.1.
+Layer 1 notification consequence consumers (new this session, Cross-Layer 1/6 boundary)
+PulseHapticsController, PulseTriggerLimiter, PulseVibration — downstream consumers of ScreeningDecision.notificationPolicy/hapticPolicy only. Confirmed this session: SignalGateCallScreeningService.dispatchDecisionUx() calls these only after executeDecisionConsequences() (audit + review-card persistence) has already completed, and any exception from UX dispatch is caught separately and logged rather than allowed to alter the already-persisted decision — satisfies INV-006 ("rate limiting may suppress dispatch, never audit or review state").
+Cross-Cutting
+Plain data carriers and stateless utility functions may be imported by any layer without violating layer-boundary rules, provided they contain no business logic, no Android framework dependencies beyond basic types, and no side effects.
 Current cross-cutting classes: BenchmarkResult, CallLogItem, PermissionStatus, ThreatSource, DateUtils, PhoneNumberUtils, Color, Theme, SignalGateTheme, Effects.
-(Enforced automatically by scripts/check-architecture-drift.sh, Rule 6 — blocks Room, DAO, and Context imports in data/models/ and utils/. Still-open gap: Rule 6 does not scan ui/theme/, even though Color/Theme/SignalGateTheme/Effects are claimed cross-cutting above.)
-5. ViewModel and ownership rules
-Each screen must have exactly one primary ViewModel. A screen may depend on helpers or shared repositories, but screen state ownership must remain singular and explicit. ViewModels depend on repositories or application services, never DAOs directly.
-UI code must not persist security state directly. Direct SharedPreferences, Room, DAO, ContentResolver, or security-root access from Compose screens is prohibited unless explicitly grandfathered here. The ViewModel/application boundary owns persistence orchestration.
+(Enforced by scripts/check-architecture-drift.sh, Rule 6 — blocks Room, DAO, and Context imports in data/models/ and utils/. Still-open gap, carried from v3, not re-verified this session: Rule 6 does not scan ui/theme/.)
+ViewModel and ownership rules
+Each screen must have exactly one primary ViewModel. ViewModels depend on repositories or application services, never DAOs directly.
+UI code must not persist security state directly. Direct SharedPreferences, Room, DAO, ContentResolver, or security-root access from Compose screens is prohibited unless explicitly grandfathered here.
 Platform/Edge components are ingress points, not policy owners. A receiver, service, worker, or activity may validate the shape of an incoming event and translate it into an application command, but it must not perform feature-level DAO mutation or independently reimplement security policy.
-A screen that needs new state extends its owning ViewModel or introduces a new screen/ViewModel pair. Cross-screen ViewModel reuse is prohibited unless the shared object is explicitly a domain/application service rather than a screen state owner.
-6. Security boundary and trust model
+A screen that needs new state extends its owning ViewModel or introduces a new screen/ViewModel pair. Cross-screen ViewModel reuse is prohibited unless the shared object is explicitly a domain/application service rather than a screen state owner. (TelemetryViewModel vs. RecentCallsViewModel's overlapping CallLogRepository-transformation responsibility must be resolved under this rule — see §10.2.)
+Security boundary and trust model
 A security boundary is the point beyond which a layer may no longer trust or manipulate raw input, secrets, or privileged state without passing through the stricter boundary defined below.
-Layer 1 - Platform/Edge
-Accepts Android callbacks, broadcasts, service calls, worker triggers, intents, and deep links. All external values are untrusted. Layer 1 validates the minimum shape required to safely hand the event to an application service. Layer 1 must not directly mutate security policy through DAOs — enforced as of Phase 0.1/0.7.
-Layer 2 - Security/Parsing
-The first trusted normalization zone. It owns canonicalization, bounded parsing, secure database entry points, Keystore handling, and integrity-sensitive validation. External source material cannot become active policy until it passes this boundary.
-Layer 3 - Persistence
-Stores validated state and provides transactional persistence primitives. Persistence does not decide whether data is trustworthy or what a call should do, and does not decide whether a given write is decision-affecting and therefore must route through SecurityRuleRepository. The encrypted database is the authoritative store for active security policy.
-Layer 4 - Domain
-Owns authoritative security decisions: precedence, risk, call tier, and decision semantics. Domain output must be explicit and typed. A security failure is not equivalent to ALLOW, CLEAN_UNKNOWN, or any other trusted result (target: Phase 0.6).
-Layer 5 - Application
-Owns cross-repository workflows and security-state mutation orchestration. This layer is the approved boundary for manual rule mutations (implemented), source snapshot activation (target), digest/review workflows, and notification throttling. It may call repositories, but it must not bypass domain policy.
-Layer 6 - Presentation
-Transforms trusted domain/application results into screen state and user events. It must not reinterpret security decisions, bypass application services, or accept raw external input as final truth.
-Layer 7 - UI
-Renders state and collects user interaction. UI is never the authoritative security decision-maker and must not directly persist security policy.
-7. Security invariants
-These invariants are binding architectural requirements. A feature, optimization, test, or refactor is not complete if it violates one of them.
-INV-001 — Authoritative Security State
-The encrypted Room/SQLCipher database is the authoritative source of active security policy. Bloom filters, indexes, caches, derived snapshots, and in-memory state are non-authoritative accelerators. A derived structure may improve performance, but it must never introduce a false negative, stale decision, or policy divergence from the authoritative store.
-Every decision-affecting mutation must pass through an approved application/persistence boundary that updates, invalidates, or rebuilds all required derived indexes. No feature repository may create a second security-rule write path.
-Status: partially satisfied. Manual block/allow mutation is closed (SecurityRuleRepository, Phase 0.1, CI-verified). Derived-index rebuild/invalidate semantics and source-snapshot mutation are not yet built (Phase 0.2/Phase 3).
-INV-002 — Last-Known-Good Security Dataset
-External or generated security-source snapshots must not modify active policy until the complete candidate dataset has passed parsing, schema, size, freshness, integrity, and sanity validation. Activation must be transactional. A failed, partial, truncated, stale, malformed, or suspicious snapshot leaves the previously accepted dataset unchanged.
-The system must distinguish sync attempted from snapshot accepted. Source health must reflect the accepted active dataset, not merely a successful network request or partial parse. Status: open (Phase 0.4/0.5, Phase 3).
-INV-003 — Explicit Security Failure
-Failure of the screening engine, persistence path, source synchronization, or security root of trust must produce an explicit failure state. It must never silently become ALLOW, CLEAN_UNKNOWN, or another trusted result.
-The Android response to a security failure is a product policy decision, but the failure itself must remain distinguishable and auditable from a legitimate allow decision. Status: open (Phase 0.6).
-INV-004 — External Input Is Untrusted
-Caller ID, contact-provider data, downloaded source data, broadcast extras, deep-link parameters, notification actions, and other external values are untrusted until validated and canonicalized at the appropriate boundary.
-INV-005 — Deterministic Security Decisions
-Given the same authoritative security state, normalized input, source configuration, and domain policy, the decision engine must produce the same decision. UI state, notification timing, haptic effects, logging, and network availability must not alter the domain decision.
-INV-006 — Decision Side Effects Follow the Decision Contract
-Audit records, review cards, notifications, haptics, and rate limiting are consequences of an explicit domain/application decision. Edge code must not infer security semantics from one enum field when the domain contract requires additional consequences. In particular, HEURISTIC_FLAG must remain reviewable according to the domain contract. Status: satisfied for decision, audit, and persisted review-card consequences; notification/haptic dispatch remains governed by Phase 2 product completion.
-INV-007 — No Raw PII in Operational Logs
-Production logging must not emit raw phone numbers, contact names, or equivalent call-identifying PII. Diagnostics should use non-reversible identifiers or controlled redaction. User-visible notifications must have an explicit lock-screen/privacy policy.
-INV-008 — Protected Source Lifecycle
-Sources containing user-authoritative or foundational policy must not be casually deleted. MANUAL and CONTACTS semantics must be explicitly defined before deletion is permitted. Removing a source must have an explicit, tested policy for its existing entries and derived indexes. Status: open (Phase 0.3).
-INV-009 — Edge-to-Application Boundary
-Platform/Edge components must not directly access DAOs for feature-level security mutations. Receivers, services, workers, and activities hand commands inward to application services/repositories. This prevents duplicated policy and makes external ingress auditable. Status: satisfied for CallActionReceiver (Phase 0.1/0.7, CI-verified 2026-08-13).
-INV-010 — Release Gates Are Mandatory
-A required security or correctness test may not be advisory in CI. Required test failures fail the gate. Exceptions must be explicit, time-bounded, owned, and recorded in the ledger. Status: partially satisfied. check-architecture-drift.sh is now a required, non-advisory CI gate (fixed this session — it previously existed but was invoked by no workflow). Unit tests still run with continue-on-error: true (Phase 5, open).
-8. Change control and build integrity
-Any change must be checked against this contract before implementation. If a change requires violating a boundary or invariant, the contract must be updated first and the change must explicitly state which rule is being revised and why.
-The practical rule remains: UI renders, ViewModels adapt, application code orchestrates and enforces the mutation boundary, domain decides and declares failure explicitly, persistence stores authoritative state, and security/parsing establishes trust.
-Single-lineage rule: this is the only Architecture Contract lineage for this project going forward. Any future proposal, session, or tool that produces a competing contract document must reconcile against this one — specifically, against actual current source and CI state, not just against the text of the prior document — before either is treated as authoritative.
-Every third-party import used in src/main/java must correspond to a declared dependency in app/build.gradle; no import may rely on an incidental transitive dependency. minSdkVersion, targetSdkVersion, and compileSdkVersion are architectural constraints and require review when changed.
-DataSyncEngine.kt uses bounded native ZipInputStream + SAX parsing rather than Apache POI. POI is not to be reintroduced unless a new decision explicitly proves it compatible with the current Android toolchain and security/resource constraints.
-Release builds must use minification/resource shrinking and must fail closed when release signing credentials are absent. Broad R8 keep rules that effectively disable optimization/obfuscation are prohibited in the final release configuration. proguard-rules.pro currently violates this (-keep class com.signalgate.multipoint.** { *; } plus two stale class-name keeps) — Phase 6.
-CI workflows must use least-privilege permissions, immutable action references where practical, mandatory test gates, dependency/secret scanning, and release artifact provenance appropriate to a security application.
-9. Architecture enforcement
-scripts/check-architecture-drift.sh is a structural guard, not a substitute for behavioral security tests. It must enforce at least:
-canonical layer numbering and ownership;
-no direct DAO access from UI/Presentation;
-no Room construction outside SecureDatabase;
-Layer 2 security imports do not leak into UI;
-prohibited dependency direction;
-cross-cutting purity checks, including ui/theme/ where those classes are declared cross-cutting (currently unenforced — open gap);
-no unreferenced legacy layout XML unless explicitly grandfathered;
-no direct DAO access from Platform/Edge feature code (satisfied for the current codebase as of Phase 0.1/0.7 — not yet a standing grep rule in the script itself, see follow-up below);
-no direct SharedPreferences/persistence access from Compose UI unless explicitly grandfathered;
-approved application boundary for decision-affecting security mutations, to the extent statically enforceable.
-Follow-up needed: rules 8–10 above describe target enforcement; the script as currently written enforces rules 1–7 (confirmed by reading it this session) but does not yet have grep rules for 8–10. The underlying violations these rules would have caught (§10.7, §10.10) are already fixed in source, so the script passing today doesn't yet mean it would catch a regression — that gap should close in Phase 5.
-Structural checks must be complemented by behavioral tests for security invariants. A green architecture-drift script alone is not a release authorization.
-Newly confirmed this session: the script existed but was invoked by zero CI workflows — none of pulse-ci.yml, crash-diagnostic.yml, generate-room-schema.yml, or metrics.yml called it. Fixed: a "Check Architecture Drift" step now runs in pulse-ci.yml before the Gradle build, with no continue-on-error, and has been confirmed passing in a real CI run against the current source.
-10. Known violations and required resolution
-10.1 PermissionSettingsScreen unreachable
-PermissionSettingsScreen exists but is not reachable from Screen.kt/NavGraph.kt. Resolve by wiring it with its intended ViewModel or delete it. Open — Phase 4.
-10.2 TelemetryViewModel orphaned
-TelemetryViewModel is registered in Koin but is not consumed by a screen. Wire it to its justified owner or remove the class and binding. Open — Phase 4.
-10.3 Build comment drift
-The app/build.gradle KSP comment describing exportSchema = false conflicts with SignalGateDatabase using exportSchema = true. Open — Phase 4.
-10.4 ShieldStatusGlow color conversion
-ShieldStatusGlow.kt uses Color.hashCode() for a native Paint color. Use toArgb(). Open — Phase 4.
-10.5 Gray-zone persistence contract — [RESOLVED, CI-verified 2026-08-19]
-HEURISTIC_FLAG now creates the review state promised by the domain contract through the explicit ScreeningDecision consequence contract. GrayZoneReviewabilityTest verifies decision → audit record → PendingCardEntity → repository → PendingCardViewModel → DigestScreen in mandatory instrumented CI. Notification/haptic product dispatch remains Phase 2 work.
-10.6 Architecture script coverage gap
-Rule 6 must scan ui/theme/ if those classes remain cross-cutting. Open — Phase 5.
-10.7 Security-rule mutation has multiple paths — [RESOLVED, CI-verified 2026-08-13]
-BlocklistRepository previously wrote UnifiedEntryDao directly while DataSourceRepository.insertEntry() also acted as a write chokepoint and updated Bloom state — multiple persistence paths with different derived-index responsibilities, violating INV-001. Resolved: SecurityRuleRepository introduced as the approved application/security-rule mutation boundary; BlocklistRepository collapsed to a facade over it. Confirmed via Koin dependency-graph resolution and architecture-drift check in CI.
-10.8 Source synchronization is not yet an atomic last-known-good workflow
-The source-management path must distinguish download, parse, validate, accepted snapshot, and active dataset. Open — Phase 3.
-10.9 Screening exception path is an implicit allow
-SignalGateCallScreeningService currently catches screening exceptions and builds an allow response, violating INV-003. Open — Phase 0.6.
-10.10 Platform edge directly accesses persistence — [RESOLVED, CI-verified 2026-08-13]
-CallActionReceiver previously injected PendingCardDao directly. Resolved: now routes through SecurityRuleRepository/PendingCardRepository. Confirmed via CI (Koin graph resolution, architecture-drift check).
-10.11 Source deletion semantics are underspecified
-SourceDao foreign-key cascade behavior means deleting a source can remove its associated entries. The product must explicitly define which sources may be deleted before exposing deletion as a general operation. Open — Phase 0.3.
-10.12 Release hardening gaps
-Required release work includes: removing advisory test gates, adding instrumented security tests to mandatory CI, dependency/CVE scanning, secret scanning, least-privilege workflow permissions, immutable action references where practical, SBOM/provenance generation, and narrowing stale/broad R8 keep rules. Open — Phase 5/6.
-11. Security-First Build Plan
-The build plan is deliberately reordered. Do not resume broad UI/gray-zone feature work until Phase 0 exits.
+Layer 1 - Platform/Edge: Accepts Android callbacks, broadcasts, service calls, worker triggers, intents, and deep links. All external values are untrusted. Layer 1 validates the minimum shape required to safely hand the event to an application service. Layer 1 must not directly mutate security policy through DAOs.
+Layer 2 - Security/Parsing: The first trusted normalization zone. Owns canonicalization, bounded parsing, secure database entry points, Keystore handling, integrity-sensitive validation, and artifact authenticity verification. External source material cannot become active policy until it passes this boundary — confirmed this session for the parsing half (hard-fail on limit violation) and the persistence-activation half (transactional replace-or-reject in SecurityRuleRepository, Layer 5).
+Layer 3 - Persistence: Stores validated state and provides transactional persistence primitives. Does not decide whether data is trustworthy or whether a write is decision-affecting. The encrypted database is the authoritative store for active security policy (INV-001).
+Layer 4 - Domain: Owns authoritative security decisions: precedence, risk, call tier, and decision semantics. Domain output is explicit and typed — confirmed this session via ScreeningDecision's self-enforcing invariant. A security failure is not equivalent to ALLOW, CLEAN_UNKNOWN, or any other trusted result — [RESOLVED, Phase 0.6, confirmed this session].
+Layer 5 - Application: Owns cross-repository workflows and security-state mutation orchestration — the approved boundary for manual rule mutations, source snapshot activation (both confirmed implemented this session), digest/review workflows, and notification throttling. Must not bypass domain policy.
+Layer 6 - Presentation: Transforms trusted domain/application results into screen state and user events. Must not reinterpret security decisions, bypass application services, or accept raw external input as final truth.
+Layer 7 - UI: Renders state and collects user interaction. UI is never the authoritative security decision-maker and must not directly persist security policy.
+Security invariants
+INV-001 — Authoritative Security State. The encrypted Room/SQLCipher database is the authoritative source of active security policy; Bloom filters, indexes, caches, derived snapshots, and in-memory state are non-authoritative accelerators. Status: [SATISFIED, confirmed this session]. Manual mutation (Phase 0.1) and source-snapshot mutation (Phase 0.4) both route through the single SecurityRuleRepository/DataSourceRepository chokepoint. Derived-index rebuild/invalidate semantics are tested end-to-end (Phase 0.2, 25/25 passing on emulator this session, cold/warm/post-mutation/post-replacement/rebuild/reset all covered).
+INV-002 — Last-Known-Good Security Dataset. Status: [SATISFIED, confirmed this session]. SecurityRuleRepository.replaceSourceSnapshot() is transactional (withTransaction {}), rejects empty candidates before touching state, records sync-attempted separately from sync-accepted (recordSyncAttempt/recordSnapshotAccepted/recordSyncFailure), and DataSyncEngine hard-fails (throws) rather than returning a partial parse result on any bounded-limit violation.
+INV-003 — Explicit Security Failure. Status: [SATISFIED, confirmed this session]. SECURITY_FAILURE is a structurally distinct CallTier/ScreeningAction, enforced by ScreeningDecision's own init invariant; the Android CallResponse policy for it is an explicit, documented branch in toCallResponse(), not a fallthrough from ALLOW.
+INV-004 — External Input Is Untrusted. Unchanged from v3; not re-audited file-by-file this session.
+INV-005 — Deterministic Security Decisions. Unchanged from v3; not re-audited this session.
+INV-006 — Decision Side Effects Follow the Decision Contract. Status: [SATISFIED for decision/audit/review-card/notification/haptic consequences, confirmed this session]. ScreeningDecision.forTier() is the single source of auditRequired/reviewCardRequired/notificationPolicy/hapticPolicy per tier; executeDecisionConsequences() persists before dispatchDecisionUx() runs, and a UX-dispatch failure is caught independently so it cannot rewrite an already-persisted outcome.
+INV-007 — No Raw PII in Operational Logs. Status: [SATISFIED, confirmed this session for the paths reviewed]. StartupDiagnostics carries only fixed event names and elapsed milliseconds. SignalGateCallScreeningService's notifications use VISIBILITY_PRIVATE with an explicit buildRedactedPublicVersion() containing no phone number, confidence, or action — matches NotificationPrivacyTest.
+INV-008 — Protected Source Lifecycle. Status: [SATISFIED, confirmed this session]. DataSourceRepository.PROTECTED_SOURCE_TYPES = {MANUAL, FTC, FCC} — verified to match ReliableSourceManager's literal sourceType strings exactly, so the guard cannot silently miss a real source type. deleteSource() throws ProtectedSourceDeletionException before the DAO cascade can run for any protected type; only entries or (for federal sources) enablement may be changed.
+INV-009 — Edge-to-Application Boundary. Status: satisfied for CallActionReceiver (Phase 0.1/0.7); unchanged from v3, not re-audited further this session.
+INV-010 — Release Gates Are Mandatory. Status: unchanged from v3 (check-architecture-drift.sh is a required CI gate; unit tests' continue-on-error status not re-checked this session).
+Change control and build integrity
+Unchanged from v3. Any change must be checked against this contract before implementation. Single-lineage rule (§13) still applies: this is the only Architecture Contract lineage for this project; any competing document must reconcile against actual current source and CI state before either is treated as authoritative — this document's own revision note is itself an application of that rule.
+Architecture enforcement
+Unchanged from v3; scripts/check-architecture-drift.sh content not re-read this session. The follow-up noted in v3 (rules 8-10 are target enforcement, not yet grep rules in the script) is carried forward as still open.
+Known violations and required resolution
+10.1 PermissionSettingsScreen unreachable — [STILL OPEN, re-confirmed this session by direct grep]. Resolve by wiring it into NavGraph.kt/Screen.kt with its intended entry point, or delete it. Phase 4.
+10.2 TelemetryViewModel orphaned — [STILL OPEN, re-confirmed this session by direct grep]. Registered in Koin, zero screen call sites. Overlaps functionally with RecentCallsViewModel (both transform CallLogRepository data). Resolve by wiring it to a justified distinct owner, merging its responsibility into RecentCallsViewModel, or removing the class and its Koin binding. Phase 4.
+10.3 Build comment drift — carried from v3, not re-checked this session. Phase 4.
+10.4 ShieldStatusGlow color conversion — carried from v3, not re-checked this session. Phase 4.
+10.5 Gray-zone persistence contract — [RESOLVED, v3, CI-verified 2026-08-19]. Unchanged.
+10.6 Architecture script coverage gap — carried from v3, not re-checked this session. Phase 5.
+10.7 Security-rule mutation has multiple paths — [RESOLVED, v3]. Unchanged.
+10.8 Source synchronization atomicity — [RESOLVED, confirmed this session]. Formerly open in v3; SecurityRuleRepository.replaceSourceSnapshot() now provides the atomic, last-known-good-preserving path described in INV-002 above.
+10.9 Screening exception path is an implicit allow — [RESOLVED, confirmed this session]. Formerly open in v3 (Phase 0.6); SignalGateCallScreeningService now has an explicit, documented toCallResponse()/handleSecurityFailure() pair — see §4 Layer 1 and INV-003. Addition, 2026-08-25, not a correction to the above — this resolution was accurate for what it claimed (the try/catch machinery's internal ordering), but did not cover a separate, adjacent code path: onScreenCall() previously exited via a bare details.handle?.schemeSpecificPart ?: return on a null/malformed Call.Details.handle, entirely outside the try/catch this section describes, silently skipping respondToCall() entirely (Android's own ~5s no-response timeout then proceeds as if allowed). Confirmed live before fixing, not assumed stale. Fixed: the null case now calls handleSecurityFailure(details, phoneNumber = "UNKNOWN_MALFORMED_HANDLE") — an explicit, audited SECURITY_FAILURE response. Also added an explicit withTimeout(3_500) around the engine.screenCall() decision call itself, since nothing previously enforced a deadline shorter than Android's own platform timeout. Not yet covered by an automated test — see PROJECT_LEDGER.md, 2026-08-25 entry, and SECURITY-DEVOPS-BUILD-PLAN.md 4.9.A/B/C for the still-open exit tests.
+10.10 Platform edge directly accesses persistence — [RESOLVED, v3]. Unchanged.
+10.11 Source deletion semantics — [RESOLVED, confirmed this session]. Formerly open in v3 (Phase 0.3); DataSourceRepository.PROTECTED_SOURCE_TYPES + ProtectedSourceDeletionException now define and enforce this — see INV-008 above.
+10.12 Release hardening gaps — carried from v3, not re-checked this session. Phase 5/6.
+10.13 AppModule OSI-layer comment conflict — [NEW, this session]. AppModule.kt's doc comments describe engineModule bindings using literal-but-incorrect OSI terms (L2 "Data Link" for the OkHttp/TLS transport client, L4 "Network" for sanitization, L6 "Presentation Logic" for decision engines) that conflict with both real OSI semantics and this contract's own Layer 1-7 numbering (§3). This is documentation-only — no code/binding is wrong, only the comment's layer labels. Resolve by updating AppModule.kt's comments to reference Layer 1-7 by name per §3. Phase 4 (documentation hygiene), low risk.
+Security-First Build Plan
 Phase 0 — Security Control-Plane Integrity Gate
 Objective: prove that security state cannot diverge between authoritative persistence, derived indexes, external source data, and edge behavior.
-0.1 — [COMPLETE, CI-verified 2026-08-13] Establish a single approved application/security-rule mutation boundary for manual allow, manual block, contact rules, imported rules, source replacement, and rule removal. (Contact/import/source-replacement routing remains open — only manual allow/block/remove/read are implemented so far.)
-0.2 Make the database explicitly authoritative and Bloom filters explicitly derived. Add safe invalidation/rebuild behavior. A cold/empty Bloom state must only reduce performance, never change a decision. Open.
-0.3 Define protected source lifecycle semantics. At minimum, decide whether MANUAL, CONTACTS, FTC, FCC, and any future user-defined source may be disabled, refreshed, cleared, or deleted. Open.
-0.4 Implement transactional source replacement with last-known-good retention. Do not activate partial datasets. Open.
-0.5 Make resource-limit violations hard failures for security-source parsing. A truncated source is not a successful source. Open.
-0.6 Establish explicit SECURITY_FAILURE decision semantics and document the Android CallResponse behavior for that state. Open.
-0.7 — [COMPLETE, CI-verified 2026-08-13] Route CallActionReceiver through an application boundary and remove direct DAO access from Layer 1.
-0.8 Add regression tests for all Phase 0 invariants. Phase exits only when the tests pass in mandatory CI. Open — no test coverage exists yet for SecurityRuleRepository or CallActionReceiver.
+0.1 — [COMPLETE, CI-verified 2026-08-13] Single approved application/security-rule mutation boundary for manual allow, manual block, contact rules, imported rules, source replacement, and rule removal.
+0.2 — [COMPLETE, CI-verified this session — 25/25 instrumented tests passing, including all 7 BloomAuthoritativeDecisionTest cases]. Database explicitly authoritative, Bloom filters explicitly derived, with safe invalidation/rebuild behavior confirmed across cold/warm/post-mutation/post-replacement/rebuild/reset states.
+0.3 — [COMPLETE, source-confirmed this session, not independently CI-reconfirmed]. Protected source lifecycle semantics defined and enforced (PROTECTED_SOURCE_TYPES, ProtectedSourceDeletionException); matching SourceDeletionCascadeTest (androidTest) and DataSourceRepositoryDeletionTest (test) exist in the branch per this session's audit.
+0.4 — [COMPLETE, source-confirmed this session, not independently CI-reconfirmed]. Transactional source replacement with last-known-good retention implemented (SecurityRuleRepository.replaceSourceSnapshot()); matching SourceActivationTransactionTest (androidTest) exists.
+0.5 — [COMPLETE, source-confirmed this session, not independently CI-reconfirmed]. Resource-limit violations are hard failures in DataSyncEngine (parser throws rather than returns partial data); matching DataSyncEngineXlsxLimitTest (test) exists.
+0.6 — [COMPLETE, source-confirmed this session; the emulator CI run confirming §0.2 this session also compiled and ran the full instrumented suite green, which structurally required this code to compile and its dependents to resolve — but this session did not isolate and re-verify the specific CallScreeningEngineSecurityFailureTest result]. Explicit SECURITY_FAILURE decision semantics and documented Android CallResponse behavior — see §4 Layer 1, ScreeningAction, ScreeningDecision.
+0.7 — [COMPLETE, CI-verified 2026-08-13] CallActionReceiver routed through an application boundary; no direct DAO access from Layer 1.
+0.8 — [PARTIALLY COMPLETE — status upgraded this session, not fully closed]. v3 stated "no test coverage exists yet." This session's audit found 8 androidTest files and 17 test files in the branch, collectively naming and covering essentially every Phase 0 item (Bloom authority, decision matrix, source deletion cascade, source activation transactions, security-failure decisions, gray-zone reviewability, notification privacy, Keystore/SQLCipher). This session directly confirmed only the instrumented suite as a whole is green (25/25). Phase 0.8 closes only once every one of those tests is confirmed running as a mandatory (non-advisory) CI gate — the instrumented workflow is already mandatory per v3 §9; the JVM test workflow's advisory/mandatory status was not re-checked this session (see INV-010).
 Phase 1 — Decision Engine Integrity
-1.1 Build a five-tier decision matrix covering ALLOWLISTED, FEDERAL_BLOCK, HEURISTIC_BLOCK, HEURISTIC_FLAG, and CLEAN_UNKNOWN.
-1.2 Test manual allow versus external block, manual block versus external allow, source priority, exact versus pattern rules, normalization, empty/invalid input, and default behavior.
-1.3 Test Bloom cold start, warm state, post-mutation state, post-source-replacement state, rebuild, and reset. Verify every optimized decision equals the authoritative DB decision.
-1.4 Fix the gray-zone persistence contract so every HEURISTIC_FLAG result becomes reviewable exactly as the domain contract specifies.
-1.5 Define an immutable decision result containing the security action and required downstream consequences rather than requiring Layer 1 to infer side effects from a tier alone.
-Phase 2 — Gray-Zone Product Completion
-2.1 Re-verify the Digest surface against real persisted gray-zone cards.
-2.2 Reintroduce the held notification/haptic implementation only after Phase 1 passes.
-2.3 Keep haptic/notification behavior independent from domain policy. A limiter may suppress a notification but must never alter the call tier or audit record.
-2.4 Validate notification privacy, lock-screen behavior, notification actions, and deep-link handling.
-2.5 Ensure action buttons invoke application services rather than DAOs.
-Phase 3 — Data Source Reliability
-3.1 Separate bounded parsing from security validation.
-3.2 Validate source schema, content type, encoding, record limits, field limits, duplicate behavior, expected count ranges, freshness, and catastrophic dataset anomalies.
-3.3 Add signed snapshot/hash verification for externally sourced security datasets where operationally supported. HTTPS is transport security; artifact authenticity must be separately established.
-3.4 Implement source state transitions such as ENABLED, SYNCING, HEALTHY, STALE, FAILED, REJECTED, and DISABLED.
-3.5 Make "sync attempted" distinct from "snapshot accepted" and expose the accepted snapshot metadata for diagnostics.
-3.6 Ensure failed synchronization leaves the active last-known-good dataset untouched.
-Phase 4 — UI / Onboarding / Architecture Completion
-4.1 Resolve PermissionSettingsScreen and TelemetryViewModel orphan states.
-4.2 Move EULA persistence out of Compose and behind its owning ViewModel/application boundary.
-4.3 Move Contacts Provider access behind a repository/data-source boundary; ViewModels should not directly own ContentResolver/ContactsContract operations.
-4.4 Complete the Compose design-system/UI work only against the stable application contracts.
-4.5 Correct ShieldStatusGlow color conversion and other non-security UI defects.
-4.6 Remove or grandfather stale XML resources only after full-file/reference review and live-device verification where applicable.
-Phase 5 — Security Test and CI Gate
-5.1 Make unit tests mandatory; remove continue-on-error from required tests.
-5.2 Add instrumented Keystore, SQLCipher, migration, database-reset, and decision-path tests to mandatory CI.
-5.3 Implement the actual SecurityUtilsTest/instrumented coverage rather than retaining a placeholder.
-5.4 Add dependency/CVE scanning with explicit severity policy and exception ownership.
-5.5 Add secret scanning and verify no credentials/API keys are embedded in the application artifact.
-5.6 Expand architecture-drift enforcement (§9, rules 8–10) and make the script itself a required CI check — the "required CI check" half of this is done; the rule-8–10 expansion is not.
-5.7 Add least-privilege GitHub Actions permissions and pin third-party actions to immutable SHAs where practical.
-Phase 6 — Release Hardening and Provenance
-6.1 Replace broad/stale R8 keep rules with narrowly justified rules. Prove the minified release build still starts Koin, Room, WorkManager, navigation, and the CallScreeningService correctly.
-6.2 Build a signed release candidate using CI-held release credentials. Missing release credentials must fail closed.
-6.3 Generate SBOM and artifact checksums; retain build provenance tied to the source commit and workflow run.
-6.4 Run release instrumentation, manifest/exported-component review, and launch verification on a real or CI-managed device.
-6.5 Verify backup exclusions for the encrypted database and secure preference material.
-6.6 Perform a final privacy review of Logcat, notifications, crash diagnostics, and generated artifacts.
-Phase 7 — Release Candidate Gate
-The release candidate is not approved until all of the following are true:
-[ ] INV-001 through INV-010 have automated evidence or documented platform-level justification.
-[x] Manual-rule mutation path is singular and tested for compile/DI correctness (behavioral test coverage still open — Phase 0.8).
-[ ] Five-tier decision matrix is green.
-[ ] Bloom optimization has no security-semantic authority.
-[ ] Source synchronization is atomic and last-known-good.
-[ ] Partial/truncated source datasets are rejected.
-[ ] Screening failure is explicit and tested.
-[ ] Gray-zone review path is end-to-end tested.
-[ ] Keystore invalidation/recovery is instrumented-tested.
-[ ] Database migration and reset paths are tested.
-[x] Mandatory CI contains the architecture-drift gate as a required (non-advisory) check.
-[ ] Mandatory CI contains no other advisory security/correctness tests (unit tests still continue-on-error: true).
-[ ] Dependency and secret scans are green or have approved exceptions.
-[ ] Release R8 build is validated.
-[ ] SBOM, checksum, signing, and provenance artifacts exist.
-[ ] Manifest/exported-component and privacy reviews are complete.
-12. Definition of Done for security-sensitive changes
-A security-sensitive change is not complete when the code compiles. It is complete only when:
-the Architecture Contract has been checked;
-the owning layer and trust boundary are explicit;
-the authoritative-state impact is understood;
-derived indexes/caches are updated or invalidated safely;
-failure semantics are explicit;
-relevant unit/instrumented tests exist;
-architecture drift checks pass;
-required CI gates pass; and
-the ledger records the decision and remaining risk.
-Historical reasoning belongs in PROJECT_LEDGER.md; this contract states the current rules.
-13. Governance rule (from Lineage B, adopted)
-If implementation reality and documentation disagree, do not silently choose one. Record the discrepancy, inspect the actual code/configuration in full, update the contract if the architecture changed intentionally, and update the ledger so the decision becomes auditable. This rule is precisely why this document exists in its current merged form — Lineage B's own snapshot disagreed with Lineage A's shipped, CI-verified code, and this reconciliation is the record of that discrepancy.
-This is the adopted v3 reconciled contract. It supersedes the former v2 wording and is committed under the canonical filename Architecture-Contract.md; no separate Architecture-Contract-v3-DRAFT.md file remains. PROJECT_LEDGER.md records this adoption. Historical amendment tracking from v2's footer (Amendments 0–5, applied 2026-07-15) is preserved in PROJECT_LEDGER.md and not repeated here.
+1.1-1.3 — source-level evidence this session strongly suggests these are done (six-tier CallTier including SECURITY_FAILURE; CallScreeningEngineDecisionMatrixTest exists; Bloom cold/warm/post-mutation/rebuild/reset all tested per §0.2) but this session did not re-derive the full decision-matrix test coverage independently — treat as likely complete, confirm before closing.
+1.4 — [RESOLVED, v3, CI-verified 2026-08-19]. Unchanged.
+1.5 — [COMPLETE, confirmed this session]. ScreeningDecision is exactly the immutable decision-and-consequence result this item called for.
+Remaining Phase 1 items not re-audited this session: carried forward from v3 as previously stated.
+Phases 2-7 — carried forward from v3 without re-audit this session, except:
+2.1-2.3 — source-level evidence this session (PulseHapticsController/PulseTriggerLimiter wired downstream of ScreeningDecision only, per §4/INV-006) suggests these are substantially done; not independently re-verified against v3's full item text.
+3.1, 3.4, 3.5, 3.6 — source-level evidence this session (SourceLifecycleState's seven states, attempt-vs-accepted distinction, last-known-good preservation on failure) suggests these are done; not independently re-verified against v3's full item text.
+All other Phase 2-7 items: unchanged from v3, not re-audited this session.
+Definition of Done for security-sensitive changes
+Unchanged from v3.
+Governance rule (from v3 Lineage B, adopted, unchanged)
+If implementation reality and documentation disagree, do not silently choose one. Record the discrepancy, inspect the actual code/configuration in full, update the contract if the architecture changed intentionally, and update the ledger so the decision becomes auditable. This v4 revision is itself an application of that rule: v3 documented Phase 0.2-0.6 as open; this session found, by reading full files rather than headers, that they are implemented, and recorded exactly which claims were independently CI-confirmed versus source-confirmed-only rather than blurring the two.
+Single-lineage rule: this is the only Architecture Contract lineage for this project going forward. Any future proposal, session, or tool that produces a competing contract document must reconcile against this one — specifically, against actual current source and CI state, not just against the text of the prior document — before either is treated as authoritative.
+This is the adopted v4 contract, committed under the canonical filename Architecture-Contract.md. PROJECT_LEDGER.md should record this adoption and the specific §10.8/10.9/10.11/10.13 status changes and the new §10.13 finding.
