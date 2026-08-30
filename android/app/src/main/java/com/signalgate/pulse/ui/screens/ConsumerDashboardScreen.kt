@@ -1,7 +1,9 @@
 package com.signalgate.pulse.ui.screens
 
+import android.app.role.RoleManager
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -165,6 +167,19 @@ fun ConsumerDashboardScreen(
                         )
                     )
                     .border(1.dp, BorderGlass, RoundedCornerShape(20.dp))
+                    .then(
+                        if (!shieldActive) {
+                            Modifier.clickable {
+                                val roleManager =
+                                    context.getSystemService(Context.ROLE_SERVICE) as RoleManager
+                                context.startActivity(
+                                    roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
+                                )
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
                     .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
