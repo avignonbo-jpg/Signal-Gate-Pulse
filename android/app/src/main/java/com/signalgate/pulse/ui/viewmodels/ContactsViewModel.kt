@@ -4,10 +4,9 @@ import android.content.Context
 import android.provider.ContactsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.signalgate.pulse.database.entities.UnifiedEntryEntity
 import com.signalgate.pulse.database.repositories.BlocklistRepository
-import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.database.repositories.SettingRepository
+import com.signalgate.pulse.logic.SecurityRuleRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -20,7 +19,7 @@ data class ContactItem(
 )
 
 class ContactsViewModel(
-    private val repository: DataSourceRepository,
+    private val securityRuleRepository: SecurityRuleRepository,
     private val blocklistRepository: BlocklistRepository,
     private val settingRepository: SettingRepository
 ) : ViewModel() {
@@ -134,15 +133,10 @@ class ContactsViewModel(
             }
 
             selected.forEach { contact ->
-                repository.insertEntry(
-                    UnifiedEntryEntity(
-                        phoneNumber = contact.normalizedNumber,
-                        action = "ALLOW",
-                        sourceId = contactsSourceId,
-                        category = "Contact",
-                        confidence = 100,
-                        metadata = contact.displayName
-                    )
+                securityRuleRepository.addContactAllow(
+                    phoneNumber = contact.normalizedNumber,
+                    sourceId = contactsSourceId,
+                    displayName = contact.displayName
                 )
             }
 

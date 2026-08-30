@@ -106,6 +106,25 @@ class SecurityRuleRepository(
     }
 
     /**
+     * Adds an allow rule imported from the contacts provider while preserving
+     * the dedicated contacts source attribution. The write still passes through
+     * DataSourceRepository.insertEntry(), which owns sanitization and Bloom
+     * maintenance for every decision-affecting mutation.
+     */
+    suspend fun addContactAllow(phoneNumber: String, sourceId: Int, displayName: String) {
+        dataSourceRepository.insertEntry(
+            UnifiedEntryEntity(
+                phoneNumber = phoneNumber,
+                action = "ALLOW",
+                sourceId = sourceId,
+                category = "Contact",
+                confidence = 100,
+                metadata = displayName
+            )
+        )
+    }
+
+    /**
      * Removes a manual rule. This is the one path that legitimately bypasses
      * DataSourceRepository: BloomFilterEngine supports insertion only, not
      * deletion (a normal Bloom filter property, not a bug — see
