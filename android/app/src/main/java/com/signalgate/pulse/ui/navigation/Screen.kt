@@ -12,6 +12,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Settings      : Screen("settings",   "Settings",          Icons.Default.Settings)
     object Logcat        : Screen("logcat",     "Logcat Viewer",     Icons.Default.Info)
     object Onboarding    : Screen("onboarding", "Onboarding",        Icons.Default.PlayArrow)
+    object PermissionSettings : Screen("permission_settings", "Permission Settings", Icons.Default.Settings)
 
     /**
      * Blocked call digest — swipeable card list backed by PendingCardEntity queue.

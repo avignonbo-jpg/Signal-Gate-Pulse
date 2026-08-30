@@ -12,6 +12,7 @@ import com.signalgate.pulse.ui.onboarding.OnboardingWizardScreen
 import com.signalgate.pulse.ui.screens.CallLogScreen
 import com.signalgate.pulse.ui.screens.ConsumerDashboardScreen
 import com.signalgate.pulse.ui.screens.LogcatViewerScreen
+import com.signalgate.pulse.ui.screens.PermissionSettingsScreen
 import com.signalgate.pulse.ui.screens.SettingsScreen
 import com.signalgate.pulse.ui.screens.SourcesScreen
 import com.signalgate.pulse.ui.screens.BlockAllowListScreen
@@ -30,6 +31,9 @@ fun SignalGateNavGraph(
         composable(Screen.Dashboard.route) {
             ConsumerDashboardScreen(
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                onNavigateToPermissionSettings = {
+                    navController.navigate(Screen.PermissionSettings.route)
+                },
                 onLaunchOnboarding = { navController.navigate(Screen.Onboarding.route) }
             )
         }
@@ -58,6 +62,12 @@ fun SignalGateNavGraph(
 
         composable(Screen.Onboarding.route) {
             OnboardingWizardScreen(navController)
+        }
+
+        // Contextual entry point only: the dashboard exposes this destination
+        // when the call-screening role is inactive; it is not a permanent menu item.
+        composable(Screen.PermissionSettings.route) {
+            PermissionSettingsScreen()
         }
 
         /**

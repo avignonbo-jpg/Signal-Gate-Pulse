@@ -57,6 +57,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun ConsumerDashboardScreen(
     onNavigateToSettings: () -> Unit = {},
+    onNavigateToPermissionSettings: () -> Unit = {},
     onLaunchOnboarding: () -> Unit = {},
     viewModel: DashboardViewModel = koinViewModel()
 ) {
@@ -211,6 +212,17 @@ fun ConsumerDashboardScreen(
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center
                     )
+
+                    if (!shieldActive) {
+                        Text(
+                            text = "MANAGE PERMISSIONS",
+                            color = NeonCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp,
+                            modifier = Modifier.clickable(onClick = onNavigateToPermissionSettings)
+                        )
+                    }
                 }
             }
 
