@@ -30,7 +30,6 @@ import com.signalgate.pulse.ui.screens.SettingsViewModel
 import com.signalgate.pulse.ui.screens.SourcesViewModel
 import com.signalgate.pulse.ui.viewmodels.ContactsViewModel
 import com.signalgate.pulse.ui.viewmodels.LogcatViewModel
-import com.signalgate.pulse.ui.viewmodels.TelemetryViewModel
 import com.signalgate.pulse.workers.CommunitySyncWorker
 import com.signalgate.pulse.StartupDiagnostics
 import com.signalgate.pulse.data.security.BloomFilterEngine
@@ -208,7 +207,6 @@ val engineModule = module {
  */
 val viewModelModule = module {
     viewModel { ContactsViewModel(get(), get(), get()) }
-    viewModel { TelemetryViewModel(get()) }
     viewModel { DashboardViewModel(get(), get(), get(), get()) } // Phase 0.4: real source sync boundary added
 
     // Phase 4.2: constructor dependency changed from DataSourceRepository to
