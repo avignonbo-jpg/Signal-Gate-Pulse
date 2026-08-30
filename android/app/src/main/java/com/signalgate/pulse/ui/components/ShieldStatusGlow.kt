@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.signalgate.pulse.ui.theme.NeonGreen
@@ -67,7 +68,7 @@ fun ShieldStatusGlow(
 
             drawIntoCanvas { canvas ->
                 val frameworkPaint = Paint().asFrameworkPaint().apply {
-                    color = glowColor.copy(alpha = pulseAlpha).hashCode()
+                    color = glowColor.copy(alpha = pulseAlpha).toArgb()
                     // Emulate high-fidelity neon glow using a BlurMaskFilter
                     maskFilter = android.graphics.BlurMaskFilter(15f, android.graphics.BlurMaskFilter.Blur.NORMAL)
                 }
@@ -86,7 +87,7 @@ fun ShieldStatusGlow(
 
                 // Clean core border layer
                 val strokePaint = android.graphics.Paint().apply {
-                    color = glowColor.hashCode()
+                    color = glowColor.toArgb()
                     style = android.graphics.Paint.Style.STROKE
                     strokeWidth = 4f
                     isAntiAlias = true
