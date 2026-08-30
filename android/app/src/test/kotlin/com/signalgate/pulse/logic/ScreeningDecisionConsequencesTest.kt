@@ -40,14 +40,14 @@ class ScreeningDecisionConsequencesTest {
     }
 
     @Test
-    fun heuristicBlock_requiresBlockReviewAndPulse() {
+    fun heuristicBlock_requiresBlockReviewWithoutHaptic() {
         val decision = ScreeningDecision.forTier(CallTier.HEURISTIC_BLOCK, ScreeningAction.BLOCK)
 
         assertEquals(ScreeningAction.BLOCK, decision.callAction)
         assertTrue(decision.auditRequired)
         assertTrue(decision.reviewCardRequired)
         assertEquals(NotificationPolicy.BLOCK_REVIEW, decision.notificationPolicy)
-        assertEquals(HapticPolicy.BLOCK_PULSE, decision.hapticPolicy)
+        assertEquals(HapticPolicy.NONE, decision.hapticPolicy)
         assertFalse(decision.securityFailure)
     }
 

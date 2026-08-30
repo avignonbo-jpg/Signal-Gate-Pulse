@@ -280,7 +280,9 @@ class ScreeningServiceEdgeExecutionTest {
     }
 
     // -------------------------------------------------------------------------
-    // hapticPolicy values — policy correctness, not dispatch
+    // hapticPolicy values — policy correctness, not dispatch. HEURISTIC_BLOCK
+    // intentionally has no haptic; BLOCK_PULSE remains a supported policy value
+    // for explicit callers but is no longer selected by ScreeningDecision.forTier().
     //
     // Dispatch wired in Phase 2.1 after Phase 1.3 proves persisted reviewability.
     // These tests confirm the policy value; they deliberately do not assert that
@@ -288,9 +290,9 @@ class ScreeningServiceEdgeExecutionTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun heuristicBlock_hapticPolicy_isBlockPulse() {
+    fun heuristicBlock_hapticPolicy_isNone() {
         val info = callInfoForTier(CallTier.HEURISTIC_BLOCK, ScreeningAction.BLOCK)
-        assertEquals(HapticPolicy.BLOCK_PULSE, info.screeningDecision.hapticPolicy)
+        assertEquals(HapticPolicy.NONE, info.screeningDecision.hapticPolicy)
     }
 
     @Test
@@ -367,7 +369,7 @@ class ScreeningServiceEdgeExecutionTest {
         assertEquals(true,  decision.auditRequired)
         assertEquals(true,  decision.reviewCardRequired)
         assertEquals(NotificationPolicy.BLOCK_REVIEW, decision.notificationPolicy)
-        assertEquals(HapticPolicy.BLOCK_PULSE, decision.hapticPolicy)
+        assertEquals(HapticPolicy.NONE, decision.hapticPolicy)
         assertEquals(false, decision.securityFailure)
 
         // Simulate both writes the service makes

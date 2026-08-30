@@ -64,7 +64,7 @@ data class ScreeningDecision(
                 )
                 CallTier.HEURISTIC_BLOCK -> ScreeningDecision(
                     tier, action, auditRequired = true, reviewCardRequired = true,
-                    NotificationPolicy.BLOCK_REVIEW, HapticPolicy.BLOCK_PULSE, securityFailure = false
+                    NotificationPolicy.BLOCK_REVIEW, HapticPolicy.NONE, securityFailure = false
                 )
                 CallTier.HEURISTIC_FLAG -> ScreeningDecision(
                     tier, action, auditRequired = true, reviewCardRequired = true,

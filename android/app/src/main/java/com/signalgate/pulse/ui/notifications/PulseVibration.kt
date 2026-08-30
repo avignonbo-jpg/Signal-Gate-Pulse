@@ -30,7 +30,8 @@ object PulseVibration {
 
     /**
      * Two short pulses — 80ms on, 80ms off, 80ms on.
-     * Used for [HapticPolicy.BLOCK_PULSE] (HEURISTIC_BLOCK calls).
+     * Retained as the effect for [HapticPolicy.BLOCK_PULSE]. It is not selected
+     * by [ScreeningDecision.forTier] for HEURISTIC_BLOCK calls.
      */
     val blockPulse: VibrationEffect = VibrationEffect.createWaveform(
         longArrayOf(0L, 80L, 80L, 80L),   // delay, on, off, on

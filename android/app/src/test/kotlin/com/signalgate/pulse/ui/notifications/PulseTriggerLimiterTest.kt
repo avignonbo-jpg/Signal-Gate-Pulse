@@ -39,12 +39,14 @@ class PulseTriggerLimiterTest {
     }
 
     @Test
-    fun blockReviewAndBlockPulse_areNeverRateLimited() {
+    fun blockReviewIsNeverRateLimited_andBlockPulseRemainsSupported() {
         val number = "+15551234567"
         val start = 1_700_000_000_000L
 
         assertTrue(limiter.shouldDispatchNotification(NotificationPolicy.BLOCK_REVIEW, number, start))
         assertTrue(limiter.shouldDispatchNotification(NotificationPolicy.BLOCK_REVIEW, number, start + 1))
+        // BLOCK_PULSE remains defined and directly dispatchable even though
+        // HEURISTIC_BLOCK no longer selects it in ScreeningDecision.forTier().
         assertTrue(limiter.shouldDispatchHaptic(HapticPolicy.BLOCK_PULSE, number, start))
         assertTrue(limiter.shouldDispatchHaptic(HapticPolicy.BLOCK_PULSE, number, start + 1))
     }

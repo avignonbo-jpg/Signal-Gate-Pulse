@@ -695,3 +695,13 @@ Validation: git diff --check passed. Local Gradle compilation could not execute 
 Status: Instrumentation is prepared; no measured real-device baseline exists yet. Activity and direct Telecom-created CallScreeningService cold-process captures are still required before the startup measurement exit criterion can close.
 To-do / heads-up: Build through mandatory CI, install on a representative real device, capture repeated fresh-install and existing-database Activity and direct screening-service runs, then classify each checkpoint as mandatory, deferrable, parallelizable, cacheable, or a sequencing artifact without relaxing the authoritative-database invariant.
 Signature: SignalGate Analyst 2 — 2026-08-22
+
+2026-08-29 — HEURISTIC_BLOCK haptic policy aligned with approved branch decision
+Who: Manus AI, following explicit user sign-off to proceed with the authorized branch-fork haptic change.
+What: Changed ScreeningDecision.forTier() so HEURISTIC_BLOCK retains BLOCK_REVIEW notification, auditRequired = true, and reviewCardRequired = true while using HapticPolicy.NONE. BLOCK_PULSE and its VibrationEffect remain defined and directly supported, but BLOCK_PULSE is no longer selected by forTier(). Updated the consequence, edge-execution, and limiter test wording/expectations accordingly.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/ScreeningDecision.kt; android/app/src/main/java/com/signalgate/pulse/ui/notifications/PulseVibration.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/ScreeningDecisionConsequencesTest.kt; android/app/src/test/kotlin/com/signalgate/pulse/ScreeningServiceEdgeExecutionTest.kt; android/app/src/test/kotlin/com/signalgate/pulse/ui/notifications/PulseTriggerLimiterTest.kt; PROJECT_LEDGER.md
+Layers touched: Layer 4 domain consequence contract, Layer 1 haptic consumer documentation, and regression tests only. Notification policy, audit behavior, and review-card behavior were not changed.
+Contract consulted: yes — Architecture-Contract.md and the complete issue constraints were reviewed before editing. The required ScreeningDecision securityFailure invariant was not modified.
+Validation: git diff --check passed. Static reference inspection confirms BLOCK_PULSE remains defined in ScreeningDecision, PulseVibration, and PulseTriggerLimiter, while ScreeningDecision.forTier() now selects HapticPolicy.NONE for HEURISTIC_BLOCK. Local Gradle execution remains unavailable because the sandbox has no Android SDK; mandatory JVM CI verification is required.
+Status: Ready to commit and push as a single issue-specific change-set.
+Signature: Manus AI — 2026-08-29
