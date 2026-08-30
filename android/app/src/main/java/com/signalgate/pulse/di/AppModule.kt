@@ -47,11 +47,11 @@ import kotlinx.coroutines.launch
  * AppModule — Koin DI bindings per Architecture Contract §2.
  *
  * Module split (one per layer):
- *   databaseModule  — SignalGateDatabase, all DAOs
- *   repositoryModule — all four repositories
- *   engineModule    — L2 transport, L4 sanitization, L6 decision logic
- *   viewModelModule — one viewModel{} per screen (Contract §4)
- *   workerModule    — CoroutineWorker bindings via KoinWorkerFactory (Contract §2)
+ *   databaseModule  — Layer 3 Persistence: SignalGateDatabase, all DAOs
+ *   repositoryModule — Layer 3 Persistence: all repositories
+ *   engineModule    — Layer 2 Security/Parsing and Layer 4 Domain engines
+ *   viewModelModule — Layer 6 Presentation: one viewModel{} per screen (Contract §4)
+ *   workerModule    — Layer 1 Platform/Edge CoroutineWorker bindings via KoinWorkerFactory (Contract §2)
  *
  * Startup ordering (BINDING per Contract §2):
  * DatabaseInitializer.seedRequiredSources() completes synchronously in
@@ -92,10 +92,11 @@ val databaseModule = module {
 }
 
 /**
- * repositoryModule — Provides repository layer (L4 Transport boundary).
+ * repositoryModule — Provides Layer 3 Persistence repositories.
  * Scope: Single instance per app lifetime.
  *
- * Repositories mediate all access between domain logic (L5+) and persistence (L2).
+ * Repositories mediate access between Layer 4 Domain/Layer 5 Application logic
+ * and Layer 3 Persistence. No direct DAO access crosses the UI boundary.
  * No direct DAO access from UI or engines — all goes through repositories.
  *
  * Step 0.1 Changes:
@@ -149,18 +150,19 @@ val repositoryModule = module {
 }
 
 /**
- * engineModule — Provides business logic engines and transport layer (L2, L4, L6).
+ * engineModule — Provides Layer 2 Security/Parsing, Layer 4 Domain, and
+ * Layer 5 Application engines.
  * Scope: Single instance per app lifetime.
  *
  * Layer responsibilities:
- * - L2 (Data Link): Transport, OkHttp, TLS, timeouts
- * - L4 (Network): Input sanitization, CSV parsing
- * - L6 (Presentation Logic): Call risk evaluation, screening decisions
+ * - Layer 2 Security/Parsing: secure CSV parsing and input normalization
+ * - Layer 4 Domain: call-risk evaluation and screening decisions
+ * - Layer 5 Application: reliable-source transport and synchronization orchestration
  *
  * These engines are stateless and safe to share as singletons.
  */
 val engineModule = module {
-    // L4 — input sanitization boundary
+    // Layer 2 Security/Parsing — input sanitization boundary
     single { BloomFilterEngine() }
     // Bloom fast-pass wiring (this session): a second, separate BloomFilterEngine
     // instance dedicated to block-pattern prefixes (see DataSourceRepository's
@@ -179,14 +181,14 @@ val engineModule = module {
         )
     }
 
-    // L2 — transport boundary (OkHttp, TLS, timeouts owned here)
+    // Layer 5 Application — transport boundary (OkHttp, TLS, timeouts owned here)
     // Security fix (audit finding): third get() resolves the SecureCsvParser
     // singleton registered above — ReliableSourceManager now streams federal CSV
     // feeds through it instead of a hand-rolled parser. See ReliableSourceManager.
     single { ReliableSourceManager(get(), get(), get(), get(), get()) }
     single { SourceSyncUseCase(get()) }
 
-    // L6 — decision boundary
+    // Layer 4 Domain — decision boundary
     // CallRiskEvaluator is a stateless object — registered so CallScreeningEngine
     // receives it via constructor injection for testability.
     single { CallRiskEvaluator }
@@ -195,7 +197,7 @@ val engineModule = module {
 }
 
 /**
- * viewModelModule — Provides ViewModel instances for all screens (L6 Presentation).
+ * viewModelModule — Provides Layer 6 Presentation ViewModel instances for all screens.
  * Scope: Per-screen lifecycle (Compose Navigation handles creation/destruction).
  *
  * Step 0.1 Change:
@@ -203,7 +205,8 @@ val engineModule = module {
  *   Used for direct CallLogDao access in refreshCounters() method (Step 2.5).
  *
  * Architecture Contract §4: Each screen gets exactly one ViewModel.
- * ViewModels are the sole interface between Composables (L7) and business logic (L5-L6).
+ * ViewModels are the sole interface between Layer 7 UI Composables and
+ * Layer 5 Application/Layer 4 Domain logic.
  */
 val viewModelModule = module {
     viewModel { ContactsViewModel(get(), get(), get()) }
