@@ -1,0 +1,45 @@
+name: Dependency and CVE Scan
+
+on:
+  push:
+    branches: [ consumer-v1 ]
+  pull_request:
+    branches: [ consumer-v1 ]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  dependency-scan:
+    name: OWASP Dependency-Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@1e54355a8b4c8abaa8cc7d0b70aa655a3bb15a6c
+        with:
+          project: SignalGate-Pulse
+          path: .
+          format: SARIF
+          out: dependency-check-reports
+          args: >-
+            --failOnCVSS 7
+            --enableRetired
+
+      - name: Upload Dependency-Check SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: dependency-check-reports/dependency-check-report.sarif
+
+      - name: Upload Dependency-Check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: dependency-check-reports/
+          retention-days: 14
