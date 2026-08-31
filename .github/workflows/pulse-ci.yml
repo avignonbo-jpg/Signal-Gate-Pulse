@@ -40,6 +40,7 @@ jobs:
         run: ./gradlew :app:testPulseDebugUnitTest --stacktrace
 
       - name: Run Lint Check (Pulse)
+        if: always()
         working-directory: ./android
         run: ./gradlew :app:lintPulseDebug --stacktrace
 
@@ -62,7 +63,8 @@ jobs:
           name: test-results
           path: |
             android/app/build/test-results/**
-            android/app/build/reports/**
+            android/app/build/reports/tests/**
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Upload Lint Report
@@ -70,7 +72,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lint-report
-          path: android/app/build/reports/**
+          path: |
+            android/app/build/reports/lint-results-*.html
+            android/app/build/reports/lint-results-*.xml
+            android/app/build/intermediates/lint_intermediate_text_report/**
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Verify build.gradle compose-metrics gate
