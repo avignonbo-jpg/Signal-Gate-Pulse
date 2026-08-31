@@ -717,3 +717,19 @@ Validation: git diff --check passed before commit. Commit cfd713d was pushed to 
 Status: The CallScreeningService test-environment blocker is addressed in source; Gate 1.1 is not closed until mandatory CI passes and the required exactly-one-response, malformed-handle, exception, and timing evidence is reviewed. The broader Pre-Release Screening Assurance Gate remains open.
 To-do / heads-up: inspect the CI results for cfd713d, then continue with source lifecycle/Bloom post-commit verification and the remaining pre-release assurance work one scoped change-set at a time. New detection intelligence remains deferred to v1.1.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Screening response-policy test seam verified by mandatory Consumer CI
+Who: Manus AI.
+What: Pulse Consumer CI run 33451270901 passed on commit cfd713d. The run completed the architecture drift check, Pulse Debug APK build, all 84 JVM unit tests, Pulse lint, artifact uploads, and compose-metrics gate verification. The four previously failing ScreeningService tests now pass because framework response construction is isolated behind the test-injectable factory while production CallResponse.Builder behavior remains unchanged.
+Validation evidence: GitHub Actions run 33451270901, job 99681479495, status success. The remaining annotations are GitHub action runtime notices about Node.js 20 deprecation and setup-java v4 migration; they are warnings, not build or lint failures.
+Status: Gate 1.1 test-environment blocker is resolved for the current JVM suite. The broader Gate 1.1 exit remains open pending explicit malformed-handle/service-exception/exactly-one-response and real-device Telecom evidence. Gate 2 pre-release screening assurance remains open.
+Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Manus continuation handoff created
+Who: Manus AI.
+What: Added MANUS-HANDOFF.md to preserve the owner-approved pre-release screening assurance plan, governing-document map, completed commits and CI evidence, current open Phase 4.0/Gate 1 and assurance work, immediate next actions, and non-negotiable security constraints for a future Manus AI entity.
+Files touched: MANUS-HANDOFF.md; PROJECT_LEDGER.md
+Contract consulted: yes — Architecture-Contract.md v4, SECURITY-DEVOPS-BUILD-PLAN.md, SignalGate-Pulse-Release-Roadmap.md, SIGNALGATE-PULSE-NEXT-ARCHITECTURAL-BUILD-PLAN.md, SignalGate-Pulse-Manus-CI-Guardrails.md, Source-Of-Truth.md, and the approved /home/ubuntu/plan.md were re-read or consulted during execution.
+Validation: Handoff content written; ledger entry appended. Commit and remote push pending.
+Status: Handoff ready for future continuation. Current implementation work remains in progress; no release gate is marked complete by this entry.
+Signature: Manus AI — 2026-08-31
