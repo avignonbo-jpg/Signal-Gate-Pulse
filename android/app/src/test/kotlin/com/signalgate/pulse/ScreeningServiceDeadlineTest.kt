@@ -1,8 +1,10 @@
-package com.signalgate.pulse
+ package com.signalgate.pulse
 
 import android.telecom.Call
+import android.telecom.CallScreeningService.CallResponse
 import com.signalgate.pulse.database.entities.CallLogEntry
 import com.signalgate.pulse.logic.CallScreeningEngine
+import com.signalgate.pulse.logic.ScreeningAction
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
@@ -49,7 +51,7 @@ class ScreeningServiceDeadlineTest {
                 details = details,
                 engine = engine,
                 respond = { response.complete(it) },
-                persist = {
+                persist = { _, _ ->
                     persistenceStarted.complete(Unit)
                     releasePersistence.await()
                 },
@@ -76,7 +78,7 @@ class ScreeningServiceDeadlineTest {
             details = details,
             engine = engine,
             respond = { responses += it },
-            persist = { throw IllegalStateException("database unavailable") },
+            persist = { _, _ -> throw IllegalStateException("database unavailable") },
             dispatchUx = { _, _ -> }
         )
 
