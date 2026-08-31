@@ -33,6 +33,13 @@ import timber.log.Timber
 
 class SignalGateCallScreeningService : TelecomCallScreeningService() {
 
+    internal data class TelecomResponsePolicy(
+        val disallowCall: Boolean,
+        val silenceCall: Boolean,
+        val skipCallLog: Boolean,
+        val skipNotification: Boolean
+    )
+
     override fun onCreate() {
         super.onCreate()
         StartupDiagnostics.mark(StartupDiagnostics.Event.SCREENING_SERVICE_ON_CREATE)
@@ -137,14 +144,15 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
         engine: CallScreeningEngine,
         respond: (CallResponse) -> Unit,
         persist: suspend (CallInfo, ScreeningDecision) -> Unit,
-        dispatchUx: (CallInfo, ScreeningDecision) -> Unit
+        dispatchUx: (CallInfo, ScreeningDecision) -> Unit,
+        responseFactory: (ScreeningAction) -> CallResponse = ::toCallResponse
     ) {
         val callInfo = withTimeout(3_500) { engine.screenCall(phoneNumber, details) }
         val decision = callInfo.screeningDecision
 
         // Telecom response is the deadline-critical operation. It deliberately
         // precedes audit/review persistence, notification, and haptic dispatch.
-        respond(toCallResponse(decision.callAction))
+        respond(responseFactory(decision.callAction))
 
         try {
             persist(callInfo, decision)
@@ -174,18 +182,30 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
      * but that is a deliberate, visible policy choice made here — not an
      * accidental byproduct of SECURITY_FAILURE aliasing ALLOW.
      */
-    private fun toCallResponse(action: ScreeningAction): CallResponse = when (action) {
+    internal fun responsePolicy(action: ScreeningAction): TelecomResponsePolicy = when (action) {
         ScreeningAction.ALLOW, ScreeningAction.SCREEN, ScreeningAction.SECURITY_FAILURE ->
-            CallResponse.Builder()
-                .setDisallowCall(false)
-                .setSkipCallLog(false)
-                .setSkipNotification(false)
-                .build()
+            TelecomResponsePolicy(
+                disallowCall = false,
+                silenceCall = false,
+                skipCallLog = false,
+                skipNotification = false
+            )
 
-        ScreeningAction.BLOCK -> CallResponse.Builder()
-            .setSilenceCall(true)
-            .setSkipCallLog(true)
-            .setSkipNotification(true)
+        ScreeningAction.BLOCK -> TelecomResponsePolicy(
+            disallowCall = false,
+            silenceCall = true,
+            skipCallLog = true,
+            skipNotification = true
+        )
+    }
+
+    private fun toCallResponse(action: ScreeningAction): CallResponse {
+        val policy = responsePolicy(action)
+        return CallResponse.Builder()
+            .setDisallowCall(policy.disallowCall)
+            .setSilenceCall(policy.silenceCall)
+            .setSkipCallLog(policy.skipCallLog)
+            .setSkipNotification(policy.skipNotification)
             .build()
     }
 
@@ -200,9 +220,10 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
         details: Call.Details,
         phoneNumber: String,
         respond: (CallResponse) -> Unit = { response -> respondToCall(details, response) },
-        audit: suspend (CallLogEntry) -> Unit = { entry -> callLogRepository.insertCallLog(entry) }
+        audit: suspend (CallLogEntry) -> Unit = { entry -> callLogRepository.insertCallLog(entry) },
+        responseFactory: (ScreeningAction) -> CallResponse = ::toCallResponse
     ) {
-        respond(toCallResponse(ScreeningAction.SECURITY_FAILURE))
+        respond(responseFactory(ScreeningAction.SECURITY_FAILURE))
         val failureEntry = CallLogEntry(
             phoneNumber = phoneNumber,
             normalizedPhoneNumber = phoneNumber,

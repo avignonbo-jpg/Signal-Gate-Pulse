@@ -25,6 +25,7 @@ class ScreeningServiceDeadlineTest {
     private val service = SignalGateCallScreeningService()
     private val details: Call.Details = mock()
     private val engine: CallScreeningEngine = mock()
+    private val responseFactory: (ScreeningAction) -> CallResponse = { mock() }
 
     private fun allowInfo() = CallInfo(
         originalPhoneNumber = "+15551234567",
@@ -55,7 +56,8 @@ class ScreeningServiceDeadlineTest {
                     persistenceStarted.complete(Unit)
                     releasePersistence.await()
                 },
-                dispatchUx = { _, _ -> }
+                dispatchUx = { _, _ -> },
+                responseFactory = responseFactory
             )
         }
 
@@ -79,7 +81,8 @@ class ScreeningServiceDeadlineTest {
             engine = engine,
             respond = { responses += it },
             persist = { _, _ -> throw IllegalStateException("database unavailable") },
-            dispatchUx = { _, _ -> }
+            dispatchUx = { _, _ -> },
+            responseFactory = responseFactory
         )
 
         assertEquals(1, responses.size)
@@ -101,7 +104,8 @@ class ScreeningServiceDeadlineTest {
                     details = details,
                     phoneNumber = phoneNumber,
                     respond = { response.complete(it) },
-                    audit = { audit.complete(it) }
+                    audit = { audit.complete(it) },
+                    responseFactory = responseFactory
                 )
             }
         )
