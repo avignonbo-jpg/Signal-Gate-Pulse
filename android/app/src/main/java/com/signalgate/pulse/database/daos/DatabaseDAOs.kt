@@ -135,11 +135,12 @@ interface UnifiedEntryDao {
     suspend fun findEntriesByPhoneNumberWithPriority(phoneNumber: String): List<UnifiedEntryEntity>
 
     /**
-     * Phase 2.6 — Priority-ordered pattern lookup.
+     * Phase 2.6 — Priority-ordered matching pattern lookup.
      *
-     * All BLOCK patterns joined with source priority, highest priority first.
-     * Used by getCallDecision() to resolve prefix/area-code blocks correctly
-     * when multiple sources define overlapping patterns.
+     * The normalized number is the complete value and phoneNumber is the
+     * candidate prefix, so the LIKE direction intentionally reads
+     * `:normalized LIKE ue.phoneNumber || '%'`. Filtering in SQLite keeps the
+     * screening hot path from materializing every pattern in Kotlin.
      */
     @Query("""
         SELECT ue.* FROM unified_entries ue
@@ -147,9 +148,10 @@ interface UnifiedEntryDao {
         WHERE ue.isPattern = 1
           AND ue.action = 'BLOCK'
           AND s.isEnabled = 1
-        ORDER BY COALESCE(s.priority, 0) DESC
+          AND :normalized LIKE ue.phoneNumber || '%'
+        ORDER BY COALESCE(s.priority, 0) DESC, ue.id ASC
     """)
-    suspend fun getAllBlockPatternsWithPriority(): List<UnifiedEntryEntity>
+    suspend fun findMatchingBlockPatternsWithPriority(normalized: String): List<UnifiedEntryEntity>
 }
 
 /**

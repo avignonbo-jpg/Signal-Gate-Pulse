@@ -281,8 +281,12 @@ class DataSourceRepository(
 
         // Step 3: pattern/prefix check with priority ordering
         if (mightMatchPattern) {
-            val patterns = entryDao.getAllBlockPatternsWithPriority()
-            val matchedPattern = patterns.firstOrNull { normalized.startsWith(it.phoneNumber) }
+            // Bloom only answers whether a prefix may exist. SQLite performs
+            // the bounded prefix selection so large pattern datasets are not
+            // materialized into the screening service process.
+            val matchedPattern = entryDao
+                .findMatchingBlockPatternsWithPriority(normalized)
+                .firstOrNull()
             if (matchedPattern != null) {
                 return CallDecision(
                     action = "BLOCK",

@@ -751,3 +751,19 @@ Contract alignment: Covers INV-001 authoritative database state and INV-002 atom
 Validation: Static diff validation and mandatory instrumented CI pending. Local Android execution remains unavailable because the sandbox has no Android SDK.
 Status: Change is ready for commit/push. Do not mark Bloom post-commit or source-activation gates closed until the instrumented test passes.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Snapshot rollback/Bloom contamination regression passed instrumented CI
+Who: Manus AI.
+What: The combined failedReplacement_preservesLastKnownGoodAndRecordsAttempt coverage passed on the emulator, proving that a failed candidate snapshot preserves the prior authoritative BLOCK decision and cannot make the candidate-only number decision-relevant through Bloom state.
+Validation evidence: Pulse Instrumented Tests run 33451970789, job 99683671131, completed successfully on commit adf480a. The run executed the full instrumented suite and uploaded test results. GitHub action Node.js 20/setup-java v4 deprecation annotations remain warnings only.
+Status: The specific rollback/Bloom contamination evidence is green. The broader source lifecycle and derived-index gates remain open, including disabled-source behavior, FCC root cause, parser streaming/limits, and real-device validation.
+Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Pattern matching hot path bounded in SQL
+Who: Manus AI.
+What: Replaced DataSourceRepository's load-all-patterns-then-scan behavior with UnifiedEntryDao.findMatchingBlockPatternsWithPriority(normalized), filtering `:normalized LIKE ue.phoneNumber || '%'` in SQLite and preserving enabled-source and priority ordering. Bloom remains only the read-skip guard; the database remains authoritative.
+Files touched: android/app/src/main/java/com/signalgate/pulse/database/daos/DatabaseDAOs.kt; android/app/src/main/java/com/signalgate/pulse/database/repositories/DataSourceRepository.kt; PROJECT_LEDGER.md
+Contract alignment: Addresses SECURITY-DEVOPS-BUILD-PLAN.md §4.8.1 and the approved assurance plan’s large-dataset/deadline concerns without changing decision policy or adding a new mutation path.
+Validation: git diff --check passed; mandatory Consumer CI and instrumented CI pending. Local Android Gradle execution remains unavailable because the sandbox has no Android SDK.
+Status: Ready for commit and push. Existing pattern decision and Bloom equivalence tests are the required regression evidence.
+Signature: Manus AI — 2026-08-31
