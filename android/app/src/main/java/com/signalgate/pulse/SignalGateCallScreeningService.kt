@@ -23,6 +23,8 @@ import com.signalgate.pulse.ui.notifications.PulseHapticsController
 import com.signalgate.pulse.ui.notifications.PulseTriggerLimiter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.TimeoutCancellationException
@@ -41,6 +43,9 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
     private val pendingCardRepository: PendingCardRepository by inject()
     private val pulseHapticsController: PulseHapticsController by inject()
     private val pulseTriggerLimiter: PulseTriggerLimiter by inject()
+    private val serviceScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default.limitedParallelism(4)
+    )
 
     companion object {
         private const val TAG = "SignalGateScreening"
@@ -49,28 +54,39 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
     }
 
     override fun onScreenCall(details: Call.Details) {
-        // Phase 4.0.1 fix (2026-08-25): this used to be
-        // `details.handle?.schemeSpecificPart ?: return` — a bare return here
-        // never called respondToCall(), and Android treats a non-response
-        // within its ~5s deadline as the call proceeding: an implicit ALLOW
-        // reached through a path that bypassed every SECURITY_FAILURE
-        // machinery below entirely (the null case exited before the
-        // try/catch that feeds handleSecurityFailure() even started).
-        // Confirmed live against source before this fix, not assumed stale —
-        // see PROJECT_LEDGER.md for the verification.
-        val handleSchemeSpecificPart = details.handle?.schemeSpecificPart
-        if (handleSchemeSpecificPart == null) {
+        handleScreeningRequest(details)
+    }
+
+    /**
+     * Thin Telecom entrypoint delegate. The injectable callbacks let JVM tests
+     * exercise the exact null-handle and deadline branches without depending on
+     * framework response interception or asynchronous sleeps.
+     */
+    internal fun handleScreeningRequest(
+        details: Call.Details,
+        respond: (CallResponse) -> Unit = { response -> respondToCall(details, response) },
+        launch: ((suspend () -> Unit) -> Unit) = { block ->
+            serviceScope.launch { block() }
+            Unit
+        },
+        onSecurityFailure: (String) -> Unit = { phoneNumber ->
+            handleSecurityFailure(details, phoneNumber, respond = respond)
+        }
+    ) {
+        // A malformed handle must still receive an explicit response; a bare return
+        // would let the Telecom framework treat the missing response as implicit ALLOW.
+        val phoneNumber = details.handle?.schemeSpecificPart?.takeIf { it.isNotBlank() }
+        if (phoneNumber == null) {
             Timber.e("SECURITY_FAILURE — onScreenCall received a null/malformed Call.Details.handle")
-            handleSecurityFailure(details, phoneNumber = "UNKNOWN_MALFORMED_HANDLE")
+            onSecurityFailure("UNKNOWN_MALFORMED_HANDLE")
             return
         }
-        val phoneNumber = handleSchemeSpecificPart
         Timber.d("onScreenCall: screening request received")
 
-        CoroutineScope(Dispatchers.Default).launch {
+        launch {
             try {
-                // Force resolution of every service dependency before the decision
-                // begins so the measured readiness marker includes Koin resolution.
+                // Resolve dependencies before the measured decision begins, but keep
+                // all post-response work behind the explicit service-owned scope.
                 val engine = screeningEngine
                 val auditRepository = callLogRepository
                 val reviewRepository = pendingCardRepository
@@ -78,53 +94,71 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                 pulseTriggerLimiter
                 StartupDiagnostics.mark(StartupDiagnostics.Event.SCREENING_DEPENDENCIES_READY)
                 StartupDiagnostics.mark(StartupDiagnostics.Event.SCREENING_DECISION_ENGINE_READY)
-                // screeningEngine.screenCall() catches its own internal errors and
-                // returns a typed ScreeningAction.SECURITY_FAILURE CallInfo rather
-                // than throwing (§0.6) — so a thrown exception reaching this catch
-                // means failure in the code around the engine (response mapping,
-                // audit write, notification), not in decisioning itself. Both paths
-                // are handled the same way below: fail safe, never as a disguised
-                // ALLOW/CLEAN_UNKNOWN.
-                //
-                // Phase 4.0.1 fix (2026-08-25): explicit deadline around the
-                // decision call itself. Android's own CallScreeningService
-                // contract is ~5s; this is intentionally set well under that so
-                // a timeout here is caught by the same catch block below and
-                // produces an explicit, audited SECURITY_FAILURE response —
-                // rather than letting a hang consume the whole platform
-                // deadline and produce a silent implicit-ALLOW non-response.
-                // TimeoutCancellationException is a CancellationException, so
-                // it's caught by `catch (e: Exception)` below like any other
-                // failure — that's deliberate here (a fire-and-forget
-                // CoroutineScope launch, not structured concurrency where
-                // re-throwing cancellation would matter).
                 StartupDiagnostics.mark(StartupDiagnostics.Event.SCREENING_DECISION_BEGIN)
-                val callInfo = withTimeout(3_500) { engine.screenCall(phoneNumber, details) }
-                val decision = callInfo.screeningDecision
-                respondToCall(details, toCallResponse(decision.callAction))
-                // Persist every explicit consequence before consulting the UX limiter.
-                // Rate limiting may suppress dispatch, never audit or review state.
-                executeDecisionConsequences(
-                    callInfo = callInfo,
-                    decision = decision,
-                    callLogRepository = auditRepository,
-                    pendingCardRepository = reviewRepository
+
+                processScreeningCall(
+                    phoneNumber = phoneNumber,
+                    details = details,
+                    engine = engine,
+                    respond = respond,
+                    persist = { callInfo, decision ->
+                        executeDecisionConsequences(
+                            callInfo = callInfo,
+                            decision = decision,
+                            callLogRepository = auditRepository,
+                            pendingCardRepository = reviewRepository
+                        )
+                    },
+                    dispatchUx = ::dispatchDecisionUx
                 )
-                try {
-                    dispatchDecisionUx(callInfo, decision)
-                } catch (e: Exception) {
-                    // UX dispatch is best effort after persistence. A notification
-                    // or platform haptic failure must not rewrite the completed
-                    // domain outcome as SECURITY_FAILURE.
-                    Timber.e(e, "Optional screening UX dispatch failed")
-                }
             } catch (e: TimeoutCancellationException) {
                 Timber.e(e, "SECURITY_FAILURE — screening decision exceeded internal deadline")
-                handleSecurityFailure(details, phoneNumber)
+                onSecurityFailure(phoneNumber)
             } catch (e: Exception) {
                 Timber.e(e, "SECURITY_FAILURE — unhandled screening error")
-                handleSecurityFailure(details, phoneNumber)
+                onSecurityFailure(phoneNumber)
             }
+        }
+    }
+
+    override fun onDestroy() {
+        serviceScope.cancel()
+        super.onDestroy()
+    }
+
+    /**
+     * Runs the decision and emits its telecom response before persistence or UX.
+     * The callback is internal so JVM tests can prove that a blocked or throwing
+     * persistence operation cannot delay or suppress the response.
+     */
+    internal suspend fun processScreeningCall(
+        phoneNumber: String,
+        details: Call.Details,
+        engine: CallScreeningEngine,
+        respond: (CallResponse) -> Unit,
+        persist: suspend (CallInfo, ScreeningDecision) -> Unit,
+        dispatchUx: (CallInfo, ScreeningDecision) -> Unit
+    ) {
+        val callInfo = withTimeout(3_500) { engine.screenCall(phoneNumber, details) }
+        val decision = callInfo.screeningDecision
+
+        // Telecom response is the deadline-critical operation. It deliberately
+        // precedes audit/review persistence, notification, and haptic dispatch.
+        respond(toCallResponse(decision.callAction))
+
+        try {
+            persist(callInfo, decision)
+        } catch (e: Exception) {
+            // The decision response is already complete. A persistence failure must
+            // not trigger a second response or rewrite the completed call outcome.
+            Timber.e(e, "Post-response consequence persistence failed")
+        }
+
+        try {
+            dispatchUx(callInfo, decision)
+        } catch (e: Exception) {
+            // UX is best effort after both decision and response are complete.
+            Timber.e(e, "Optional screening UX dispatch failed")
         }
     }
 
@@ -156,31 +190,34 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
     }
 
     /**
-     * Reached only when an exception escapes CallScreeningEngine's own
-     * SECURITY_FAILURE handling (e.g. response mapping or the audit write
-     * itself throws). Applies the same fail-safe CallResponse policy and
-     * makes a best-effort attempt to still leave an auditable
-     * SECURITY_FAILURE trail — an untyped, silent allow with no log entry
-     * would satisfy neither §0.6 invariant.
+     * Reached when an exception escapes CallScreeningEngine's own
+     * SECURITY_FAILURE handling (e.g. response mapping or consequence work).
+     * Emits the explicit failure response first, then audits asynchronously in the
+     * service-owned scope. The callbacks keep this edge directly testable without
+     * constructing a Telecom framework callback or relying on sleeps.
      */
-    private fun handleSecurityFailure(details: Call.Details, phoneNumber: String) {
-        respondToCall(details, toCallResponse(ScreeningAction.SECURITY_FAILURE))
-        CoroutineScope(Dispatchers.IO).launch {
+    internal fun handleSecurityFailure(
+        details: Call.Details,
+        phoneNumber: String,
+        respond: (CallResponse) -> Unit = { response -> respondToCall(details, response) },
+        audit: suspend (CallLogEntry) -> Unit = { entry -> callLogRepository.insertCallLog(entry) }
+    ) {
+        respond(toCallResponse(ScreeningAction.SECURITY_FAILURE))
+        val failureEntry = CallLogEntry(
+            phoneNumber = phoneNumber,
+            normalizedPhoneNumber = phoneNumber,
+            timestamp = System.currentTimeMillis(),
+            decision = ScreeningAction.SECURITY_FAILURE.name,
+            spamStatus = "SECURITY_FAILURE",
+            spamCategory = null,
+            confidence = null,
+            riskLevel = null,
+            matchedSources = null,
+            notes = CallTier.SECURITY_FAILURE.name
+        )
+        serviceScope.launch {
             try {
-                callLogRepository.insertCallLog(
-                    CallLogEntry(
-                        phoneNumber = phoneNumber,
-                        normalizedPhoneNumber = phoneNumber,
-                        timestamp = System.currentTimeMillis(),
-                        decision = ScreeningAction.SECURITY_FAILURE.name,
-                        spamStatus = "SECURITY_FAILURE",
-                        spamCategory = null,
-                        confidence = null,
-                        riskLevel = null,
-                        matchedSources = null,
-                        notes = CallTier.SECURITY_FAILURE.name
-                    )
-                )
+                audit(failureEntry)
             } catch (e: Exception) {
                 Timber.e(e, "Failed to write SECURITY_FAILURE audit record")
             }
