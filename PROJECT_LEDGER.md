@@ -733,3 +733,12 @@ Contract consulted: yes — Architecture-Contract.md v4, SECURITY-DEVOPS-BUILD-P
 Validation: Handoff content written; ledger entry appended. Commit and remote push pending.
 Status: Handoff ready for future continuation. Current implementation work remains in progress; no release gate is marked complete by this entry.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Pre-Release Screening Assurance Gate added to governing plans
+Who: Manus AI, continuing the owner-approved pre-release security assurance plan.
+What: Added Phase 4.0.7, Pre-Release Screening Assurance Gate, to SECURITY-DEVOPS-BUILD-PLAN.md and Step 3.6 to SignalGate-Pulse-Release-Roadmap.md. The gate formalizes release-blocking evidence for exactly-one Telecom response, response-before-persistence, timing, source/last-known-good integrity, Bloom post-commit behavior, privacy surfaces, adversarial inputs, and representative real-device behavior. It explicitly keeps new detection intelligence and new screening actions in separately governed v1.1+ scope.
+Files touched: SECURITY-DEVOPS-BUILD-PLAN.md; SignalGate-Pulse-Release-Roadmap.md; PROJECT_LEDGER.md
+Contract alignment: The additions implement the existing Architecture-Contract v4 final engineering principle and release criteria; no runtime behavior, decision action, or invariant was changed.
+Validation: Governance-only diff pending git diff --check, commit, push, and CI.
+Status: Assurance gate is now named and traceable in both the technical build plan and the v1.0 roadmap. Its exit evidence remains open.
+Signature: Manus AI — 2026-08-31

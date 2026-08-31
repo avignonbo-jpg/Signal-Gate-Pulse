@@ -38,6 +38,20 @@ All four are small, independent, and safe to parallelize — none touch the secu
 3.4. **§10.4 — `ShieldStatusGlow` color conversion.** Replace `Color.hashCode()` with `.toArgb()` for the native `Paint` color. Add a one-line regression note (not a full test) since this is a rendering correctness fix, not a security one.
 3.5. **§10.13 — `AppModule.kt` OSI-comment conflict.** Rewrite the `engineModule`/`repositoryModule` doc comments to reference Layer 1–7 by name (per contract §3) instead of the invented "L2/L4/L6" literal-OSI labels. This is a pure documentation fix — confirm no binding order or dependency actually changes, just the comment text.
 
+### Step 3.6 — Pre-Release Screening Assurance Gate (new, release-blocking)
+
+Pulse’s existing call-screening path is the signature capability and must be hardened before v1.0 sign-off, without adding new detection intelligence or user-facing screening actions. Verify the path under cold-process startup, malformed/null Telecom handles, decision-engine exceptions, slow or failed persistence, optional UX failures, source unavailability/staleness, Bloom rebuild and failed-transaction conditions, concurrent calls, and process death after response but before consequence persistence. The required order remains: validate ingress → decide → emit exactly one Telecom response → persist required consequences → dispatch optional UX.
+
+3.6.1. Add pure table-driven response-policy evidence and Android framework/instrumentation evidence for exactly-one response, malformed input, service exceptions, response-before-persistence, and the documented internal timing budget.
+
+3.6.2. Add adversarial source/parser/signature/download/snapshot/rollback coverage proving rejection or last-known-good retention, never partial activation, and proving Bloom mutation is post-commit-only.
+
+3.6.3. Review logs, notifications, crash diagnostics, sync errors, and audit/debug surfaces for unnecessary call-metadata exposure.
+
+3.6.4. Validate Telecom-triggered cold start, recovery, notification privacy, source behavior, and release/minified startup on a representative real device. Attach CI and device evidence to the ledger before closing the gate.
+
+This gate is a v1.0 blocker. Cloud reputation, crowdsourcing, behavioral scoring, expanded STIR/SHAKEN, new screening actions, and multi-device synchronization remain separately governed v1.1+ scope.
+
 ### Step 4 — Phase 4 remainder (UI/onboarding completion)
 
 Per contract §11 Phase 4, beyond the items already folded into Step 3:

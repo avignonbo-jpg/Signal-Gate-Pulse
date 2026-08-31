@@ -276,6 +276,21 @@ SecurityRuleRepository scope review — OPEN, evaluate before implementing Secur
 - [ ] Bloom mutation is provably post-commit-only (insertEntriesAuthoritative/rebuildDerivedIndexes split, with a rollback test)
 
 
+### 4.0.7 — Pre-Release Screening Assurance Gate
+
+The existing CallScreeningService, source lifecycle, persistence, privacy, and release behaviors form Pulse's signature capability and are release-blocking assurance work, not optional post-v1 feature scope. Before broad product expansion or v1.0 sign-off, verify the screening path under cold process startup, malformed or null Telecom handles, decision-engine exceptions, slow or failed persistence, UX failures, source unavailability/staleness, Bloom rebuild and failed-transaction conditions, concurrent calls, and process death after response but before consequence persistence. The required order is: validate ingress → decide → emit exactly one Telecom response → persist required consequences → dispatch optional UX.
+
+The gate must include pure table-driven response-policy evidence, Android framework/instrumentation evidence, adversarial parser/source/signature/rollback coverage, privacy review of logs/notifications/diagnostics, and representative real-device Telecom cold-start and release/minified validation. New screening actions or detection intelligence are outside this gate and require a separate contract-reviewed v1.1 capability plan.
+
+Exit criteria:
+- [ ] Every screening invocation produces exactly one explicit response under null/invalid input and unexpected exceptions.
+- [ ] Response timing is measured against a documented internal budget below the platform ceiling.
+- [ ] Response emission is independent of persistence, notification, and haptic completion.
+- [ ] Source and derived-index failure paths preserve authoritative and last-known-good state.
+- [ ] No reviewed log, notification, diagnostic artifact, or audit surface leaks unnecessary call metadata.
+- [ ] Required JVM/instrumented CI and representative real-device evidence are attached to the ledger.
+
+
 ### 4.1 — Orphans and unreachable UI
 
 
