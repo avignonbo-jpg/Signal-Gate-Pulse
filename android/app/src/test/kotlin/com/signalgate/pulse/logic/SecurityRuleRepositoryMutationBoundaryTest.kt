@@ -29,12 +29,14 @@ class SecurityRuleRepositoryMutationBoundaryTest {
 
         repository.addManualBlock("+15551234567", "User's block reason")
 
-        val entry = argumentCaptor<UnifiedEntryEntity>()
-        verify(dataSourceRepository).insertEntry(entry.capture())
-        assertEquals("+15551234567", entry.firstValue.phoneNumber)
-        assertEquals("BLOCK", entry.firstValue.action)
-        assertEquals(42, entry.firstValue.sourceId)
-        assertEquals("User's block reason", entry.firstValue.metadata)
+        val entries = argumentCaptor<List<UnifiedEntryEntity>>()
+        verify(dataSourceRepository).insertEntriesAuthoritative(entries.capture())
+        verify(dataSourceRepository).rebuildDerivedIndexes()
+        val entry = entries.firstValue.single()
+        assertEquals("+15551234567", entry.phoneNumber)
+        assertEquals("BLOCK", entry.action)
+        assertEquals(42, entry.sourceId)
+        assertEquals("User's block reason", entry.metadata)
     }
 
     @Test
@@ -44,11 +46,13 @@ class SecurityRuleRepositoryMutationBoundaryTest {
 
         repository.addManualAllow("+15551234567", "User's allow reason")
 
-        val entry = argumentCaptor<UnifiedEntryEntity>()
-        verify(dataSourceRepository).insertEntry(entry.capture())
-        assertEquals("ALLOW", entry.firstValue.action)
-        assertEquals(42, entry.firstValue.sourceId)
-        assertEquals("User's allow reason", entry.firstValue.metadata)
+        val entries = argumentCaptor<List<UnifiedEntryEntity>>()
+        verify(dataSourceRepository).insertEntriesAuthoritative(entries.capture())
+        verify(dataSourceRepository).rebuildDerivedIndexes()
+        val entry = entries.firstValue.single()
+        assertEquals("ALLOW", entry.action)
+        assertEquals(42, entry.sourceId)
+        assertEquals("User's allow reason", entry.metadata)
     }
 
     @Test

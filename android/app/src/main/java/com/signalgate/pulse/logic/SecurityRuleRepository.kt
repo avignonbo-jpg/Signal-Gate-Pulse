@@ -28,22 +28,20 @@ import timber.log.Timber
  * Phase 0.1 (Security Control-Plane Integrity): introduced to close the
  * divergence tracked as Known Violation §11.7. BlocklistRepository previously
  * wrote UnifiedEntryEntity rows directly via UnifiedEntryDao, bypassing the
- * Bloom-index chokepoint that DataSourceRepository.insertEntry() maintains
- * for every other write path (federal sync, CSV/XLSX import, contacts
- * allowlist). That meant a manual block/allow could silently diverge from
- * the Bloom filter's view of the world — a direct INV-001 violation.
+ * DataSourceRepository authoritative-write and derived-index boundary used by
+ * other write paths. That meant a manual block/allow could silently diverge
+ * from the Bloom filter's view of the world — a direct INV-001 violation.
  *
- * All manual mutation now routes through DataSourceRepository.insertEntry(),
- * which already owns the DB-write + Bloom-insert + sanitization pairing (see
- * its own class doc). SecurityRuleRepository does not duplicate that
- * pairing — it is a thin, explicit application-boundary wrapper around it,
- * so "which classes may write decision-affecting state" has exactly one
- * answer instead of two.
+ * All manual mutation now routes through DataSourceRepository's explicit
+ * authoritative-write and post-commit rebuild APIs. SecurityRuleRepository
+ * does not duplicate that pairing — it is a thin, explicit application-boundary
+ * wrapper around it, so "which classes may write decision-affecting state" has
+ * exactly one answer instead of two.
  *
  * Call flow (§5.2): UI → ViewModel → SecurityRuleRepository →
- * DataSourceRepository → DAO + Bloom. No repository, ViewModel, receiver, or
- * worker outside this class should call UnifiedEntryDao.insertEntry()
- * directly for a manual/user-facing rule.
+ * DataSourceRepository → authoritative DAO write → committed-state Bloom rebuild.
+ * No repository, ViewModel, receiver, or worker outside this class should call
+ * UnifiedEntryDao.insertEntry() directly for a manual/user-facing rule.
  */
 class SecurityRuleRepository(
     private val dataSourceRepository: DataSourceRepository,
@@ -67,10 +65,10 @@ class SecurityRuleRepository(
     }
 
     /**
-     * Adds a manual block rule via the single insertEntry() chokepoint, so
-     * the Bloom filter and DAO write happen together automatically.
+     * Adds a manual block rule through the authoritative-write boundary, then
+     * rebuilds Bloom-derived indexes after the write completes.
      *
-     * `reason` is passed RAW. DataSourceRepository.insertEntry() sanitizes
+     * `reason` is passed RAW. DataSourceRepository's authoritative insert sanitizes
      * category/metadata internally via SanitizationEngine.sanitizeTextField(),
      * which is NOT idempotent (its quote-escaping doubles up on repeat
      * application). Do not pre-sanitize here — that would double-escape and
@@ -79,54 +77,63 @@ class SecurityRuleRepository(
      * DAO write.
      */
     suspend fun addManualBlock(phoneNumber: String, reason: String = "Manual Block") {
-        dataSourceRepository.insertEntry(
-            UnifiedEntryEntity(
-                phoneNumber = phoneNumber,
-                action = "BLOCK",
-                sourceId = manualSourceId(),
-                category = "Manual",
-                confidence = 100,
-                metadata = reason
+        dataSourceRepository.insertEntriesAuthoritative(
+            listOf(
+                UnifiedEntryEntity(
+                    phoneNumber = phoneNumber,
+                    action = "BLOCK",
+                    sourceId = manualSourceId(),
+                    category = "Manual",
+                    confidence = 100,
+                    metadata = reason
+                )
             )
         )
+        dataSourceRepository.rebuildDerivedIndexes()
     }
 
-    /** See addManualBlock() doc — same single-chokepoint / raw-reason rules apply. */
+    /** See addManualBlock() doc — same authoritative-write / raw-reason rules apply. */
     suspend fun addManualAllow(phoneNumber: String, reason: String = "Manual Allow") {
-        dataSourceRepository.insertEntry(
-            UnifiedEntryEntity(
-                phoneNumber = phoneNumber,
-                action = "ALLOW",
-                sourceId = manualSourceId(),
-                category = "Manual",
-                confidence = 100,
-                metadata = reason
+        dataSourceRepository.insertEntriesAuthoritative(
+            listOf(
+                UnifiedEntryEntity(
+                    phoneNumber = phoneNumber,
+                    action = "ALLOW",
+                    sourceId = manualSourceId(),
+                    category = "Manual",
+                    confidence = 100,
+                    metadata = reason
+                )
             )
         )
+        dataSourceRepository.rebuildDerivedIndexes()
     }
 
     /**
      * Adds an allow rule imported from the contacts provider while preserving
      * the dedicated contacts source attribution. The write still passes through
-     * DataSourceRepository.insertEntry(), which owns sanitization and Bloom
-     * maintenance for every decision-affecting mutation.
+     * DataSourceRepository's authoritative insert, followed by an explicit
+     * post-commit derived-index rebuild.
      */
     suspend fun addContactAllow(phoneNumber: String, sourceId: Int, displayName: String) {
-        dataSourceRepository.insertEntry(
-            UnifiedEntryEntity(
-                phoneNumber = phoneNumber,
-                action = "ALLOW",
-                sourceId = sourceId,
-                category = "Contact",
-                confidence = 100,
-                metadata = displayName
+        dataSourceRepository.insertEntriesAuthoritative(
+            listOf(
+                UnifiedEntryEntity(
+                    phoneNumber = phoneNumber,
+                    action = "ALLOW",
+                    sourceId = sourceId,
+                    category = "Contact",
+                    confidence = 100,
+                    metadata = displayName
+                )
             )
         )
+        dataSourceRepository.rebuildDerivedIndexes()
     }
 
     /**
      * Removes a manual rule. This is the one path that legitimately bypasses
-     * DataSourceRepository: BloomFilterEngine supports insertion only, not
+     * DataSourceRepository's insertion boundary: BloomFilterEngine supports insertion only, not
      * deletion (a normal Bloom filter property, not a bug — see
      * DataSourceRepository.rehydrateBloomFilters()). A deleted rule simply
      * lingers as a possible false-positive in the Bloom filter until the
@@ -171,7 +178,7 @@ class SecurityRuleRepository(
             }
             database.withTransaction {
                 unifiedEntryDao.deleteEntriesBySourceId(sourceId)
-                dataSourceRepository.insertEntries(entries)
+                dataSourceRepository.insertEntriesAuthoritative(entries)
                 database.sourceDao().recordSnapshotAccepted(
                     id = sourceId,
                     timestamp = attemptTime,
@@ -181,11 +188,10 @@ class SecurityRuleRepository(
                 )
             }
 
-            // A Bloom rebuild is derived state. If it cannot complete, the DB
-            // remains authoritative and bloomReady stays false, forcing safe
-            // Room reads rather than changing a decision.
+            // This call is intentionally outside the transaction. The Room commit
+            // above establishes authoritative state before any Bloom mutation.
             try {
-                dataSourceRepository.rehydrateBloomFilters()
+                dataSourceRepository.rebuildDerivedIndexes()
             } catch (e: Exception) {
                 Timber.e(e, "Snapshot accepted but Bloom rebuild deferred for source $sourceId")
             }

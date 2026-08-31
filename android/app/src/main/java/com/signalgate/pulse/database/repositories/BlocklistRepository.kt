@@ -9,10 +9,10 @@ import com.signalgate.pulse.logic.SecurityRuleRepository
  *
  * Phase 0.1 (Security Control-Plane Integrity): this class previously wrote
  * UnifiedEntryEntity rows directly via UnifiedEntryDao, bypassing the
- * Bloom-index chokepoint DataSourceRepository.insertEntry() maintains for
- * every other write path — a confirmed INV-001 violation (§11.7). It is now
- * a thin pass-through to SecurityRuleRepository (Layer 5, §5.2), which owns
- * that chokepoint.
+ * Bloom-derived-index boundary that DataSourceRepository now exposes as an
+ * authoritative write followed by an explicit post-commit rebuild — a confirmed
+ * INV-001 violation (§11.7) before that boundary was enforced. It is now a thin
+ * pass-through to SecurityRuleRepository (Layer 5, §5.2), which owns that sequence.
  *
  * Kept as a facade — rather than deleted outright — only so existing call
  * sites (BlockedNumbersViewModel, ContactsViewModel, PendingCardViewModel)

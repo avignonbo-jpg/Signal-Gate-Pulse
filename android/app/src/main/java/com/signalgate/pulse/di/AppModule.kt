@@ -137,9 +137,9 @@ val repositoryModule = module {
      *
      * Phase 0.1 (Security Control-Plane Integrity, §11.7): SecurityRuleRepository
      * is now the authoritative mutation boundary (§5.2) — it takes
-     * DataSourceRepository (for the Bloom-maintaining insertEntry() chokepoint),
-     * UnifiedEntryDao (for removeRule(), which legitimately bypasses that
-     * chokepoint — see the class doc), and SettingRepository (for the same
+     * DataSourceRepository (for authoritative writes and post-commit derived-index
+     * rebuilding), UnifiedEntryDao (for removeRule(), which legitimately bypasses
+     * the insertion boundary — see the class doc), and SettingRepository (for the same
      * manual_source_id lookup BlocklistRepository used to own directly).
      * BlocklistRepository is now a thin deprecated facade over it — see that
      * class's doc — so its own binding shrinks to a single dependency.

@@ -36,13 +36,15 @@ class SecurityRuleRepositoryContactImportBoundaryTest {
             displayName = "Alice Example"
         )
 
-        val entry = argumentCaptor<UnifiedEntryEntity>()
-        verify(dataSourceRepository).insertEntry(entry.capture())
-        assertEquals("+15551234567", entry.firstValue.phoneNumber)
-        assertEquals("ALLOW", entry.firstValue.action)
-        assertEquals(84, entry.firstValue.sourceId)
-        assertEquals("Contact", entry.firstValue.category)
-        assertEquals(100, entry.firstValue.confidence)
-        assertEquals("Alice Example", entry.firstValue.metadata)
+        val entries = argumentCaptor<List<UnifiedEntryEntity>>()
+        verify(dataSourceRepository).insertEntriesAuthoritative(entries.capture())
+        verify(dataSourceRepository).rebuildDerivedIndexes()
+        val entry = entries.firstValue.single()
+        assertEquals("+15551234567", entry.phoneNumber)
+        assertEquals("ALLOW", entry.action)
+        assertEquals(84, entry.sourceId)
+        assertEquals("Contact", entry.category)
+        assertEquals(100, entry.confidence)
+        assertEquals("Alice Example", entry.metadata)
     }
 }

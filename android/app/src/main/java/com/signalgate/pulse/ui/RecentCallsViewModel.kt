@@ -73,25 +73,31 @@ class RecentCallsViewModel(
 
     fun blockNumber(phoneNumber: String) {
         viewModelScope.launch {
-            dataSourceRepository.insertEntry(
-                UnifiedEntryEntity(
-                    phoneNumber = phoneNumber,
-                    action = "BLOCK",
-                    sourceId = 1 // Source ID 1 is the MANUAL entry source
+            dataSourceRepository.insertEntriesAuthoritative(
+                listOf(
+                    UnifiedEntryEntity(
+                        phoneNumber = phoneNumber,
+                        action = "BLOCK",
+                        sourceId = 1 // Source ID 1 is the MANUAL entry source
+                    )
                 )
             )
+            dataSourceRepository.rebuildDerivedIndexes()
         }
     }
 
     fun whitelistNumber(phoneNumber: String) {
         viewModelScope.launch {
-            dataSourceRepository.insertEntry(
-                UnifiedEntryEntity(
-                    phoneNumber = phoneNumber,
-                    action = "ALLOW",
-                    sourceId = 1 // Source ID 1 is the MANUAL entry source
+            dataSourceRepository.insertEntriesAuthoritative(
+                listOf(
+                    UnifiedEntryEntity(
+                        phoneNumber = phoneNumber,
+                        action = "ALLOW",
+                        sourceId = 1 // Source ID 1 is the MANUAL entry source
+                    )
                 )
             )
+            dataSourceRepository.rebuildDerivedIndexes()
         }
     }
 }

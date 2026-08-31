@@ -32,9 +32,9 @@ import kotlinx.coroutines.flow.map
  * getCallDecision() now checks two BloomFilterEngine instances before touching
  * Room at all — [bloomFilter] for exact phone numbers, [patternBloomFilter] for
  * block-pattern prefixes (see matchesAnyPatternPrefix()). Both are populated at
- * the same chokepoint as everything else in this class, insertEntry(), so every
- * manual rule, contacts import, and federal sync (CSV or FTC JSON API) keeps the
- * filters in sync with the DB automatically — no separate write path to forget.
+ * the explicit post-commit rebuild path in this class, so every manual rule,
+ * contacts import, and federal sync (CSV or FTC JSON API) can update the filters
+ * only after its authoritative DB write has completed.
  *
  * Bloom filters never produce false negatives, only false positives. That means:
  *   - A "not present" bloom result is a hard guarantee — safe to skip the DB read.
@@ -163,26 +163,19 @@ class DataSourceRepository(
      *
      * sanitizeTextField() is NOT idempotent (its SQL quote-escaping doubles up
      * on repeated application), so it must be applied exactly once. No current
-     * caller pre-sanitizes category/metadata before calling insertEntry(), so
-     * sanitizing here — once, centrally — is safe. Do not also sanitize these
-     * fields at call sites that go through this method.
+     * caller pre-sanitizes category/metadata before calling
+     * insertEntriesAuthoritative(), so sanitizing here — once, centrally — is safe.
+     * Do not also sanitize these fields at call sites that go through this method.
      *
-     * Bloom fast-pass (this session): also inserts into the appropriate bloom
-     * filter, chosen by isPattern — pattern rows (e.g. "+1900") go into
-     * [patternBloomFilter] since they're a prefix fragment, not a real number,
-     * and would never exact-match anything if inserted into [bloomFilter]. This
-     * is the same chokepoint every entry type already funnels through, so both
-     * filters stay comprehensive automatically as new rules arrive.
+     * Bloom state is deliberately not mutated here. Callers must invoke
+     * [rebuildDerivedIndexes] only after the authoritative write or surrounding
+     * Room transaction has completed successfully.
      */
-    suspend fun insertEntry(entry: UnifiedEntryEntity) {
-        insertEntries(listOf(entry))
-    }
-
     /**
-     * Inserts a batch in one Room transaction while preserving the same
-     * sanitization and Bloom-filter invariants as insertEntry().
+     * Inserts a batch into the authoritative Room store only. This method never
+     * mutates Bloom state and is safe to call inside a surrounding Room transaction.
      */
-    suspend fun insertEntries(entries: List<UnifiedEntryEntity>) {
+    suspend fun insertEntriesAuthoritative(entries: List<UnifiedEntryEntity>) {
         if (entries.isEmpty()) return
 
         val sanitizedEntries = entries.map { entry ->
@@ -194,13 +187,16 @@ class DataSourceRepository(
         }
 
         entryDao.insertEntries(sanitizedEntries)
-        sanitizedEntries.forEach { sanitized ->
-            if (sanitized.isPattern) {
-                patternBloomFilter.insert(sanitized.phoneNumber)
-            } else {
-                bloomFilter.insert(sanitized.phoneNumber)
-            }
-        }
+    }
+
+    /**
+     * Rebuilds Bloom-derived indexes from the committed authoritative Room state.
+     * Call this only after the transaction containing the corresponding DB writes
+     * has completed successfully. If rebuilding fails, the DB remains authoritative
+     * and [bloomReady] stays false, so reads safely fall back to Room.
+     */
+    suspend fun rebuildDerivedIndexes() {
+        rehydrateBloomFilters()
     }
 
     suspend fun deleteEntry(entry: UnifiedEntryEntity) = entryDao.deleteEntry(entry)

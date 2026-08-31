@@ -111,6 +111,11 @@ class BloomAuthoritativeDecisionTest {
      * struct equality and produced 4 false failures, all with identical
      * action/confidence/source and only the reason annotation differing.
      */
+    private suspend fun insert(entry: UnifiedEntryEntity) {
+        optimizedRepo.insertEntriesAuthoritative(listOf(entry))
+        optimizedRepo.rebuildDerivedIndexes()
+    }
+
     private suspend fun assertDecisionsMatch(number: String, context: String) {
         val optimized = optimizedRepo.getCallDecision(number)
         val authoritative = authoritativeRepo.getCallDecision(number)
@@ -161,10 +166,10 @@ class BloomAuthoritativeDecisionTest {
 
     @Test
     fun warmBloom_normalStadyState_matchesAuthoritative() = runBlocking {
-        optimizedRepo.insertEntry(
+        insert(
             UnifiedEntryEntity(phoneNumber = "+18005550111", action = "BLOCK", sourceId = federalSourceId)
         )
-        optimizedRepo.insertEntry(
+        insert(
             UnifiedEntryEntity(phoneNumber = "+18005550122", action = "ALLOW", sourceId = manualSourceId)
         )
         optimizedRepo.rehydrateBloomFilters()
@@ -177,37 +182,32 @@ class BloomAuthoritativeDecisionTest {
     // --- manual mutation after warm Bloom -----------------------------------
 
     /**
-     * The exact scenario SecurityRuleRepository (Phase 0.1) exists to make
-     * safe: does a brand-new addManualBlock()-equivalent write show up in
-     * the decision immediately, even though the bloom filter was already
-     * warm and had no prior knowledge of this number? insertEntry() is
-     * called directly here (rather than via SecurityRuleRepository) because
-     * this test is scoped to the Bloom/DB divergence question specifically —
-     * SecurityRuleRepository's own routing is Phase 0.1's concern, already
-     * covered by the Koin/DI verification for that item.
+     * A committed authoritative write must not mutate a warm Bloom filter as a
+     * side effect. The derived index is updated only by the explicit rebuild,
+     * which callers invoke after their surrounding transaction completes.
      */
     @Test
-    fun manualMutation_afterWarmBloom_isImmediatelyVisible() = runBlocking {
-        optimizedRepo.insertEntry(
+    fun authoritativeMutation_requiresExplicitRebuild() = runBlocking {
+        insert(
             UnifiedEntryEntity(phoneNumber = "+18005550111", action = "BLOCK", sourceId = federalSourceId)
         )
         optimizedRepo.rehydrateBloomFilters()
 
-        // Brand new number, unknown to either repo's bloom filter until now.
         val freshNumber = "+17275550199"
         assertDecisionsMatch(freshNumber, "before fresh mutation, no rule yet")
 
-        optimizedRepo.insertEntry(
-            UnifiedEntryEntity(phoneNumber = freshNumber, action = "BLOCK", sourceId = federalSourceId)
+        optimizedRepo.insertEntriesAuthoritative(
+            listOf(UnifiedEntryEntity(phoneNumber = freshNumber, action = "BLOCK", sourceId = federalSourceId))
         )
-        // Deliberately no rehydrateBloomFilters() call here — insertEntry()
-        // itself is documented as inserting into the live bloom filter at
-        // the same chokepoint as the DB write, so a fresh mutation must be
-        // visible without a manual rebuild.
-        assertDecisionsMatch(freshNumber, "immediately after fresh mutation, no rebuild")
+        assertEquals(
+            "warm Bloom must not expose an authoritative row before rebuild",
+            "ALLOW",
+            optimizedRepo.getCallDecision(freshNumber).action
+        )
 
-        val decision = optimizedRepo.getCallDecision(freshNumber)
-        assertEquals("fresh BLOCK mutation must actually be enforced, not just match", "BLOCK", decision.action)
+        optimizedRepo.rebuildDerivedIndexes()
+        assertDecisionsMatch(freshNumber, "after explicit post-commit rebuild")
+        assertEquals("fresh BLOCK mutation must be enforced after rebuild", "BLOCK", optimizedRepo.getCallDecision(freshNumber).action)
     }
 
     // --- source replacement after warm Bloom --------------------------------
@@ -226,7 +226,7 @@ class BloomAuthoritativeDecisionTest {
     @Test
     fun sourceReplacement_afterWarmBloom_matchesAuthoritative() = runBlocking {
         val number = "+16465550188"
-        optimizedRepo.insertEntry(
+        insert(
             UnifiedEntryEntity(phoneNumber = number, action = "BLOCK", sourceId = federalSourceId)
         )
         optimizedRepo.rehydrateBloomFilters()
@@ -237,10 +237,13 @@ class BloomAuthoritativeDecisionTest {
         // source, simulating a snapshot replacement changing its mind about
         // this entry.
         db.unifiedEntryDao().deleteEntryByNumberAndSource(number, federalSourceId)
-        optimizedRepo.insertEntry(
-            UnifiedEntryEntity(phoneNumber = number, action = "ALLOW", sourceId = federalSourceId)
+        optimizedRepo.insertEntriesAuthoritative(
+            listOf(UnifiedEntryEntity(phoneNumber = number, action = "ALLOW", sourceId = federalSourceId))
         )
 
+        // The stale old bit may cause an extra Room read, but it cannot change
+        // the authoritative ALLOW result. The snapshot path rebuilds explicitly
+        // after its transaction commits.
         assertDecisionsMatch(number, "after source replacement, before explicit rebuild")
         assertEquals(
             "replaced rule must win — must no longer be BLOCK",
@@ -255,7 +258,7 @@ class BloomAuthoritativeDecisionTest {
     fun explicitRebuild_afterMultipleMutations_matchesAuthoritative() = runBlocking {
         val numbers = listOf("+18005550201", "+18005550202", "+18005550203")
         numbers.forEach {
-            optimizedRepo.insertEntry(UnifiedEntryEntity(phoneNumber = it, action = "BLOCK", sourceId = federalSourceId))
+            insert(UnifiedEntryEntity(phoneNumber = it, action = "BLOCK", sourceId = federalSourceId))
         }
         optimizedRepo.rehydrateBloomFilters()
         optimizedRepo.rehydrateBloomFilters() // explicit second rebuild — must be idempotent, per class doc
@@ -278,7 +281,7 @@ class BloomAuthoritativeDecisionTest {
     @Test
     fun databaseReset_thenRebuild_matchesAuthoritative() = runBlocking {
         val number = "+12125550177"
-        optimizedRepo.insertEntry(UnifiedEntryEntity(phoneNumber = number, action = "BLOCK", sourceId = federalSourceId))
+        insert(UnifiedEntryEntity(phoneNumber = number, action = "BLOCK", sourceId = federalSourceId))
         optimizedRepo.rehydrateBloomFilters()
         assertEquals("BLOCK", optimizedRepo.getCallDecision(number).action)
 
@@ -307,7 +310,7 @@ class BloomAuthoritativeDecisionTest {
      */
     @Test
     fun patternRule_afterWarmBloom_matchesAuthoritative() = runBlocking {
-        optimizedRepo.insertEntry(
+        insert(
             UnifiedEntryEntity(phoneNumber = "+1900", action = "BLOCK", isPattern = true, sourceId = federalSourceId)
         )
         optimizedRepo.rehydrateBloomFilters()

@@ -173,7 +173,8 @@ class DataSyncEngine(
     suspend fun insertEntries(entries: List<UnifiedEntryEntity>) = withContext(Dispatchers.IO) {
         var inserted = 0
         entries.chunked(CHUNK_SIZE).forEach { chunk ->
-            chunk.forEach { entry -> dataSourceRepository.insertEntry(entry) }
+            dataSourceRepository.insertEntriesAuthoritative(chunk)
+            dataSourceRepository.rebuildDerivedIndexes()
             inserted += chunk.size
             Timber.tag(TAG).d("Inserted $inserted / ${entries.size}")
         }
