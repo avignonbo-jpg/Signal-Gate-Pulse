@@ -31,6 +31,7 @@ class SourceActivationTransactionTest {
 
     private lateinit var database: SignalGateDatabase
     private lateinit var repository: SecurityRuleRepository
+    private lateinit var dataSourceRepository: DataSourceRepository
 
     @Before
     fun setUp() {
@@ -38,7 +39,7 @@ class SourceActivationTransactionTest {
         database = Room.inMemoryDatabaseBuilder(context, SignalGateDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        val dataSourceRepository = DataSourceRepository(
+        dataSourceRepository = DataSourceRepository(
             database.sourceDao(),
             database.unifiedEntryDao(),
             BloomFilterEngine(),
@@ -70,6 +71,7 @@ class SourceActivationTransactionTest {
             sourceId = sourceId
         )
         database.unifiedEntryDao().insertEntry(oldEntry)
+        dataSourceRepository.rehydrateBloomFilters()
 
         val result = repository.replaceSourceSnapshot(
             sourceId,
@@ -91,6 +93,16 @@ class SourceActivationTransactionTest {
         assertTrue(
             "last-known-good entry must remain active",
             database.unifiedEntryDao().findEntriesBySourceId(sourceId).any { it.phoneNumber == oldEntry.phoneNumber }
+        )
+        assertEquals(
+            "failed replacement must preserve the prior authoritative BLOCK decision",
+            "BLOCK",
+            dataSourceRepository.getCallDecision(oldEntry.phoneNumber).action
+        )
+        assertEquals(
+            "failed candidate must not become a decision-relevant Bloom false positive",
+            "ALLOW",
+            dataSourceRepository.getCallDecision("+15550000002").action
         )
     }
 

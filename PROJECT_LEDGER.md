@@ -742,3 +742,12 @@ Contract alignment: The additions implement the existing Architecture-Contract v
 Validation: Governance-only diff pending git diff --check, commit, push, and CI.
 Status: Assurance gate is now named and traceable in both the technical build plan and the v1.0 roadmap. Its exit evidence remains open.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Combined snapshot rollback and Bloom decision-integrity coverage added
+Who: Manus AI.
+What: Extended SourceActivationTransactionTest.failedReplacement_preservesLastKnownGoodAndRecordsAttempt to rehydrate a warm Bloom repository before replacement, then verify after the candidate transaction fails that the prior BLOCK decision remains active and the candidate-only number remains ALLOW. This directly combines the existing last-known-good transaction assertion with the derived-index contamination invariant.
+Files touched: android/app/src/androidTest/kotlin/com/signalgate/pulse/logic/SourceActivationTransactionTest.kt; PROJECT_LEDGER.md
+Contract alignment: Covers INV-001 authoritative database state and INV-002 atomic source replacement; production code unchanged.
+Validation: Static diff validation and mandatory instrumented CI pending. Local Android execution remains unavailable because the sandbox has no Android SDK.
+Status: Change is ready for commit/push. Do not mark Bloom post-commit or source-activation gates closed until the instrumented test passes.
+Signature: Manus AI — 2026-08-31
