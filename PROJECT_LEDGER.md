@@ -918,3 +918,11 @@ Files touched: android/app/src/main/java/com/signalgate/pulse/logic/DataSyncEngi
 Validation evidence: Failure reproduced by Compose Metrics analyzer; corrected source passes git diff --check locally. Mandatory Consumer, Instrumented, Compose Metrics, and Dependency/CVE workflows for the fix are pending.
 Status: Prior 0881d47 XLSX batch implementation is not accepted as verified because it failed compilation. Do not mark XLSX transport complete until the corrected commit passes all required workflows and its artifacts are reviewed.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Corrected XLSX handoff architecture drift
+Who: Manus AI.
+What: Compose Metrics reported five errors because runBlocking was used outside MainApplication in DataSyncEngine.streamXLSXFile(). Re-read the complete DataSyncEngine.kt before editing and replaced the coroutine Channel/runBlocking handoff with a capacity-one ArrayBlockingQueue consumed by the coroutine side while the synchronous SAX callback performs bounded put() backpressure. Removed the forbidden runBlocking import and calls.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/DataSyncEngine.kt; PROJECT_LEDGER.md
+Validation: The reported compile error is addressed and the architecture-invalid runBlocking calls are removed. Mandatory Consumer, Instrumented, Compose Metrics, and Dependency/CVE workflows for this correction are pending.
+Status: The prior XLSX batch commit remains unverified due to architecture-drift failure. Do not mark XLSX transport complete until this correction passes architecture drift, all required tests, and artifact checks.
+Signature: Manus AI — 2026-08-31

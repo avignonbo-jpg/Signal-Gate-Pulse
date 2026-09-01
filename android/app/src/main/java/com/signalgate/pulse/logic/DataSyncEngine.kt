@@ -7,7 +7,6 @@ import com.signalgate.pulse.database.repositories.DataSourceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.xml.sax.Attributes
 import org.xml.sax.InputSource
@@ -15,7 +14,7 @@ import org.xml.sax.helpers.DefaultHandler
 import timber.log.Timber
 import java.io.File
 import java.io.InputStream
-import kotlinx.coroutines.channels.Channel
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.zip.ZipInputStream
 import javax.xml.parsers.SAXParserFactory
 
@@ -168,7 +167,7 @@ class DataSyncEngine(
             parserLimits.maxSharedStrings,
             parserLimits.maxExpandedSharedStringBytes
         )
-        val queue = Channel<XlsxBatchMessage>(capacity = 1)
+        val queue = ArrayBlockingQueue<XlsxBatchMessage>(1)
         val producer = kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
             try {
                 val batch = ArrayList<UnifiedEntryEntity>(batchSize)
@@ -178,23 +177,23 @@ class DataSyncEngine(
                 ) { entry ->
                     batch += entry
                     if (batch.size == batchSize) {
-                        runBlocking { queue.send(XlsxBatchMessage.Batch(batch.toList())) }
+                        queue.put(XlsxBatchMessage.Batch(batch.toList()))
                         batch.clear()
                     }
                 }
                 if (batch.isNotEmpty()) {
-                    runBlocking { queue.send(XlsxBatchMessage.Batch(batch.toList())) }
+                    queue.put(XlsxBatchMessage.Batch(batch.toList()))
                 }
-                runBlocking { queue.send(XlsxBatchMessage.Complete) }
+                queue.put(XlsxBatchMessage.Complete)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                runBlocking { queue.send(XlsxBatchMessage.Failed(e)) }
+                queue.put(XlsxBatchMessage.Failed(e))
             }
         }
         try {
             while (true) {
-                when (val message = queue.receive()) {
+                when (val message = queue.take()) {
                     is XlsxBatchMessage.Batch -> onBatch(message.entries)
                     XlsxBatchMessage.Complete -> break
                     is XlsxBatchMessage.Failed -> throw message.cause
