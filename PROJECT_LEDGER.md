@@ -815,3 +815,10 @@ Contract alignment: Addresses the approved assurance plan’s disabled-source li
 Validation: Static source review and git diff --check pending; mandatory CI pending. No network fetch was performed during this change.
 Status: Ready for commit/push. A focused mocked manager test should be added if the existing test harness exposes ReliableSourceManager without invoking live endpoints.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Disabled-source filtering verified by CI and uploaded test report
+Who: Manus AI.
+What: The uploaded test-results(5).zip was inspected. Its Pulse Debug unit-test report contains 84 tests with zero failures and zero errors; DataSyncEngineXlsxLimitTest contains 5 passing tests, including the expanded shared-string, cell-length, and CSV bounded-batch regressions. The disabled-source automatic-sync change also completed successfully.
+Validation evidence: Pulse Consumer CI run 33453969699 for commit 9889080 completed with success. The run passed architecture drift, APK build, unit tests, lint, test/lint artifact uploads, and compose-metrics verification. Uploaded archive timestamp: 2026-09-01T00:19Z.
+Status: Automatic disabled-source filtering is CI-verified. Remaining open items are a focused manager-level regression for the filter if the harness permits it, full XLSX batch transport, FCC endpoint/root-cause verification, and real-device validation.
+Signature: Manus AI — 2026-08-31
