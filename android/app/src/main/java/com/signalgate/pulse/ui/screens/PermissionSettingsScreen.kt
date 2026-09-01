@@ -62,7 +62,7 @@ fun PermissionSettingsScreen(
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
+    ) { _ ->
         val newState = viewModel.permissions.associate { it.permission to (
             ContextCompat.checkSelfPermission(context, it.permission) == PackageManager.PERMISSION_GRANTED
         )}

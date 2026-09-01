@@ -102,7 +102,7 @@ val SignalGateTypography = Typography(
 
 @Composable
 fun SignalGateTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    @Suppress("UNUSED_PARAMETER") darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     // Force dark theme for now as per prototype design

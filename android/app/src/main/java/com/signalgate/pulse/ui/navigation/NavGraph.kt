@@ -21,7 +21,7 @@ import com.signalgate.pulse.ui.screens.BlockAllowListScreen
 fun SignalGateNavGraph(
     navController: NavHostController,
     modifier: Modifier = Modifier,
-    onOpenDrawer: () -> Unit = {}
+    @Suppress("UNUSED_PARAMETER") onOpenDrawer: () -> Unit = {}
 ) {
     NavHost(
         navController = navController,

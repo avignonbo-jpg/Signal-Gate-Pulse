@@ -16,7 +16,7 @@ import com.signalgate.pulse.database.entities.SourceEntity
 object DatabaseInitializer {
 
     suspend fun seedRequiredSources(
-        context: Context,
+        @Suppress("UNUSED_PARAMETER") context: Context,
         sourceDao: SourceDao,
         settingDao: SettingDao
     ) {
