@@ -846,3 +846,11 @@ Files touched: SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md
 Evidence referenced: Consumer CI runs 33452532389 and 33453014941; instrumented run 33451970789; Consumer CI run 33453582541; uploaded test-results(5).zip with 84/84 tests passing; disabled-source CI run 33453969699.
 Status: Governance plan now distinguishes complete evidence from scoped partial work. Continue with the next open assurance item; do not treat the overall Phase 4 gate as closed.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Security-first continuation priority set from full handoff review
+Who: Manus AI.
+What: Re-read the complete MANUS-HANDOFF.md, active SECURITY-DEVOPS-BUILD-PLAN.md, latest ledger evidence, and current CI state. Updated the handoff to prioritize: (1) exactly-one Telecom response and service exception choreography, (2) repository-backed whole-candidate batch activation, (3) XLSX batch transport preserving two-pass resolution and hard limits, (4) FCC sync root-cause verification, and (5) privacy/real-device evidence before lower-risk product cleanup.
+Validation evidence: Policy-test CI and build-plan reconciliation workflows are green; current remote branch includes e579944 and b04528f. No release gate was newly closed by this review.
+Rationale: The first priority has the highest live-call blast radius; ingestion and parser work must not outrank proving that malformed input, timeout, exception, persistence failure, and UX failure still produce exactly one safe Telecom response.
+Status: Handoff priority update is ready for commit/push. Continue with the first priority using a narrowly scoped, network-free service regression.
+Signature: Manus AI — 2026-08-31

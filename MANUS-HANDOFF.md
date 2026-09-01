@@ -60,6 +60,19 @@ The uploaded `test-results(5).zip` independently contained 84 tests with zero fa
 5. **Phase 4.0 edge coverage:** Exactly one Telecom response, response-before-persistence, timing budget, cold start, process death, concurrency, malformed handles, and release/minified behavior remain release blockers where not independently evidenced.
 6. **Privacy and real-device evidence:** Review logs, notifications, crash artifacts, sync errors, debug/audit surfaces, then run representative Telecom cold-start and minified/release tests on a real device.
 
+## Security-first priority order
+
+The next work should follow dependency and blast-radius order rather than feature count:
+
+1. **Close Telecom failure choreography first.** Add service-entry coverage for unexpected engine/response-path exceptions and prove exactly one explicit response, including malformed handles, timeout, persistence failure, and UX failure. This is the highest-risk ingress behavior because a missing or duplicate Telecom response affects the live call outcome.
+2. **Wire repository-backed whole-candidate activation.** Connect the bounded CSV batch API to the authoritative snapshot boundary so batches are an implementation detail, not independently activated partial snapshots. Prove failure discards the entire candidate and post-commit Bloom rebuild occurs once.
+3. **Add equivalent XLSX batch transport.** Preserve two-pass shared-string resolution, hard row/byte/string limits, and full-candidate discard semantics while eliminating the list-returning dataset materialization.
+4. **Root-cause FCC sync behavior.** Instrument `Never/0/Unknown`, verify endpoint/fallback liveness, and document whether the source is fixed or intentionally unavailable before changing product behavior.
+5. **Complete privacy and device evidence.** Review operational surfaces, then validate Telecom cold-start and minified/release behavior on a representative physical device.
+6. **Only after those blockers, resume lower-risk product cleanup and release hardening.** Keep new detection intelligence and new screening actions outside this gate.
+
+Do not reorder item 1 behind parser or UI work: parser safety protects ingestion, but exactly-one-response and failure choreography protect the phone’s signature behavior at the point of consequence.
+
 ## Immediate continuation procedure
 
 First verify `git fetch origin consumer-v1`, the clean working tree, and the remote head. Read the governing files and append a ledger note before or with the next scoped change. Inspect the allowed file scope in the CI guardrails. Make one issue-specific change, run `git diff --check`, inspect the full diff, commit, push, and record the exact CI run and artifact evidence. Do not mark a gate complete from compilation alone. If the Android SDK is unavailable locally, use mandatory GitHub Actions as the Android build/test/lint authority.
