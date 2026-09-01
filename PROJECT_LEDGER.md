@@ -894,3 +894,10 @@ What: Final status check superseded the earlier in-progress snapshot. All four w
 Additional evidence: Ledger-only follow-up commit aac6afc also passed all four workflows: Consumer 33456967592, Instrumented 33456967585, Compose Metrics 33456967605, and Dependency/CVE 33456967570.
 Status: CSV bounded-batch transactional activation is CI-verified. This does not close full XLSX batch transport or the overall Phase 4 assurance gate.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Build plan updated for XLSX batch-transport status
+Who: Manus AI.
+What: Re-read the complete active SECURITY-DEVOPS-BUILD-PLAN.md, complete MANUS-HANDOFF.md, current DataSyncEngineXlsxLimitTest.kt, and latest ledger entries before editing. Updated §4.8.2, §4.8.3, and §4.9.F to distinguish the now-complete CSV streaming/transactional activation path from the still-open XLSX path. The plan records that DataSyncEngine.replaceCsvSnapshot() feeds bounded CSV batches through one authoritative Room transaction, with acceptance and rollback coverage.
+Validation evidence: Commit e2b1c19 passed Consumer CI run 33456749184, Pulse Instrumented Tests run 33456749182, Compose Metrics CI run 33456749222, and Dependency/CVE Scan run 33456749185. The follow-up ledger commit aac6afc also passed all four workflows. No XLSX completion claim was made.
+Status: CSV portion of bounded streaming and repository-backed activation is CI-verified. Remaining §4.8/4.9 work is suspend-aware XLSX batch transport with preserved two-pass shared-string resolution, hard parser limits, and whole-candidate failure semantics.
+Signature: Manus AI — 2026-08-31

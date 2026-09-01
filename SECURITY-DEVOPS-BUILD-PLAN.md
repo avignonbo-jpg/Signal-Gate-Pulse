@@ -351,14 +351,14 @@ Pattern-matching hot path — **✅ COMPLETE**, CI-verified 2026-08-31. On a Blo
 
 
 
-DataSyncEngine is not actually streaming — **PARTIALLY COMPLETE / OPEN**. The CSV path now has `streamCsvFile(..., onBatch)` and emits/discards bounded batches, but the compatibility list-returning API remains and XLSX still uses a two-pass parser that returns a list. Full closure requires suspend-aware XLSX batch transport and repository-backed activation semantics.
+DataSyncEngine is not actually streaming — **CSV PATH COMPLETE / XLSX PATH OPEN**, CI-verified 2026-08-31. CSV now has `streamCsvFile(..., onBatch)` and `replaceCsvSnapshot(...)`, which feeds bounded batches into `SecurityRuleRepository.replaceSourceSnapshotBatched()` so parser failure rolls back the complete candidate. The compatibility list-returning API remains, and XLSX still uses a two-pass parser that returns a list. Full closure requires suspend-aware XLSX batch transport and its equivalent repository-backed activation path. Consumer, instrumented, Compose Metrics, and Dependency/CVE workflows for commit `e2b1c19` all passed: runs `33456749184`, `33456749182`, `33456749222`, and `33456749185`.
 
 
 ### 4.8.3 — Chunked-but-not-batched insert
 
 
 
-Chunked-but-not-batched insert — **PARTIALLY COMPLETE / OPEN**. The new CSV parser exposes bounded batches, but a complete repository-backed batch activation path is not yet wired. Do not close this item until each batch’s database transaction, post-commit derived-index rebuild, and whole-candidate failure semantics are proven together.
+Chunked-but-not-batched insert — **CSV PATH COMPLETE / XLSX PATH OPEN**, CI-verified 2026-08-31. The CSV path now wires bounded parser batches through one authoritative Room transaction, records accepted metadata only after all batches succeed, and rebuilds Bloom only after commit. Instrumented coverage proves both successful CSV activation and rollback after a later producer failure; commit `e2b1c19` passed all mandatory workflows. Do not close the overall item until XLSX uses the same boundary and its failure semantics are proven.
 
 
 ### 4.8.4 — XLSX shared-string limit needs a byte budget, not just a count
@@ -407,7 +407,7 @@ Disabled-source sync test — a disabled source is skipped by the sync worker's 
 
 
 
-Bounded-batch streaming test — **✅ COMPLETE for the CSV path**, Consumer CI-verified 2026-08-31. `DataSyncEngineXlsxLimitTest.csvParser_emitsBoundedBatches` proves three CSV records are delivered as `[2, 1]` batches, without requiring 2M rows. Full 4.8.2 closure remains open until XLSX receives equivalent batch transport. Covers the CSV portion of 4.8.2.
+Bounded-batch streaming test — **✅ COMPLETE for the CSV path**, Consumer and Instrumented CI-verified 2026-08-31. `DataSyncEngineXlsxLimitTest.csvParser_emitsBoundedBatches` proves three CSV records are delivered as `[2, 1]` batches, and `SourceActivationTransactionTest.csvBatches_areActivatedAsOneAuthoritativeSnapshot` proves the batches become one accepted authoritative snapshot. Commit `e2b1c19` passed Consumer run `33456749184` and Instrumented run `33456749182`; the complete 4.8.2/4.9.F closure remains open until XLSX receives equivalent batch transport.
 
 
 ### 4.9.G — EULA persistence-failure test
