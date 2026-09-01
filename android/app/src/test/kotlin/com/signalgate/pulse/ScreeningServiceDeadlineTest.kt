@@ -190,7 +190,7 @@ class ScreeningServiceDeadlineTest {
                 )
             }
         ) {
-            throw TimeoutCancellationException("screening decision timeout")
+            withTimeout(1) { CompletableDeferred<Unit>().await() }
         }
 
         val auditEntry = withTimeout(1_000) { audit.await() }

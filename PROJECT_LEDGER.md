@@ -955,3 +955,11 @@ Contract consulted: yes — Architecture-Contract.md, MANUS-HANDOFF.md, active b
 Validation: pending. Static checks and mandatory remote CI are required; local Gradle execution remains unavailable because the Android SDK is not configured in this sandbox.
 Status: This adds direct timeout-branch coverage to 4.9.A but does not close 4.0.1 or 4.0.7. An elapsed-time measurement under a controlled slow engine, Android framework/instrumentation proof of the actual `onScreenCall` callback, and real-device evidence remain open.
 Signature: Manus AI — 2026-09-01
+
+2026-09-01 — 4.9.A timeout-regression fixture corrected after CI compilation feedback
+Who: Manus AI.
+What: Pulse Consumer CI run `33464807118` reached JVM test compilation and failed only because the test attempted to construct `TimeoutCancellationException` directly, which is not publicly constructible in the project’s coroutine version. Replaced that fixture with `withTimeout(1) { CompletableDeferred<Unit>().await() }`, which raises the same typed timeout from the supported coroutine API and exercises the actual `executeScreeningSafely()` timeout catch branch. No production code, response policy, timing budget, persistence behavior, dependency, schema, or workflow changed.
+Files touched: android/app/src/test/kotlin/com/signalgate/pulse/ScreeningServiceDeadlineTest.kt; PROJECT_LEDGER.md.
+Contract consulted: yes — the complete service implementation and test were re-read against the exact Consumer CI compiler annotation before the minimal correction.
+Validation: pending `git diff --check`, architecture drift, and a fresh mandatory CI run. The preceding test commit is not accepted as 4.9.A evidence because its JVM test source did not compile.
+Signature: Manus AI — 2026-09-01
