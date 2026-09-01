@@ -910,3 +910,11 @@ Contract alignment: Advances the next open §4.8.2/§4.9.F task by removing unbo
 Validation: Complete target files were read before editing; git diff --check pending; local Android Gradle execution remains unavailable because the sandbox has no Android SDK. Mandatory Consumer and Instrumented CI pending.
 Status: Ready for commit/push. Do not mark full XLSX streaming complete until the new batch regression, hard-limit regressions, and repository-backed XLSX activation path pass mandatory CI.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Corrected XLSX batch callback suspension boundary
+Who: Manus AI.
+What: Compose Metrics CI for commit 0881d47 exposed a Kotlin compile error at DataSyncEngine.kt:179 because the synchronous SAX callback attempted to call suspendable Channel.send(). Re-read the complete DataSyncEngine.kt before editing, then corrected the producer handoff with runBlocking around cancellable Channel.send() calls and explicit CancellationException propagation. This keeps SAX parsing synchronous while preserving bounded backpressure and avoids the prior blocking queue approach.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/DataSyncEngine.kt; PROJECT_LEDGER.md
+Validation evidence: Failure reproduced by Compose Metrics analyzer; corrected source passes git diff --check locally. Mandatory Consumer, Instrumented, Compose Metrics, and Dependency/CVE workflows for the fix are pending.
+Status: Prior 0881d47 XLSX batch implementation is not accepted as verified because it failed compilation. Do not mark XLSX transport complete until the corrected commit passes all required workflows and its artifacts are reviewed.
+Signature: Manus AI — 2026-08-31

@@ -5,7 +5,9 @@ import com.signalgate.pulse.data.security.SourceRecordValidator
 import com.signalgate.pulse.database.entities.UnifiedEntryEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.xml.sax.Attributes
 import org.xml.sax.InputSource
@@ -176,14 +178,18 @@ class DataSyncEngine(
                 ) { entry ->
                     batch += entry
                     if (batch.size == batchSize) {
-                        queue.send(XlsxBatchMessage.Batch(batch.toList()))
+                        runBlocking { queue.send(XlsxBatchMessage.Batch(batch.toList())) }
                         batch.clear()
                     }
                 }
-                if (batch.isNotEmpty()) queue.send(XlsxBatchMessage.Batch(batch.toList()))
-                queue.send(XlsxBatchMessage.Complete)
+                if (batch.isNotEmpty()) {
+                    runBlocking { queue.send(XlsxBatchMessage.Batch(batch.toList())) }
+                }
+                runBlocking { queue.send(XlsxBatchMessage.Complete) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                queue.send(XlsxBatchMessage.Failed(e))
+                runBlocking { queue.send(XlsxBatchMessage.Failed(e)) }
             }
         }
         try {
