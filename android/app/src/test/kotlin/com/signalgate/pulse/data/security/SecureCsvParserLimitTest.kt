@@ -1,5 +1,6 @@
 package com.signalgate.pulse.data.security
 
+import java.io.ByteArrayInputStream
 import java.io.InputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -10,6 +11,20 @@ import org.junit.Test
  * limit must be rejected rather than returned as a truncated security dataset.
  */
 class SecureCsvParserLimitTest {
+
+    @Test
+    fun namedColumn_selectsFccCallerIdRatherThanTicketId() {
+        val parsed = mutableListOf<String>()
+        val csv = "Ticket ID,Issue,Caller ID Number,Notes\n" +
+            "1014509,\"Robocalls, prerecorded\",402-382-7125,ignored\n"
+
+        SecureCsvParser().streamColumnByHeader(
+            ByteArrayInputStream(csv.toByteArray()),
+            "Caller ID Number"
+        ) { parsed += it }
+
+        assertEquals(listOf("402-382-7125"), parsed)
+    }
 
     @Test
     fun rowLimitExceeded_isHardFailure() {

@@ -376,11 +376,8 @@ class ReliableSourceManager(
             }
             val bodyStream = response.body?.byteStream() ?: throw Exception("Empty body from $label")
             val stream = CountingInputStream(bodyStream)
-            secureCsvParser.streamRows(stream) { rawNumber ->
+            secureCsvParser.streamColumnByHeader(stream, "Caller ID Number") { rawNumber ->
                 val normalizedRaw = rawNumber.trim()
-                if (recordCount == 0 && normalizedRaw.lowercase() in setOf("phone", "phone_number", "number")) {
-                    return@streamRows
-                }
                 recordCount++
                 maxFieldLength = maxOf(maxFieldLength, normalizedRaw.length)
                 val canonicalNumber = SourceRecordValidator.canonicalizePhone(normalizedRaw)
