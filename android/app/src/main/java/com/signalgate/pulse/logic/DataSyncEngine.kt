@@ -270,6 +270,33 @@ class DataSyncEngine(
     }
 
     /**
+     * Streams an XLSX candidate directly into the authoritative snapshot
+     * transaction. The parser retains its two-pass shared-string resolution,
+     * while the activation boundary guarantees that no partial candidate can
+     * replace the last-known-good snapshot.
+     */
+    suspend fun replaceXlsxSnapshot(
+        inputStream: InputStream,
+        sourceId: Int,
+        securityRuleRepository: SecurityRuleRepository,
+        phoneColumnIndex: Int = DEFAULT_PHONE_COLUMN,
+        snapshotVersion: String? = null,
+        snapshotHash: String? = null,
+        batchSize: Int = CHUNK_SIZE
+    ): SnapshotActivationResult = securityRuleRepository.replaceSourceSnapshotBatched(
+        sourceId = sourceId,
+        snapshotVersion = snapshotVersion,
+        snapshotHash = snapshotHash
+    ) { emitBatch ->
+        streamXLSXFile(
+            inputStream,
+            sourceId,
+            phoneColumnIndex,
+            batchSize
+        ) { batch -> emitBatch(batch) }
+    }
+
+    /**
      * Inserts a list of entries in chunks of CHUNK_SIZE to avoid binding too
      * many parameters in a single Room transaction.
      */

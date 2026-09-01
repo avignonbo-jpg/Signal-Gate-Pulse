@@ -11,6 +11,9 @@ import com.signalgate.pulse.database.entities.UnifiedEntryEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.database.repositories.SettingRepository
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -215,5 +218,45 @@ class SourceActivationTransactionTest {
             SourceLifecycleState.HEALTHY.name,
             database.sourceDao().getSourceById(sourceId)!!.lifecycleState
         )
+    }
+
+    @Test
+    fun xlsxBatches_areActivatedAsOneAuthoritativeSnapshot() = runBlocking {
+        val sourceId = database.sourceDao().insertSource(
+            SourceEntity(name = "XLSX Federal", type = "FTC", pathOrUrl = "test")
+        ).toInt()
+        val engine = DataSyncEngine(dataSourceRepository, SecureCsvParser())
+        val xlsx = xlsxArchive(
+            "<worksheet><sheetData>" +
+                "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>phone</t></is></c></row>" +
+                "<row r=\"2\"><c r=\"A2\" t=\"inlineStr\"><is><t>+15550000010</t></is></c></row>" +
+                "<row r=\"3\"><c r=\"A3\" t=\"inlineStr\"><is><t>+15550000011</t></is></c></row>" +
+                "<row r=\"4\"><c r=\"A4\" t=\"inlineStr\"><is><t>+15550000012</t></is></c></row>" +
+                "</sheetData></worksheet>"
+        )
+
+        val result = engine.replaceXlsxSnapshot(
+            inputStream = ByteArrayInputStream(xlsx),
+            sourceId = sourceId,
+            securityRuleRepository = repository,
+            batchSize = 2
+        )
+
+        assertTrue("XLSX snapshot must be accepted", result is SnapshotActivationResult.Accepted)
+        assertEquals(3, database.unifiedEntryDao().getEntryCountBySourceId(sourceId))
+        assertEquals(
+            SourceLifecycleState.HEALTHY.name,
+            database.sourceDao().getSourceById(sourceId)!!.lifecycleState
+        )
+    }
+
+    private fun xlsxArchive(sheetXml: String): ByteArray {
+        val output = ByteArrayOutputStream()
+        ZipOutputStream(output).use { zip ->
+            zip.putNextEntry(ZipEntry("xl/worksheets/sheet1.xml"))
+            zip.write(sheetXml.toByteArray())
+            zip.closeEntry()
+        }
+        return output.toByteArray()
     }
 }
