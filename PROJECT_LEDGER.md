@@ -872,3 +872,12 @@ Contract alignment: Advances the second security-first priority and addresses th
 Validation: Full target files were read before editing. Static diff validation and mandatory CI pending; local Android Gradle execution remains unavailable because the sandbox has no Android SDK.
 Status: Ready for commit/push. Do not mark §4.8.3 or full §4.8.2 complete until a production caller wires a parser batch stream into this boundary and the complete path passes CI.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — CSV bounded batches wired into authoritative snapshot activation
+Who: Manus AI.
+What: Added DataSyncEngine.replaceCsvSnapshot(), connecting streamCsvFile() to SecurityRuleRepository.replaceSourceSnapshotBatched(). Added instrumented coverage proving three CSV records delivered in bounded batches are accepted as one HEALTHY authoritative snapshot with the complete count recorded.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/DataSyncEngine.kt; android/app/src/androidTest/kotlin/com/signalgate/pulse/logic/SourceActivationTransactionTest.kt; PROJECT_LEDGER.md
+Contract alignment: Advances §4.8.2/§4.8.3 while preserving INV-001/INV-002: parser failures roll back the whole candidate, and Bloom rebuild remains post-commit. XLSX batch transport remains open.
+Validation: Target DataSyncEngine and SourceActivationTransactionTest had been read in full before editing. Static diff validation and mandatory CI pending; local Android Gradle execution remains unavailable because the sandbox has no Android SDK.
+Status: Ready for commit/push. Do not mark complete until the new instrumented acceptance and rollback paths pass mandatory CI.
+Signature: Manus AI — 2026-08-31

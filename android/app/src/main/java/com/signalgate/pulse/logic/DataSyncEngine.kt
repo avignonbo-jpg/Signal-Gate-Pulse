@@ -190,6 +190,26 @@ class DataSyncEngine(
     }
 
     /**
+     * Streams a CSV candidate directly into the authoritative snapshot
+     * transaction. Parser failure or cancellation rolls back every emitted
+     * batch; no caller can accidentally activate a partial candidate.
+     */
+    suspend fun replaceCsvSnapshot(
+        inputStream: InputStream,
+        sourceId: Int,
+        securityRuleRepository: SecurityRuleRepository,
+        snapshotVersion: String? = null,
+        snapshotHash: String? = null,
+        batchSize: Int = CHUNK_SIZE
+    ): SnapshotActivationResult = securityRuleRepository.replaceSourceSnapshotBatched(
+        sourceId = sourceId,
+        snapshotVersion = snapshotVersion,
+        snapshotHash = snapshotHash
+    ) { emitBatch ->
+        streamCsvFile(inputStream, sourceId, batchSize) { batch -> emitBatch(batch) }
+    }
+
+    /**
      * Inserts a list of entries in chunks of CHUNK_SIZE to avoid binding too
      * many parameters in a single Room transaction.
      */

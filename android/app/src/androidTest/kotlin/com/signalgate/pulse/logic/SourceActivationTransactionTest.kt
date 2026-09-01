@@ -4,11 +4,13 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.signalgate.pulse.data.security.BloomFilterEngine
+import com.signalgate.pulse.data.security.SecureCsvParser
 import com.signalgate.pulse.database.SignalGateDatabase
 import com.signalgate.pulse.database.entities.SourceEntity
 import com.signalgate.pulse.database.entities.UnifiedEntryEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.database.repositories.SettingRepository
+import java.io.ByteArrayInputStream
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -190,5 +192,28 @@ class SourceActivationTransactionTest {
         val sourceEntries = database.unifiedEntryDao().findEntriesBySourceId(sourceId)
         assertTrue("failed batch must preserve last-known-good entry", sourceEntries.any { it.phoneNumber == oldEntry.phoneNumber })
         assertTrue("failed batch must not leave candidate entries", sourceEntries.none { it.phoneNumber == "+15550000006" })
+    }
+
+    @Test
+    fun csvBatches_areActivatedAsOneAuthoritativeSnapshot() = runBlocking {
+        val sourceId = database.sourceDao().insertSource(
+            SourceEntity(name = "CSV Federal", type = "FTC", pathOrUrl = "test")
+        ).toInt()
+        val engine = DataSyncEngine(dataSourceRepository, SecureCsvParser())
+        val csv = "+15550000007\n+15550000008\n+15550000009\n"
+
+        val result = engine.replaceCsvSnapshot(
+            inputStream = ByteArrayInputStream(csv.toByteArray()),
+            sourceId = sourceId,
+            securityRuleRepository = repository,
+            batchSize = 2
+        )
+
+        assertTrue("CSV snapshot must be accepted", result is SnapshotActivationResult.Accepted)
+        assertEquals(3, database.unifiedEntryDao().getEntryCountBySourceId(sourceId))
+        assertEquals(
+            SourceLifecycleState.HEALTHY.name,
+            database.sourceDao().getSourceById(sourceId)!!.lifecycleState
+        )
     }
 }
