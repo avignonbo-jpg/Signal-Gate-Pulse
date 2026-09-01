@@ -945,3 +945,13 @@ Contract consulted: yes — Architecture-Contract.md, MANUS-HANDOFF.md, SECURITY
 Validation: Commit `e8b7651` passed Pulse Consumer CI run `33464225113`, including `ScreeningServiceDeadlineTest` (5 tests, failures=0, errors=0); Pulse Instrumented Tests `33464225108`; Compose Metrics CI `33464225109`; and Dependency and CVE Scan `33464225106`. Consumer and instrumented test-result artifacts were present and downloaded for review. The local Android test attempt remains unavailable because this sandbox has no Android SDK path configured; GitHub Actions is the execution authority.
 Status: 4.9.C is now complete with direct CI evidence. This does not complete 4.0.1, 4.0, or 4.0.7: the comprehensive exactly-one-response proof, measured timing budget, response-under-process-death behavior, real-device Telecom/release validation, privacy surface review, FCC/source behavior, and remaining gate exit criteria remain open.
 Signature: Manus AI — 2026-09-01
+
+2026-09-01 — 4.0.1 / 4.9.A decision-timeout failure choreography regression added
+Who: Manus AI.
+What: Added a focused `ScreeningServiceDeadlineTest.decisionTimeout_emitsOneSecurityFailureResponseAndAudits` regression. It drives the service’s typed `TimeoutCancellationException` branch through `executeScreeningSafely()` and `handleSecurityFailure()` and asserts exactly one explicit response, only `SECURITY_FAILURE` emitted to the response factory, and a distinct audit record. This tests the same safe response/audit choreography used when the internal `withTimeout(3_500)` decision bound expires; it does not modify the 3.5-second budget, response policy, persistence order, or production code.
+Files touched: android/app/src/test/kotlin/com/signalgate/pulse/ScreeningServiceDeadlineTest.kt; PROJECT_LEDGER.md.
+Layers touched: Layer 1 Platform/Edge failure-choreography regression coverage and governance documentation only. No production service, domain decision, persistence, schema, dependency, or workflow behavior changed.
+Contract consulted: yes — Architecture-Contract.md, MANUS-HANDOFF.md, active build plan, roadmap, complete service/test implementation, and previous CI artifact results.
+Validation: pending. Static checks and mandatory remote CI are required; local Gradle execution remains unavailable because the Android SDK is not configured in this sandbox.
+Status: This adds direct timeout-branch coverage to 4.9.A but does not close 4.0.1 or 4.0.7. An elapsed-time measurement under a controlled slow engine, Android framework/instrumentation proof of the actual `onScreenCall` callback, and real-device evidence remain open.
+Signature: Manus AI — 2026-09-01
