@@ -136,4 +136,36 @@ class ScreeningServiceDeadlineTest {
         assertEquals(1, failureCount)
         assertEquals("+15551234567", failurePhone)
     }
+
+    @Test
+    fun unexpectedScreeningException_emitsOneSecurityFailureResponseAndAudits() = runBlocking {
+        val responses = mutableListOf<CallResponse>()
+        val emittedActions = mutableListOf<ScreeningAction>()
+        val audit = CompletableDeferred<CallLogEntry>()
+
+        service.executeScreeningSafely(
+            phoneNumber = "+15551234567",
+            onSecurityFailure = { phoneNumber ->
+                service.handleSecurityFailure(
+                    details = details,
+                    phoneNumber = phoneNumber,
+                    respond = { responses += it },
+                    audit = { audit.complete(it) },
+                    responseFactory = { action ->
+                        emittedActions += action
+                        mock()
+                    }
+                )
+            }
+        ) {
+            throw IllegalStateException("unexpected screening failure")
+        }
+
+        val auditEntry = withTimeout(1_000) { audit.await() }
+        assertEquals(1, responses.size)
+        assertEquals(listOf(ScreeningAction.SECURITY_FAILURE), emittedActions)
+        assertEquals("+15551234567", auditEntry.phoneNumber)
+        assertEquals(ScreeningAction.SECURITY_FAILURE.name, auditEntry.decision)
+        assertEquals(CallTier.SECURITY_FAILURE.name, auditEntry.notes)
+    }
 }

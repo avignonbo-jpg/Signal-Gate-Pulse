@@ -926,3 +926,12 @@ Files touched: android/app/src/main/java/com/signalgate/pulse/logic/DataSyncEngi
 Validation: The reported compile error is addressed and the architecture-invalid runBlocking calls are removed. Mandatory Consumer, Instrumented, Compose Metrics, and Dependency/CVE workflows for this correction are pending.
 Status: The prior XLSX batch commit remains unverified due to architecture-drift failure. Do not mark XLSX transport complete until this correction passes architecture drift, all required tests, and artifact checks.
 Signature: Manus AI — 2026-08-31
+
+2026-09-01 — 4.0.1 / 4.9.C unexpected-service-exception response evidence strengthened
+Who: Manus AI.
+What: Reconciled the user-reported `runBlocking` architecture failure against live `consumer-v1`: commit `7dc2dcf` already replaces the rejected `Channel`/`runBlocking` handoff with a capacity-one `ArrayBlockingQueue`, and the remote commit shows all four checks successful. To advance the next highest-risk open assurance evidence without modifying the service’s deliberate response policy, added a focused `ScreeningServiceDeadlineTest` regression. The test drives the exact `executeScreeningSafely` unexpected-exception branch through `handleSecurityFailure` and asserts one emitted Telecom response, only `ScreeningAction.SECURITY_FAILURE` passed to the response factory, and an audit record carrying the original supplied number plus `SECURITY_FAILURE` decision/tier values.
+Files touched: android/app/src/test/kotlin/com/signalgate/pulse/ScreeningServiceDeadlineTest.kt; PROJECT_LEDGER.md.
+Layers touched: Layer 1 Platform/Edge failure-choreography regression coverage and governance documentation only. No production service, domain decision, persistence schema, dependency, or workflow behavior changed.
+Contract consulted: yes — Architecture-Contract.md, MANUS-HANDOFF.md, SECURITY-DEVOPS-BUILD-PLAN.md, SignalGate-Pulse-Release-Roadmap.md, the current service implementation, its direct decision/persistence/UX dependencies, existing response and deadline tests, and the architecture checker were read in full before the test edit.
+Validation: pending. `git diff --check`, architecture drift, and mandatory remote CI must pass before the 4.0.1 / 4.9.C evidence can be counted. This test does not close 4.0 or 4.0.7; timing measurement, real-device Telecom/release evidence, source lifecycle/FCC evidence, privacy review, and the remaining gate criteria are still open.
+Signature: Manus AI — 2026-09-01
