@@ -118,6 +118,9 @@ class ReliableSourceManager(
                 strategy     = FetchStrategy.CSV
             )
         )
+
+        internal fun shouldSyncAutomatically(source: SourceEntity?): Boolean =
+            source?.isEnabled != false
     }
 
     enum class FetchStrategy { FTC_REST_API, CSV }
@@ -165,7 +168,7 @@ class ReliableSourceManager(
         // deliberate manual refresh and is not silently converted into a no-op.
         SOURCES
             .filter { source ->
-                dataSourceRepository.getSourceByName(source.name)?.isEnabled != false
+                shouldSyncAutomatically(dataSourceRepository.getSourceByName(source.name))
             }
             .map { syncSource(it) }
     }

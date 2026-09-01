@@ -830,3 +830,11 @@ Files touched: MANUS-HANDOFF.md; PROJECT_LEDGER.md
 Validation: Branch reconciled at remote head 9631f68 before update. Handoff rewrite is complete; ledger update is being committed and pushed with it.
 Status: Governance records synchronized. Continue with one scoped assurance change at a time and record CI evidence after each push.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Disabled-source automatic-sync predicate covered by unit test
+Who: Manus AI.
+What: Extracted ReliableSourceManager.shouldSyncAutomatically(SourceEntity?) and added a focused unit test proving missing and enabled rows are eligible while explicitly disabled rows are skipped. This tests policy without network access or live endpoint calls.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/ReliableSourceManager.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/ReliableSourceManagerPolicyTest.kt; PROJECT_LEDGER.md
+Validation: Static review and git diff --check pending; mandatory CI pending. Production sync selection remains unchanged apart from using the extracted predicate.
+Status: Ready for commit/push. The test does not replace the need for an integration test proving syncAllFederalSources() performs no endpoint request for a disabled persisted row.
+Signature: Manus AI — 2026-08-31
