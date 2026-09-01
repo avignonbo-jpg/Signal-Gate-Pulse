@@ -822,3 +822,11 @@ What: The uploaded test-results(5).zip was inspected. Its Pulse Debug unit-test 
 Validation evidence: Pulse Consumer CI run 33453969699 for commit 9889080 completed with success. The run passed architecture drift, APK build, unit tests, lint, test/lint artifact uploads, and compose-metrics verification. Uploaded archive timestamp: 2026-09-01T00:19Z.
 Status: Automatic disabled-source filtering is CI-verified. Remaining open items are a focused manager-level regression for the filter if the harness permits it, full XLSX batch transport, FCC endpoint/root-cause verification, and real-device validation.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Future-agent handoff refreshed through commit 9631f68
+Who: Manus AI.
+What: Updated MANUS-HANDOFF.md with the response-path, CI artifact, snapshot/Bloom, bounded SQL pattern, XLSX byte-budget, CSV batch, disabled-source sync changes; exact CI evidence; current open gates; and the next-agent execution procedure.
+Files touched: MANUS-HANDOFF.md; PROJECT_LEDGER.md
+Validation: Branch reconciled at remote head 9631f68 before update. Handoff rewrite is complete; ledger update is being committed and pushed with it.
+Status: Governance records synchronized. Continue with one scoped assurance change at a time and record CI evidence after each push.
+Signature: Manus AI — 2026-08-31
