@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -22,7 +22,7 @@ fun SourceIcon(
 ) {
     val (iconVector, backgroundColor, iconColor) = when (sourceType) {
         SourceType.REMOTE_URL -> Triple(Icons.Default.LocationOn, Color(0x1A00E676), Color(0xFF00E676)) // Green/Globe accent
-        SourceType.LOCAL_CSV -> Triple(Icons.Default.List, Color(0x1A00E5FF), Color(0xFF00E5FF))      // Cyan/Document accent
+        SourceType.LOCAL_CSV -> Triple(Icons.AutoMirrored.Filled.List, Color(0x1A00E5FF), Color(0xFF00E5FF))      // Cyan/Document accent
     }
 
     Box(
