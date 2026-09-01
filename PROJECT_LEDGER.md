@@ -799,3 +799,10 @@ Contract alignment: Addresses SECURITY-DEVOPS-BUILD-PLAN.md §4.8.2/§4.8.3 for 
 Validation: Existing synchronous parser callers were checked and preserved. New CSV batch test verifies [2, 1] emission for three records with batch size two. git diff --check and mandatory CI pending; local Android Gradle execution remains unavailable because the sandbox has no Android SDK.
 Status: Ready for commit/push. Do not claim full dataset streaming closed until the XLSX path and a repository-backed batch activation path are also proven.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Bounded-batch CSV parsing passed Consumer CI
+Who: Manus AI.
+What: The new DataSyncEngine.streamCsvFile() API and SecureCsvParser.streamRowsSuspend() variant passed consumer verification. Existing synchronous parser callers remain compatible; the new path emits and clears bounded batches for downstream consumers.
+Validation evidence: Pulse Consumer CI run 33453582541, job 99688657880, completed successfully on commit 8feda19. Architecture drift, Debug APK build, all 84 JVM unit tests, lint, test/lint artifact uploads, and compose-metrics verification passed.
+Scope boundary: This closes the line-oriented CSV portion of §4.8.2 evidence only. XLSX still uses a two-pass ZIP/shared-string parser and its full batch transport remains open; do not claim complete parser streaming or batched activation yet.
+Signature: Manus AI — 2026-08-31
