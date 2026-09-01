@@ -963,3 +963,13 @@ Files touched: android/app/src/test/kotlin/com/signalgate/pulse/ScreeningService
 Contract consulted: yes — the complete service implementation and test were re-read against the exact Consumer CI compiler annotation before the minimal correction.
 Validation: pending `git diff --check`, architecture drift, and a fresh mandatory CI run. The preceding test commit is not accepted as 4.9.A evidence because its JVM test source did not compile.
 Signature: Manus AI — 2026-09-01
+
+2026-09-01 — 4.9.A typed-timeout fallback CI-verified; measured timing remains open
+Who: Manus AI.
+What: The corrected timeout regression passed all mandatory workflows. `ScreeningServiceDeadlineTest.decisionTimeout_emitsOneSecurityFailureResponseAndAudits` now induces a timeout with the supported `withTimeout` API and proves the service’s timeout branch produces one explicit `SECURITY_FAILURE` response plus a distinct audit record. The build plan records this as partial 4.9.A evidence because it does not yet drive a deliberately slow `CallScreeningEngine` through the production 3.5-second `processScreeningCall` boundary or establish real-device Telecom timing.
+Files touched: SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md.
+Layers touched: Governance/evidence only. No production service, decision policy, persistence boundary, dependency, schema, or workflow behavior changed.
+Contract consulted: yes — Architecture-Contract.md, MANUS-HANDOFF.md, SECURITY-DEVOPS-BUILD-PLAN.md, SignalGate-Pulse-Release-Roadmap.md, the service source, and complete timeout-test context.
+Validation: Commit `721b8f1` passed Pulse Consumer CI `33465291591`, Pulse Instrumented Tests `33465291567`, Compose Metrics CI `33465291580`, and Dependency/CVE Scan `33465291605`. The earlier `718d5b8` test commit is superseded and remains invalid as the direct exception constructor did not compile.
+Status: The timeout fallback is CI-verified. Full 4.0.1 and 4.0.7 remain open pending measured timing, actual Telecom-service evidence, real-device validation, broader privacy review, source/FCC work, and the other named assurance criteria.
+Signature: Manus AI — 2026-09-01

@@ -372,7 +372,7 @@ XLSX shared-string limit needs a byte budget, not just a count — **✅ COMPLET
 
 
 
-CallScreeningService deadline test — decision path is artificially slowed; response still happens within the platform deadline. Covers 4.0.1.
+CallScreeningService deadline test — **PARTIALLY EVIDENCED**, CI-verified typed-timeout fallback 2026-09-01. `ScreeningServiceDeadlineTest.decisionTimeout_emitsOneSecurityFailureResponseAndAudits` drives the supported `withTimeout` path and confirms one explicit `SECURITY_FAILURE` response plus an audit record when the internal decision bound expires. Commit `721b8f1` passed Pulse Consumer CI `33465291591`, Pulse Instrumented Tests `33465291567`, Compose Metrics CI `33465291580`, and Dependency/CVE Scan `33465291605`. Full closure remains open: the suite does not yet measure a deliberately slow `CallScreeningEngine` path against the 3.5-second internal response budget or establish real-device Telecom timing. Covers 4.0.1.
 
 
 ### 4.9.B — Null-handle test
