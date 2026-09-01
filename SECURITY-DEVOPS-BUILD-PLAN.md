@@ -344,28 +344,28 @@ Package identity cleanup — ✅ DONE, 2026-08-14, ahead of this phase Also not 
 
 
 
-Pattern-matching hot path — OPEN. On a Bloom positive-prefix result, the current path calls entryDao.getAllBlockPatternsWithPriority() and iterates every pattern in Kotlin (patterns.firstOrNull { normalized.startsWith(it.phoneNumber) }). At scale (tens of thousands of patterns) this defeats the point of having Bloom as a fast-pass inside a call-screening service with a hard response deadline (see 4.0.1). Move prefix selection into SQL (WHERE :number LIKE phoneNumber || '%' ORDER BY priority DESC LIMIT 1, or an equivalent bounded strategy) so Bloom's role stays "no possible prefix -> skip DB" / "possible -> let SQL find only real candidates," not "possible -> load everything."
+Pattern-matching hot path — **✅ COMPLETE**, CI-verified 2026-08-31. On a Bloom positive-prefix result, `UnifiedEntryDao.findMatchingBlockPatternsWithPriority(normalized)` now filters `:normalized LIKE ue.phoneNumber || '%'` in SQLite and preserves enabled-source and priority ordering. Kotlin no longer materializes every pattern. Consumer CI run `33452532389` passed all 84 JVM tests, lint, architecture checks, and artifact uploads.
 
 
 ### 4.8.2 — DataSyncEngine is not actually streaming
 
 
 
-DataSyncEngine is not actually streaming — OPEN. Despite its own comments describing it as memory-safe, parseCsvFile() accumulates the full dataset into mutableListOf() before returning; XLSX parsing does the same. At the documented 2,000,000-row ceiling (Phase 0.5), this is a real memory risk, not a theoretical one. Change the API shape to genuinely stream: parse(..., onBatch: suspend (List) -> Unit), parsing one record at a time, batching ~500-1000, handing each batch to the authoritative repository, then discarding it before the next batch. This also fixes 4.8.3 below for free, since the batch boundary becomes the natural insert boundary.
+DataSyncEngine is not actually streaming — **PARTIALLY COMPLETE / OPEN**. The CSV path now has `streamCsvFile(..., onBatch)` and emits/discards bounded batches, but the compatibility list-returning API remains and XLSX still uses a two-pass parser that returns a list. Full closure requires suspend-aware XLSX batch transport and repository-backed activation semantics.
 
 
 ### 4.8.3 — Chunked-but-not-batched insert
 
 
 
-Chunked-but-not-batched insert — OPEN. The current insert path does entries.chunked(CHUNK_SIZE).forEach { chunk -> chunk.forEach { entry -> dataSourceRepository.insertEntry(entry) } } — this chunks the in-memory list but still issues one INSERT (and one Bloom mutation) per row. DataSourceRepository.insertEntries() already exists and accepts a list; use it. Combine with 4.0.3's authoritative/derived split so a batch insert is one DB transaction followed by one Bloom rebuild, not N of each.
+Chunked-but-not-batched insert — **PARTIALLY COMPLETE / OPEN**. The new CSV parser exposes bounded batches, but a complete repository-backed batch activation path is not yet wired. Do not close this item until each batch’s database transaction, post-commit derived-index rebuild, and whole-candidate failure semantics are proven together.
 
 
 ### 4.8.4 — XLSX shared-string limit needs a byte budget, not just a count
 
 
 
-XLSX shared-string limit needs a byte budget, not just a count — OPEN. MAX_SHARED_STRINGS = 2,000,000 bounds count but not memory — two million Kotlin String objects plus parser/ZIP overhead can consume hundreds of MB even under the count ceiling. Add maxExpandedSharedStringBytes and maxCellLength alongside the existing count limit, so the actual security principle is "don't let the parser consume an unsafe amount of memory," not just "don't exceed a row count." 4.9 Failure-choreography test coverage — NEW, from the 2026-08-20 review. Roughly 25 test files already exist with strong coverage of the security control-plane; this set specifically targets failure paths under load/latency/malformed-input that the existing suite doesn't yet exercise. None of these are optional relative to 4.0/4.8 above — they are how 4.0/4.8 get to be more than a read-through claim.
+XLSX shared-string limit needs a byte budget, not just a count — **✅ COMPLETE**, CI-verified 2026-08-31. Added `maxExpandedSharedStringBytes` (64 MiB default) and `maxCellLength` (64 KiB default), counted as UTF-8 bytes during SAX accumulation, with typed hard failures and regression coverage. Consumer CI run `33453014941` passed all 84 JVM tests, lint, architecture checks, and artifact uploads. 4.9 Failure-choreography test coverage — NEW, from the 2026-08-20 review. Roughly 25 test files already exist with strong coverage of the security control-plane; this set specifically targets failure paths under load/latency/malformed-input that the existing suite doesn't yet exercise. None of these are optional relative to 4.0/4.8 above — they are how 4.0/4.8 get to be more than a read-through claim.
 
 
 ### 4.9.A — CallScreeningService deadline test
@@ -393,7 +393,7 @@ Service exception test — an unexpected exception during screening produces SEC
 
 
 
-Snapshot failure + Bloom contamination test — a candidate snapshot's DB transaction fails; asserts the prior decision-relevant state is preserved AND that no stale Bloom bit from the failed candidate can affect a subsequent decision. Covers 4.0.3.
+Snapshot failure + Bloom contamination test — **✅ COMPLETE**, instrumented CI-verified 2026-08-31. `SourceActivationTransactionTest` asserts that a failed candidate snapshot preserves the prior authoritative decision and that the candidate-only number remains non-blocking. Pulse Instrumented Tests run `33451970789` passed successfully. Covers 4.0.3.
 
 
 ### 4.9.E — Disabled-source sync test
@@ -407,7 +407,7 @@ Disabled-source sync test — a disabled source is skipped by the sync worker's 
 
 
 
-Bounded-batch streaming test — using a test double, proves the parser processes in bounded batches without materializing the entire dataset in memory. Does not require literally 2M rows. Covers 4.8.2.
+Bounded-batch streaming test — **✅ COMPLETE for the CSV path**, Consumer CI-verified 2026-08-31. `DataSyncEngineXlsxLimitTest.csvParser_emitsBoundedBatches` proves three CSV records are delivered as `[2, 1]` batches, without requiring 2M rows. Full 4.8.2 closure remains open until XLSX receives equivalent batch transport. Covers the CSV portion of 4.8.2.
 
 
 ### 4.9.G — EULA persistence-failure test

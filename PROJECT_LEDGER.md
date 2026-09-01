@@ -838,3 +838,11 @@ Files touched: android/app/src/main/java/com/signalgate/pulse/logic/ReliableSour
 Validation: Static review and git diff --check pending; mandatory CI pending. Production sync selection remains unchanged apart from using the extracted predicate.
 Status: Ready for commit/push. The test does not replace the need for an integration test proving syncAllFederalSources() performs no endpoint request for a disabled persisted row.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Build plan completion statuses reconciled to verified evidence
+Who: Manus AI.
+What: Updated SECURITY-DEVOPS-BUILD-PLAN.md to mark fully evidenced items done: §4.8.1 SQL-bounded pattern matching, §4.8.4 XLSX expanded-memory budgets, §4.9.D snapshot/Bloom contamination coverage, and the CSV portion of §4.9.F bounded-batch testing. Reclassified §4.8.2 and §4.8.3 as partially complete/open because XLSX batch transport and repository-backed whole-candidate activation are not yet proven. The disabled-source manager predicate remains narrower than the full integration criterion and is not marked complete.
+Files touched: SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md
+Evidence referenced: Consumer CI runs 33452532389 and 33453014941; instrumented run 33451970789; Consumer CI run 33453582541; uploaded test-results(5).zip with 84/84 tests passing; disabled-source CI run 33453969699.
+Status: Governance plan now distinguishes complete evidence from scoped partial work. Continue with the next open assurance item; do not treat the overall Phase 4 gate as closed.
+Signature: Manus AI — 2026-08-31
