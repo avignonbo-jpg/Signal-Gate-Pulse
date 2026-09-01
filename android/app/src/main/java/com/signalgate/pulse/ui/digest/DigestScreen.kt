@@ -269,7 +269,7 @@ private fun BlockedCallCard(
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = TextSecondary
                     ),
-                    border = ButtonDefaults.outlinedButtonBorder.copy(
+                    border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
                         brush = androidx.compose.ui.graphics.SolidColor(BorderGlass)
                     ),
                     shape = RoundedCornerShape(10.dp)
