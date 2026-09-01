@@ -983,3 +983,13 @@ Contract consulted: yes — Architecture-Contract.md, MANUS-HANDOFF.md, SECURITY
 Validation: pending `git diff --check`, architecture drift, and mandatory remote CI. Direct endpoint confirmation: configured FCC fallback returned a current CSV with `Ticket ID` as its first header and `Caller ID Number` as the caller-number header; the configured primary download endpoint returned no text to the extractor, so fallback behavior is the relevant live evidence.
 Status: The recorded FCC root cause is addressed with a source-specific fail-closed mapping. This does not close Phase 4.0 or 4.0.7; lifecycle metadata, representative-device validation, and the remaining assurance gate criteria are still open.
 Signature: Manus AI — 2026-09-01
+
+2026-09-01 — FCC named-column remediation CI-verified
+Who: Manus AI.
+What: The explicit `Caller ID Number` mapping and quoted-comma parser regression passed all mandatory workflows. The correction prevents FCC ticket identifiers from being validated as phone candidates and fails closed when the required header is absent, instead of silently applying a positional field assumption.
+Files touched: PROJECT_LEDGER.md.
+Layers touched: Governance/evidence only. The CI-validated Layer 2 parser and Layer 5 source-orchestration correction from `ba759f9` is unchanged.
+Contract consulted: yes — Architecture-Contract.md, MANUS-HANDOFF.md, active build plan, release roadmap, complete parser/source-manager implementation, and their test context.
+Validation: Commit `ba759f9` passed Pulse Consumer CI `33466093304`, Pulse Instrumented Tests `33466093288`, Compose Metrics CI `33466093289`, and Dependency/CVE Scan `33466093293`.
+Status: The reported FCC root cause and its bounded, source-specific remediation are CI-verified. It does not complete Phase 4.0 or 4.0.7; the broader source lifecycle, authority, device, and release-assurance criteria remain open.
+Signature: Manus AI — 2026-09-01
