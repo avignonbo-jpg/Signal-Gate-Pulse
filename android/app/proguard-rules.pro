@@ -28,11 +28,6 @@
 -keep class kotlin.coroutines.** { *; }
 -keep class kotlinx.coroutines.** { *; }
 
-# Keep CallScreeningService (critical - must not be obfuscated)
--keep public class com.signalgate.pulse.CallScreeningService { *; }
-
-# Keep SettingsFragment and anything using SharedPreferences
--keep class com.signalgate.pulse.ui.SettingsFragment { *; }
 
 # Suppress common warnings
 -dontwarn org.jetbrains.annotations.**
