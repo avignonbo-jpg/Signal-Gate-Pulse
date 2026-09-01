@@ -176,6 +176,7 @@ class DataSourceRepository(
      * mutates Bloom state and is safe to call inside a surrounding Room transaction.
      */
     suspend fun insertEntriesAuthoritative(entries: List<UnifiedEntryEntity>) {
+        bloomReady = false
         if (entries.isEmpty()) return
 
         val sanitizedEntries = entries.map { entry ->
