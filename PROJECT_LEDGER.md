@@ -767,3 +767,19 @@ Contract alignment: Addresses SECURITY-DEVOPS-BUILD-PLAN.md §4.8.1 and the appr
 Validation: git diff --check passed; mandatory Consumer CI and instrumented CI pending. Local Android Gradle execution remains unavailable because the sandbox has no Android SDK.
 Status: Ready for commit and push. Existing pattern decision and Bloom equivalence tests are the required regression evidence.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Bounded SQL pattern lookup passed Consumer CI
+Who: Manus AI.
+What: The pattern-matching hot-path change passed mandatory consumer verification. SQLite now filters matching prefixes before Kotlin materialization while preserving source-enabled and priority ordering.
+Validation evidence: Pulse Consumer CI run 33452532389, job 99685396814, completed successfully on commit 5a871c2. Architecture drift, Debug APK build, all 84 JVM unit tests, lint, test/lint artifact uploads, and compose-metrics verification passed. Runtime deprecation annotations remain warnings only.
+Status: The §4.8.1 performance-safety change is CI-verified. The remaining §4.8 streaming/byte-budget work and the broader pre-release gate remain open.
+Signature: Manus AI — 2026-08-31
+
+2026-08-31 — XLSX parser expanded-memory budgets added
+Who: Manus AI.
+What: Added ParserLimits.maxExpandedSharedStringBytes (64 MiB default) and maxCellLength (64 KiB default). SAX handlers now count UTF-8 bytes while accumulating shared-string and phone-cell text and throw typed hard failures before returning partial candidate data. Added regression tests for expanded shared-string overflow and oversized-cell overflow, while preserving existing row, archive-byte, and shared-string-count limits.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/DataSyncEngine.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/DataSyncEngineXlsxLimitTest.kt; PROJECT_LEDGER.md
+Contract alignment: Addresses SECURITY-DEVOPS-BUILD-PLAN.md §4.8.4 and the approved assurance plan’s adversarial parser/memory-safety requirements. No source activation or decision policy was changed.
+Validation: Static source/test review and git diff --check pending; mandatory Consumer CI pending. Local Android Gradle execution remains unavailable because the sandbox has no Android SDK.
+Status: Change is ready for commit and push. Genuine streaming/batched insertion remains a separate open item; these byte budgets reduce expansion risk immediately without changing the parser API.
+Signature: Manus AI — 2026-08-31

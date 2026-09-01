@@ -80,7 +80,9 @@ class DataSyncEngine(
     data class ParserLimits(
         val maxRows: Int = 2_000_000,
         val maxXlsxBytes: Int = 25 * 1024 * 1024,
-        val maxSharedStrings: Int = 2_000_000
+        val maxSharedStrings: Int = 2_000_000,
+        val maxExpandedSharedStringBytes: Int = 64 * 1024 * 1024,
+        val maxCellLength: Int = 64 * 1024
     )
 
     companion object {
@@ -207,13 +209,18 @@ class DataSyncEngine(
         // still force a large allocation before row-limiting ever applies.
         val zipBytes = readBytesWithLimit(inputStream, parserLimits.maxXlsxBytes)
 
-        val sharedStrings = parseSharedStrings(zipBytes, parserLimits.maxSharedStrings)
+        val sharedStrings = parseSharedStrings(
+            zipBytes,
+            parserLimits.maxSharedStrings,
+            parserLimits.maxExpandedSharedStringBytes
+        )
         val entries = parseSheet(
             zipBytes,
             sourceId,
             phoneColumnIndex,
             sharedStrings,
-            parserLimits.maxRows
+            parserLimits.maxRows,
+            parserLimits.maxCellLength
         )
 
         Timber.tag(TAG).i(
@@ -250,13 +257,21 @@ class DataSyncEngine(
      * Returns an indexed list of shared string values.
      * Returns empty list if the entry is absent (all strings may be inline).
      */
-    private fun parseSharedStrings(zipBytes: ByteArray, maxSharedStrings: Int): List<String> {
+    private fun parseSharedStrings(
+        zipBytes: ByteArray,
+        maxSharedStrings: Int,
+        maxExpandedSharedStringBytes: Int
+    ): List<String> {
         val sharedStrings = mutableListOf<String>()
         ZipInputStream(zipBytes.inputStream()).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
                 if (entry.name == SHARED_STRINGS_PATH) {
-                    val handler = SharedStringsHandler(sharedStrings, maxSharedStrings)
+                    val handler = SharedStringsHandler(
+                        sharedStrings,
+                        maxSharedStrings,
+                        maxExpandedSharedStringBytes
+                    )
                     try {
                         SAXParserFactory.newInstance().newSAXParser()
                             .parse(InputSource(zip), handler)
@@ -277,6 +292,7 @@ class DataSyncEngine(
                                 // silently remove security rules from the candidate dataset.
                                 throw cause
                             }
+                            is ExpandedSharedStringsLimitExceededException -> throw cause
                             else -> throw XlsxParseException(
                                 "Unexpected error parsing shared strings", e
                             )
@@ -301,7 +317,8 @@ class DataSyncEngine(
         sourceId: Int,
         phoneColumnIndex: Int,
         sharedStrings: List<String>,
-        maxRows: Int
+        maxRows: Int,
+        maxCellLength: Int
     ): List<UnifiedEntryEntity> {
         val entries = mutableListOf<UnifiedEntryEntity>()
         var sheetFound = false
@@ -316,6 +333,7 @@ class DataSyncEngine(
                         phoneColumnIndex = phoneColumnIndex,
                         sharedStrings = sharedStrings,
                         maxRows = maxRows,
+                        maxCellLength = maxCellLength,
                         onEntry = { e -> entries.add(e) }
                     )
                     try {
@@ -336,6 +354,7 @@ class DataSyncEngine(
                                 // a truncated candidate dataset as if parsing succeeded.
                                 throw cause
                             }
+                            is CellLengthLimitExceededException -> throw cause
                             else -> throw XlsxParseException(
                                 "Unexpected error parsing sheet", e
                             )
@@ -386,11 +405,13 @@ class DataSyncEngine(
      */
     private class SharedStringsHandler(
         private val result: MutableList<String>,
-        private val maxSharedStrings: Int
+        private val maxSharedStrings: Int,
+        private val maxExpandedSharedStringBytes: Int
     ) : DefaultHandler() {
 
         private var inT = false
         private val current = StringBuilder()
+        private var expandedBytes = 0
 
         override fun startElement(uri: String, localName: String, qName: String, attrs: Attributes) {
             when (qName) {
@@ -414,7 +435,15 @@ class DataSyncEngine(
         }
 
         override fun characters(ch: CharArray, start: Int, length: Int) {
-            if (inT) current.append(ch, start, length)
+            if (inT) {
+                expandedBytes += String(ch, start, length).toByteArray(Charsets.UTF_8).size
+                if (expandedBytes > maxExpandedSharedStringBytes) {
+                    throw ExpandedSharedStringsLimitExceededException(
+                        "Expanded shared strings exceeded $maxExpandedSharedStringBytes byte limit"
+                    )
+                }
+                current.append(ch, start, length)
+            }
         }
     }
 
@@ -438,6 +467,7 @@ class DataSyncEngine(
         private val phoneColumnIndex: Int,
         private val sharedStrings: List<String>,
         private val maxRows: Int,
+        private val maxCellLength: Int,
         private val onEntry: (UnifiedEntryEntity) -> Unit
     ) : DefaultHandler() {
 
@@ -451,6 +481,7 @@ class DataSyncEngine(
         private var inV = false
         private var inT = false
         private val cellValue = StringBuilder()
+        private var cellBytes = 0
 
         override fun startElement(uri: String, localName: String, qName: String, attrs: Attributes) {
             when (qName) {
@@ -468,6 +499,7 @@ class DataSyncEngine(
                     currentCellColumn = columnIndexFromRef(ref)
                     currentCellType = attrs.getValue("t") ?: ""
                     cellValue.clear()
+                    cellBytes = 0
                 }
                 "v" -> if (currentCellColumn == phoneColumnIndex) inV = true
                 "t" -> if (currentCellColumn == phoneColumnIndex) inT = true
@@ -493,6 +525,12 @@ class DataSyncEngine(
 
         override fun characters(ch: CharArray, start: Int, length: Int) {
             if ((inV || inT) && currentCellColumn == phoneColumnIndex) {
+                cellBytes += String(ch, start, length).toByteArray(Charsets.UTF_8).size
+                if (cellBytes > maxCellLength) {
+                    throw CellLengthLimitExceededException(
+                        "Cell exceeded $maxCellLength byte limit"
+                    )
+                }
                 cellValue.append(ch, start, length)
             }
         }
@@ -568,4 +606,8 @@ class DataSyncEngine(
      * candidate dataset that looks valid.
      */
     class SharedStringsLimitExceededException(message: String) : Exception(message)
+
+    class ExpandedSharedStringsLimitExceededException(message: String) : Exception(message)
+
+    class CellLengthLimitExceededException(message: String) : Exception(message)
 }

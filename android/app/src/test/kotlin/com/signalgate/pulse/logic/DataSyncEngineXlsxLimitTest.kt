@@ -61,15 +61,55 @@ class DataSyncEngineXlsxLimitTest {
         assertEquals("Shared strings limit 2 reached", failure.message)
     }
 
+    @Test
+    fun expandedSharedStringByteLimitExceeded_isHardFailure() = runBlocking {
+        val engine = engineWithLimits(maxExpandedSharedStringBytes = 8)
+        val xlsx = xlsxArchive(
+            sharedStringsXml = sharedStrings("123456789"),
+            sheetXml = sheetWithSharedRows(0)
+        )
+
+        val failure = try {
+            engine.parseXLSXFile(ByteArrayInputStream(xlsx), sourceId = 7)
+            error("expanded shared-string byte overflow must fail")
+        } catch (expected: DataSyncEngine.ExpandedSharedStringsLimitExceededException) {
+            expected
+        }
+
+        assertEquals(
+            "Expanded shared strings exceeded 8 byte limit",
+            failure.message
+        )
+    }
+
+    @Test
+    fun cellLengthLimitExceeded_isHardFailure() = runBlocking {
+        val engine = engineWithLimits(maxCellLength = 6)
+        val xlsx = xlsxArchive(sheetWithInlineRows("+15550000001"))
+
+        val failure = try {
+            engine.parseXLSXFile(ByteArrayInputStream(xlsx), sourceId = 7)
+            error("cell-length overflow must fail")
+        } catch (expected: DataSyncEngine.CellLengthLimitExceededException) {
+            expected
+        }
+
+        assertEquals("Cell exceeded 6 byte limit", failure.message)
+    }
+
     private fun engineWithLimits(
         maxRows: Int = 2_000_000,
-        maxSharedStrings: Int = 2_000_000
+        maxSharedStrings: Int = 2_000_000,
+        maxExpandedSharedStringBytes: Int = 64 * 1024 * 1024,
+        maxCellLength: Int = 64 * 1024
     ): DataSyncEngine = DataSyncEngine(
         dataSourceRepository = mock<DataSourceRepository>(),
         csvParser = mock(),
         parserLimits = DataSyncEngine.ParserLimits(
             maxRows = maxRows,
-            maxSharedStrings = maxSharedStrings
+            maxSharedStrings = maxSharedStrings,
+            maxExpandedSharedStringBytes = maxExpandedSharedStringBytes,
+            maxCellLength = maxCellLength
         )
     )
 
