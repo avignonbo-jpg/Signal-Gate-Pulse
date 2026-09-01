@@ -806,3 +806,12 @@ What: The new DataSyncEngine.streamCsvFile() API and SecureCsvParser.streamRowsS
 Validation evidence: Pulse Consumer CI run 33453582541, job 99688657880, completed successfully on commit 8feda19. Architecture drift, Debug APK build, all 84 JVM unit tests, lint, test/lint artifact uploads, and compose-metrics verification passed.
 Scope boundary: This closes the line-oriented CSV portion of §4.8.2 evidence only. XLSX still uses a two-pass ZIP/shared-string parser and its full batch transport remains open; do not claim complete parser streaming or batched activation yet.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Automatic federal sync now honors disabled sources
+Who: Manus AI.
+What: Updated ReliableSourceManager.syncAllFederalSources() to inspect each managed source’s persisted row and skip only sources explicitly disabled. Missing rows remain eligible for first-run seeding, and explicit syncSource(sourceId) remains available for deliberate manual refresh.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/ReliableSourceManager.kt; PROJECT_LEDGER.md
+Contract alignment: Addresses the approved assurance plan’s disabled-source lifecycle criterion without changing source activation, last-known-good, or decision semantics.
+Validation: Static source review and git diff --check pending; mandatory CI pending. No network fetch was performed during this change.
+Status: Ready for commit/push. A focused mocked manager test should be added if the existing test harness exposes ReliableSourceManager without invoking live endpoints.
+Signature: Manus AI — 2026-08-31

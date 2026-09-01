@@ -159,7 +159,15 @@ class ReliableSourceManager(
         .build()
 
     suspend fun syncAllFederalSources(): List<SyncResult> = withContext(Dispatchers.IO) {
-        SOURCES.map { syncSource(it) }
+        // Automatic/background sync must honor the persisted enablement toggle.
+        // A missing row is still eligible so the first scheduled run can seed
+        // the managed federal source; explicit syncSource(sourceId) remains a
+        // deliberate manual refresh and is not silently converted into a no-op.
+        SOURCES
+            .filter { source ->
+                dataSourceRepository.getSourceByName(source.name)?.isEnabled != false
+            }
+            .map { syncSource(it) }
     }
 
     suspend fun syncSource(sourceId: Int): SyncResult = withContext(Dispatchers.IO) {
