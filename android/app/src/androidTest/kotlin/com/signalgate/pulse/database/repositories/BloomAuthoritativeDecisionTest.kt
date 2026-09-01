@@ -200,8 +200,8 @@ class BloomAuthoritativeDecisionTest {
             listOf(UnifiedEntryEntity(phoneNumber = freshNumber, action = "BLOCK", sourceId = federalSourceId))
         )
         assertEquals(
-            "warm Bloom must not expose an authoritative row before rebuild",
-            "ALLOW",
+            "during the pre-rebuild window, Room must expose the authoritative BLOCK row",
+            "BLOCK",
             optimizedRepo.getCallDecision(freshNumber).action
         )
 

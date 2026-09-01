@@ -97,8 +97,8 @@ class BloomPostCommitOrderingTest {
         )
 
         assertEquals(
-            "The pre-rebuild decision must use the authoritative lookup path",
-            "ALLOW",
+            "The pre-rebuild decision must use the authoritative Room lookup path",
+            "BLOCK",
             repository.getCallDecision(number).action
         )
 
