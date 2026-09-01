@@ -935,3 +935,13 @@ Layers touched: Layer 1 Platform/Edge failure-choreography regression coverage a
 Contract consulted: yes — Architecture-Contract.md, MANUS-HANDOFF.md, SECURITY-DEVOPS-BUILD-PLAN.md, SignalGate-Pulse-Release-Roadmap.md, the current service implementation, its direct decision/persistence/UX dependencies, existing response and deadline tests, and the architecture checker were read in full before the test edit.
 Validation: pending. `git diff --check`, architecture drift, and mandatory remote CI must pass before the 4.0.1 / 4.9.C evidence can be counted. This test does not close 4.0 or 4.0.7; timing measurement, real-device Telecom/release evidence, source lifecycle/FCC evidence, privacy review, and the remaining gate criteria are still open.
 Signature: Manus AI — 2026-09-01
+
+2026-09-01 — 4.9.C service-exception response evidence CI-verified
+Who: Manus AI.
+What: The focused `ScreeningServiceDeadlineTest` regression for unexpected service-exception choreography passed. The test exercises `executeScreeningSafely()` followed by `handleSecurityFailure()` and verifies exactly one explicit response, only `ScreeningAction.SECURITY_FAILURE` at the response factory, and an auditable failure record retaining the supplied context with distinct `SECURITY_FAILURE` decision and tier values.
+Files touched: SECURITY-DEVOPS-BUILD-PLAN.md; PROJECT_LEDGER.md.
+Layers touched: Governance/evidence only. The previously committed service-path regression is unchanged; no production behavior, domain policy, persistence boundary, dependency, schema, or workflow changed in this evidence-recording commit.
+Contract consulted: yes — Architecture-Contract.md, MANUS-HANDOFF.md, SECURITY-DEVOPS-BUILD-PLAN.md, SignalGate-Pulse-Release-Roadmap.md, and the full service/test context were reviewed before recording completion.
+Validation: Commit `e8b7651` passed Pulse Consumer CI run `33464225113`, including `ScreeningServiceDeadlineTest` (5 tests, failures=0, errors=0); Pulse Instrumented Tests `33464225108`; Compose Metrics CI `33464225109`; and Dependency and CVE Scan `33464225106`. Consumer and instrumented test-result artifacts were present and downloaded for review. The local Android test attempt remains unavailable because this sandbox has no Android SDK path configured; GitHub Actions is the execution authority.
+Status: 4.9.C is now complete with direct CI evidence. This does not complete 4.0.1, 4.0, or 4.0.7: the comprehensive exactly-one-response proof, measured timing budget, response-under-process-death behavior, real-device Telecom/release validation, privacy surface review, FCC/source behavior, and remaining gate exit criteria remain open.
+Signature: Manus AI — 2026-09-01

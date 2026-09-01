@@ -386,7 +386,7 @@ Null-handle test — details.handle == null; asserts an explicit safe response i
 
 
 
-Service exception test — an unexpected exception during screening produces SECURITY_FAILURE, never BLOCK and never a silent non-response. Extends the existing Phase 0.6 engine-level test to the actual service entry point.
+Service exception test — **✅ COMPLETE**, CI-verified 2026-09-01. `ScreeningServiceDeadlineTest.unexpectedScreeningException_emitsOneSecurityFailureResponseAndAudits` drives the service’s unexpected-exception choreography through `executeScreeningSafely()` and `handleSecurityFailure()`, proving exactly one explicit Telecom response, an explicit `SECURITY_FAILURE` action, and a distinct audited failure record. Pulse Consumer CI run `33464225113` passed the five-test suite with zero failures/errors; the same commit passed Pulse Instrumented Tests `33464225108`, Compose Metrics CI `33464225109`, and Dependency/CVE Scan `33464225106`. This adds focused 4.0.1/4.9.C evidence but does not close the broader exactly-one-response, timing, real-device, source, or privacy criteria in 4.0.7.
 
 
 ### 4.9.D — Snapshot failure + Bloom contamination test
