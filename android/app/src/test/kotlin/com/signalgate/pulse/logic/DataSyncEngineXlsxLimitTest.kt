@@ -97,6 +97,29 @@ class DataSyncEngineXlsxLimitTest {
         assertEquals("Cell exceeded 6 byte limit", failure.message)
     }
 
+    @Test
+    fun csvParser_emitsBoundedBatches() = runBlocking {
+        val engine = DataSyncEngine(
+            dataSourceRepository = mock<DataSourceRepository>(),
+            csvParser = com.signalgate.pulse.data.security.SecureCsvParser()
+        )
+        val batches = mutableListOf<List<com.signalgate.pulse.database.entities.UnifiedEntryEntity>>()
+        val csv = "+15550000001\n+15550000002\n+15550000003\n+"
+
+        engine.streamCsvFile(
+            inputStream = ByteArrayInputStream(csv.toByteArray()),
+            sourceId = 7,
+            batchSize = 2,
+            onBatch = { batches += it }
+        )
+
+        assertEquals(listOf(2, 1), batches.map { it.size })
+        assertEquals(
+            listOf("+15550000001", "+15550000002", "+15550000003"),
+            batches.flatten().map { it.phoneNumber }
+        )
+    }
+
     private fun engineWithLimits(
         maxRows: Int = 2_000_000,
         maxSharedStrings: Int = 2_000_000,

@@ -46,6 +46,39 @@ class SecureCsvParser {
             reader.close()
         }
     }
+
+    /**
+     * Suspendable counterpart used when a downstream consumer must flush each
+     * bounded batch before parsing continues. It preserves the same hard row
+     * limit and raw-record contract as [streamRows].
+     */
+    suspend fun streamRowsSuspend(
+        inputStream: InputStream,
+        onRowParsed: suspend (String) -> Unit
+    ) {
+        val reader = BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8))
+        try {
+            var line: String? = reader.readLine()
+            var rowCount = 0
+            while (line != null) {
+                if (line.isNotBlank()) {
+                    val rawNumber = line.split(",").firstOrNull()?.trim()
+                    if (!rawNumber.isNullOrEmpty()) {
+                        if (rowCount >= MAX_ROWS) {
+                            throw CsvResourceLimitExceededException(
+                                "CSV source exceeded $MAX_ROWS valid-row limit"
+                            )
+                        }
+                        onRowParsed(rawNumber)
+                        rowCount++
+                    }
+                }
+                line = reader.readLine()
+            }
+        } finally {
+            reader.close()
+        }
+    }
 }
 
 class CsvResourceLimitExceededException(message: String) : Exception(message)

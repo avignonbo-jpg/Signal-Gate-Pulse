@@ -783,3 +783,19 @@ Contract alignment: Addresses SECURITY-DEVOPS-BUILD-PLAN.md §4.8.4 and the appr
 Validation: Static source/test review and git diff --check pending; mandatory Consumer CI pending. Local Android Gradle execution remains unavailable because the sandbox has no Android SDK.
 Status: Change is ready for commit and push. Genuine streaming/batched insertion remains a separate open item; these byte budgets reduce expansion risk immediately without changing the parser API.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — XLSX expanded-text memory budgets passed Consumer CI
+Who: Manus AI.
+What: The parser now enforces expanded shared-string and per-cell UTF-8 byte budgets with typed hard failures and regression tests.
+Validation evidence: Pulse Consumer CI run 33453014941, job 99686932429, completed successfully on commit 0544431. Architecture drift, Debug APK build, all 84 JVM unit tests, lint, test/lint artifact uploads, and compose-metrics verification passed. Runtime deprecation annotations remain warnings only.
+Status: The §4.8.4 byte-budget hardening is CI-verified. Genuine bounded-batch streaming and batched insertion remain open.
+Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Bounded-batch CSV parsing API added
+Who: Manus AI.
+What: Added DataSyncEngine.streamCsvFile(..., onBatch) with configurable bounded batches and suspendable downstream flushing. The existing parseCsvFile() remains as a compatibility collector, while the new path clears each emitted batch before parsing continues. SecureCsvParser retains its existing synchronous streamRows API for current callers and adds streamRowsSuspend for batch consumers; both preserve the hard valid-row limit and raw-record contract.
+Files touched: android/app/src/main/java/com/signalgate/pulse/data/security/SecureCsvParser.kt; android/app/src/main/java/com/signalgate/pulse/logic/DataSyncEngine.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/DataSyncEngineXlsxLimitTest.kt; PROJECT_LEDGER.md
+Contract alignment: Addresses SECURITY-DEVOPS-BUILD-PLAN.md §4.8.2/§4.8.3 for the already line-oriented CSV path without changing source activation or decision policy. XLSX remains a separate two-pass compatibility API until its batch semantics can preserve hard-failure/transaction guarantees.
+Validation: Existing synchronous parser callers were checked and preserved. New CSV batch test verifies [2, 1] emission for three records with batch size two. git diff --check and mandatory CI pending; local Android Gradle execution remains unavailable because the sandbox has no Android SDK.
+Status: Ready for commit/push. Do not claim full dataset streaming closed until the XLSX path and a repository-backed batch activation path are also proven.
+Signature: Manus AI — 2026-08-31

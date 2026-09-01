@@ -150,22 +150,43 @@ class DataSyncEngine(
     ): List<UnifiedEntryEntity> = withContext(Dispatchers.IO) {
         Timber.tag(TAG).i("CSV parse started — source=$sourceId")
         val entries = mutableListOf<UnifiedEntryEntity>()
-        csvParser.streamRows(inputStream) { rawPhoneNumber ->
-            val phoneNumber = SourceRecordValidator.canonicalizePhone(rawPhoneNumber)
-                ?: return@streamRows
-            entries.add(
-                UnifiedEntryEntity(
-                    phoneNumber = phoneNumber,
-                    action = "BLOCK",
-                    sourceId = sourceId,
-                    category = "CSV Import",
-                    confidence = 75,
-                    metadata = "DataSyncEngine batch"
-                )
-            )
-        }
+        streamCsvFile(inputStream, sourceId) { batch -> entries.addAll(batch) }
         Timber.tag(TAG).i("CSV parse complete — valid=${entries.size} source=$sourceId")
         entries
+    }
+
+    /**
+     * Parses CSV rows and delivers bounded batches. A caller that activates a
+     * source must discard all prior batches if parsing throws; this method never
+     * represents a partial candidate as a successful parse.
+     */
+    suspend fun streamCsvFile(
+        inputStream: InputStream,
+        sourceId: Int,
+        batchSize: Int = CHUNK_SIZE,
+        onBatch: suspend (List<UnifiedEntryEntity>) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        require(batchSize > 0) { "batchSize must be positive" }
+        Timber.tag(TAG).i("CSV batch parse started — source=$sourceId batchSize=$batchSize")
+        val batch = ArrayList<UnifiedEntryEntity>(batchSize)
+        csvParser.streamRowsSuspend(inputStream) { rawPhoneNumber ->
+            val phoneNumber = SourceRecordValidator.canonicalizePhone(rawPhoneNumber)
+                ?: return@streamRowsSuspend
+            batch += UnifiedEntryEntity(
+                phoneNumber = phoneNumber,
+                action = "BLOCK",
+                sourceId = sourceId,
+                category = "CSV Import",
+                confidence = 75,
+                metadata = "DataSyncEngine batch"
+            )
+            if (batch.size == batchSize) {
+                onBatch(batch.toList())
+                batch.clear()
+            }
+        }
+        if (batch.isNotEmpty()) onBatch(batch.toList())
+        Timber.tag(TAG).i("CSV batch parse complete — source=$sourceId")
     }
 
     /**
