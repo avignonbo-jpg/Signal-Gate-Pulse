@@ -53,12 +53,10 @@ The uploaded `test-results(5).zip` independently contained 84 tests with zero fa
 
 ## Current open work
 
-1. **Full XLSX batch transport:** XLSX still uses a two-pass ZIP/shared-string parser and returns a list. Do not claim complete parser streaming until a suspend-aware batch transport preserves hard row/byte/string failures and candidate discard semantics.
-2. **Repository-backed batch activation:** `DataSyncEngine.streamCsvFile()` emits batches but does not itself define a complete source snapshot transaction. Integrate only through the authoritative `SecurityRuleRepository` boundary; never activate partial candidates.
-3. **Focused manager regression:** Add a mocked `ReliableSourceManager` test for automatic disabled-source filtering if the existing harness permits it without live network calls.
-4. **FCC root cause:** Reproduce/instrument the `Never/0/Unknown` sync behavior before implementation changes. Confirm endpoint and fallback liveness.
-5. **Phase 4.0 edge coverage:** Exactly one Telecom response, response-before-persistence, timing budget, cold start, process death, concurrency, malformed handles, and release/minified behavior remain release blockers where not independently evidenced.
-6. **Privacy and real-device evidence:** Review logs, notifications, crash artifacts, sync errors, debug/audit surfaces, then run representative Telecom cold-start and minified/release tests on a real device.
+1. **XLSX authoritative snapshot activation:** The suspend-aware XLSX batch transport and its bounded-batch regression are already present and must not be reimplemented. The remaining work is to add the `DataSyncEngine` wrapper that feeds XLSX batches through `SecurityRuleRepository.replaceSourceSnapshotBatched()` and to add equivalent all-or-nothing activation coverage.
+2. **Bloom pre-commit staleness window:** `DataSourceRepository.insertEntriesAuthoritative()` must invalidate `bloomReady` before any Room work, and the post-write/pre-rebuild behavior must be regression-tested. This is the current highest-priority production security fix.
+3. **Phase 4.0 real-device evidence:** Cold start, process death, concurrency, and release/minified Telecom behavior remain owner-only release blockers requiring a representative physical device. Emulator or Robolectric results must not be reported as equivalent evidence.
+4. **Privacy and operational-surface evidence:** Review logs, notifications, crash artifacts, sync errors, and debug/audit surfaces for unnecessary call metadata or raw phone numbers, then record the owner’s real-device findings.
 
 ## Security-first priority order
 
@@ -72,6 +70,10 @@ The next work should follow dependency and blast-radius order rather than featur
 6. **Only after those blockers, resume lower-risk product cleanup and release hardening.** Keep new detection intelligence and new screening actions outside this gate.
 
 Do not reorder item 1 behind parser or UI work: parser safety protects ingestion, but exactly-one-response and failure choreography protect the phone’s signature behavior at the point of consequence.
+
+## Current execution-plan addendum (2026-09-01)
+
+`CLAUDE-DEVSECOPS-BUILD-PLAN.md` is the current task-level execution plan for this continuation. Its numbered task order, per-task `allowed_files`, `forbidden_actions`, acceptance criteria, and human gates govern the listed work; the architecture contract and append-only ledger remain authoritative where the plan is silent.
 
 ## Immediate continuation procedure
 
