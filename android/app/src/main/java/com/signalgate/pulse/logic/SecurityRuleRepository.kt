@@ -214,6 +214,70 @@ class SecurityRuleRepository(
         }
     }
 
+    /**
+     * Replaces an external source from bounded parser batches inside one
+     * authoritative Room transaction. The producer may suspend between batches,
+     * but no batch is committed independently and any producer/parser failure
+     * rolls back the complete candidate. Bloom is rebuilt only after commit.
+     */
+    suspend fun replaceSourceSnapshotBatched(
+        sourceId: Int,
+        snapshotVersion: String? = null,
+        snapshotHash: String? = null,
+        attemptTimestamp: Long? = null,
+        produceBatches: suspend (suspend (List<UnifiedEntryEntity>) -> Unit) -> Unit
+    ): SnapshotActivationResult {
+        val attemptTime = attemptTimestamp ?: System.currentTimeMillis()
+        return try {
+            if (attemptTimestamp == null) {
+                val updatedRows = database.sourceDao().recordSyncAttempt(sourceId, attemptTime)
+                check(updatedRows == 1) {
+                    "Sync attempt was not recorded for source $sourceId (updatedRows=$updatedRows)"
+                }
+            }
+            var acceptedCount = 0
+            database.withTransaction {
+                unifiedEntryDao.deleteEntriesBySourceId(sourceId)
+                produceBatches { batch ->
+                    check(batch.isNotEmpty()) { "Snapshot activation rejected: empty batch" }
+                    dataSourceRepository.insertEntriesAuthoritative(batch)
+                    acceptedCount += batch.size
+                }
+                check(acceptedCount > 0) {
+                    "Snapshot activation rejected: candidate contains no accepted records"
+                }
+                database.sourceDao().recordSnapshotAccepted(
+                    id = sourceId,
+                    timestamp = attemptTime,
+                    entriesCount = acceptedCount,
+                    snapshotVersion = snapshotVersion,
+                    snapshotHash = snapshotHash
+                )
+            }
+            try {
+                dataSourceRepository.rebuildDerivedIndexes()
+            } catch (e: Exception) {
+                Timber.e(e, "Batched snapshot accepted but Bloom rebuild deferred for source $sourceId")
+            }
+            SnapshotActivationResult.Accepted
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            database.sourceDao().recordSyncFailure(
+                id = sourceId,
+                state = if (e.message?.startsWith("Snapshot activation rejected") == true) {
+                    SourceLifecycleState.REJECTED.name
+                } else {
+                    SourceLifecycleState.FAILED.name
+                },
+                reason = e.message ?: "Batched snapshot activation failed",
+                timestamp = System.currentTimeMillis()
+            )
+            Timber.e(e, "Batched snapshot replace failed for source $sourceId — last-known-good preserved")
+            SnapshotActivationResult.Failed(e)
+        }
+    }
+
     /** Marks a source as syncing before any network or parser work begins. */
     suspend fun beginSourceSync(sourceId: Int): Long {
         val timestamp = System.currentTimeMillis()

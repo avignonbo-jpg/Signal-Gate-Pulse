@@ -160,4 +160,35 @@ class SourceActivationTransactionTest {
             database.unifiedEntryDao().findEntriesBySourceId(sourceId).any { it.phoneNumber == oldEntry.phoneNumber }
         )
     }
+
+    @Test
+    fun batchedReplacement_rollsBackAllBatchesWhenProducerFails() = runBlocking {
+        val sourceId = database.sourceDao().insertSource(
+            SourceEntity(name = "Batched Federal", type = "FTC", pathOrUrl = "test")
+        ).toInt()
+        val oldEntry = UnifiedEntryEntity(
+            phoneNumber = "+15550000005",
+            action = "BLOCK",
+            sourceId = sourceId
+        )
+        database.unifiedEntryDao().insertEntry(oldEntry)
+
+        val result = repository.replaceSourceSnapshotBatched(sourceId) { emitBatch ->
+            emitBatch(
+                listOf(
+                    UnifiedEntryEntity(
+                        phoneNumber = "+15550000006",
+                        action = "BLOCK",
+                        sourceId = sourceId
+                    )
+                )
+            )
+            throw IllegalStateException("producer failed after first batch")
+        }
+
+        assertTrue("batched replacement must report failure", result is SnapshotActivationResult.Failed)
+        val sourceEntries = database.unifiedEntryDao().findEntriesBySourceId(sourceId)
+        assertTrue("failed batch must preserve last-known-good entry", sourceEntries.any { it.phoneNumber == oldEntry.phoneNumber })
+        assertTrue("failed batch must not leave candidate entries", sourceEntries.none { it.phoneNumber == "+15550000006" })
+    }
 }

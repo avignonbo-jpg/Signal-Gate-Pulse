@@ -863,3 +863,12 @@ Contract alignment: First item in the security-first continuation order; strengt
 Validation: Static diff validation and mandatory CI pending. Local Android Gradle execution remains unavailable because the sandbox has no Android SDK.
 Status: Ready for commit/push. Exactly-one response remains dependent on the existing handleSecurityFailure path and should be verified in Android/instrumented execution as well as JVM callback tests.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Transactional batched snapshot activation added
+Who: Manus AI.
+What: Added SecurityRuleRepository.replaceSourceSnapshotBatched(), which deletes the old source snapshot, consumes suspendable bounded batches inside one Room transaction, records accepted metadata/count only after all batches succeed, and rebuilds Bloom only after commit. Added instrumented coverage proving a producer failure after the first batch rolls back both the candidate batch and deletion of the last-known-good entry.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/SecurityRuleRepository.kt; android/app/src/androidTest/kotlin/com/signalgate/pulse/logic/SourceActivationTransactionTest.kt; PROJECT_LEDGER.md
+Contract alignment: Advances the second security-first priority and addresses the repository-backed whole-candidate activation requirement under INV-001/INV-002. The API is intentionally separate from existing list-based compatibility paths; parser wiring and XLSX batch transport remain open.
+Validation: Full target files were read before editing. Static diff validation and mandatory CI pending; local Android Gradle execution remains unavailable because the sandbox has no Android SDK.
+Status: Ready for commit/push. Do not mark §4.8.3 or full §4.8.2 complete until a production caller wires a parser batch stream into this boundary and the complete path passes CI.
+Signature: Manus AI — 2026-08-31
