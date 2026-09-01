@@ -120,6 +120,32 @@ class DataSyncEngineXlsxLimitTest {
         )
     }
 
+    @Test
+    fun xlsxParser_emitsBoundedBatches() = runBlocking {
+        val engine = engineWithLimits()
+        val batches = mutableListOf<List<com.signalgate.pulse.database.entities.UnifiedEntryEntity>>()
+        val xlsx = xlsxArchive(
+            sheetXml = sheetWithInlineRows(
+                "+15550000001",
+                "+15550000002",
+                "+15550000003"
+            )
+        )
+
+        engine.streamXLSXFile(
+            inputStream = ByteArrayInputStream(xlsx),
+            sourceId = 7,
+            batchSize = 2,
+            onBatch = { batches += it }
+        )
+
+        assertEquals(listOf(2, 1), batches.map { it.size })
+        assertEquals(
+            listOf("+15550000001", "+15550000002", "+15550000003"),
+            batches.flatten().map { it.phoneNumber }
+        )
+    }
+
     private fun engineWithLimits(
         maxRows: Int = 2_000_000,
         maxSharedStrings: Int = 2_000_000,

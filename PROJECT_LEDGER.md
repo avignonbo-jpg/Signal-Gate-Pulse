@@ -901,3 +901,12 @@ What: Re-read the complete active SECURITY-DEVOPS-BUILD-PLAN.md, complete MANUS-
 Validation evidence: Commit e2b1c19 passed Consumer CI run 33456749184, Pulse Instrumented Tests run 33456749182, Compose Metrics CI run 33456749222, and Dependency/CVE Scan run 33456749185. The follow-up ledger commit aac6afc also passed all four workflows. No XLSX completion claim was made.
 Status: CSV portion of bounded streaming and repository-backed activation is CI-verified. Remaining §4.8/4.9 work is suspend-aware XLSX batch transport with preserved two-pass shared-string resolution, hard parser limits, and whole-candidate failure semantics.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — XLSX bounded batch emission implemented
+Who: Manus AI.
+What: Added DataSyncEngine.streamXLSXFile(), preserving the two-pass shared-string lookup while emitting sheet entries through a cancellable capacity-one channel and bounded batches. The existing parseXLSXFile() list-returning compatibility API now delegates sheet parsing through a callback-capable helper. Typed row, cell, shared-string, expanded-byte, and structural failures remain propagated; producer cancellation is handled in a finally block.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/DataSyncEngine.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/DataSyncEngineXlsxLimitTest.kt; PROJECT_LEDGER.md
+Contract alignment: Advances the next open §4.8.2/§4.9.F task by removing unbounded candidate-entry accumulation from the XLSX sheet pass. The bounded ZIP byte buffer and shared-string index remain intentional two-pass memory costs. XLSX-to-authoritative snapshot activation wiring remains open and must be the next integration step.
+Validation: Complete target files were read before editing; git diff --check pending; local Android Gradle execution remains unavailable because the sandbox has no Android SDK. Mandatory Consumer and Instrumented CI pending.
+Status: Ready for commit/push. Do not mark full XLSX streaming complete until the new batch regression, hard-limit regressions, and repository-backed XLSX activation path pass mandatory CI.
+Signature: Manus AI — 2026-08-31

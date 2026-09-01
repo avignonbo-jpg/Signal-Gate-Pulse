@@ -5,6 +5,7 @@ import com.signalgate.pulse.data.security.SourceRecordValidator
 import com.signalgate.pulse.database.entities.UnifiedEntryEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.xml.sax.Attributes
 import org.xml.sax.InputSource
@@ -12,6 +13,7 @@ import org.xml.sax.helpers.DefaultHandler
 import timber.log.Timber
 import java.io.File
 import java.io.InputStream
+import kotlinx.coroutines.channels.Channel
 import java.util.zip.ZipInputStream
 import javax.xml.parsers.SAXParserFactory
 
@@ -141,6 +143,59 @@ class DataSyncEngine(
         )
         file.inputStream().use { stream ->
             parseXlsxFromStream(stream, sourceId, phoneColumnIndex)
+        }
+    }
+
+    /**
+     * Parses XLSX sheet entries and emits bounded batches with backpressure.
+     * Shared strings remain indexed for two-pass resolution, while parsed phone
+     * entries are not accumulated as a complete candidate list. Parser failures
+     * propagate so an activation boundary can discard all emitted batches.
+     */
+    suspend fun streamXLSXFile(
+        inputStream: InputStream,
+        sourceId: Int,
+        phoneColumnIndex: Int = DEFAULT_PHONE_COLUMN,
+        batchSize: Int = CHUNK_SIZE,
+        onBatch: suspend (List<UnifiedEntryEntity>) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        require(batchSize > 0) { "batchSize must be positive" }
+        val zipBytes = readBytesWithLimit(inputStream, parserLimits.maxXlsxBytes)
+        val sharedStrings = parseSharedStrings(
+            zipBytes,
+            parserLimits.maxSharedStrings,
+            parserLimits.maxExpandedSharedStringBytes
+        )
+        val queue = Channel<XlsxBatchMessage>(capacity = 1)
+        val producer = kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val batch = ArrayList<UnifiedEntryEntity>(batchSize)
+                parseSheetWithCallback(
+                    zipBytes, sourceId, phoneColumnIndex, sharedStrings,
+                    parserLimits.maxRows, parserLimits.maxCellLength
+                ) { entry ->
+                    batch += entry
+                    if (batch.size == batchSize) {
+                        queue.send(XlsxBatchMessage.Batch(batch.toList()))
+                        batch.clear()
+                    }
+                }
+                if (batch.isNotEmpty()) queue.send(XlsxBatchMessage.Batch(batch.toList()))
+                queue.send(XlsxBatchMessage.Complete)
+            } catch (e: Exception) {
+                queue.send(XlsxBatchMessage.Failed(e))
+            }
+        }
+        try {
+            while (true) {
+                when (val message = queue.receive()) {
+                    is XlsxBatchMessage.Batch -> onBatch(message.entries)
+                    XlsxBatchMessage.Complete -> break
+                    is XlsxBatchMessage.Failed -> throw message.cause
+                }
+            }
+        } finally {
+            producer.cancel()
         }
     }
 
@@ -362,6 +417,21 @@ class DataSyncEngine(
         maxCellLength: Int
     ): List<UnifiedEntryEntity> {
         val entries = mutableListOf<UnifiedEntryEntity>()
+        parseSheetWithCallback(
+            zipBytes, sourceId, phoneColumnIndex, sharedStrings, maxRows, maxCellLength
+        ) { entry -> entries.add(entry) }
+        return entries
+    }
+
+    private fun parseSheetWithCallback(
+        zipBytes: ByteArray,
+        sourceId: Int,
+        phoneColumnIndex: Int,
+        sharedStrings: List<String>,
+        maxRows: Int,
+        maxCellLength: Int,
+        onEntry: (UnifiedEntryEntity) -> Unit
+    ) {
         var sheetFound = false
 
         ZipInputStream(zipBytes.inputStream()).use { zip ->
@@ -375,30 +445,20 @@ class DataSyncEngine(
                         sharedStrings = sharedStrings,
                         maxRows = maxRows,
                         maxCellLength = maxCellLength,
-                        onEntry = { e -> entries.add(e) }
+                        onEntry = onEntry
                     )
                     try {
                         SAXParserFactory.newInstance().newSAXParser()
                             .parse(InputSource(zip), handler)
                     } catch (e: Exception) {
-                        // SAX wraps exceptions thrown from handler callbacks in SAXException
-                        // before they reach this catch site. Unwrap to recover the typed
-                        // limit exception — failing to do so lets a truncated candidate
-                        // dataset pass as a valid parse result, a hard security violation.
                         val cause = unwrapSaxException(e)
                         when (cause) {
                             is RowLimitExceededException -> {
-                                Timber.tag(TAG).w(
-                                    "Row limit $maxRows reached — ${entries.size} entries collected"
-                                )
-                                // A row limit is a hard security failure. Do not return
-                                // a truncated candidate dataset as if parsing succeeded.
+                                Timber.tag(TAG).w("Row limit $maxRows reached")
                                 throw cause
                             }
                             is CellLengthLimitExceededException -> throw cause
-                            else -> throw XlsxParseException(
-                                "Unexpected error parsing sheet", e
-                            )
+                            else -> throw XlsxParseException("Unexpected error parsing sheet", e)
                         }
                     }
                     break
@@ -410,10 +470,9 @@ class DataSyncEngine(
         if (!sheetFound) {
             throw XlsxParseException(
                 "xl/worksheets/sheet1.xml not found in XLSX archive — " +
-                "file may be corrupt or not a valid XLSX"
+                    "file may be corrupt or not a valid XLSX"
             )
         }
-        return entries
     }
 
 
@@ -651,4 +710,10 @@ class DataSyncEngine(
     class ExpandedSharedStringsLimitExceededException(message: String) : Exception(message)
 
     class CellLengthLimitExceededException(message: String) : Exception(message)
+
+    private sealed interface XlsxBatchMessage {
+        data class Batch(val entries: List<UnifiedEntryEntity>) : XlsxBatchMessage
+        data class Failed(val cause: Exception) : XlsxBatchMessage
+        data object Complete : XlsxBatchMessage
+    }
 }
