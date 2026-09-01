@@ -91,7 +91,7 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
         Timber.d("onScreenCall: screening request received")
 
         launch {
-            try {
+            executeScreeningSafely(phoneNumber, onSecurityFailure) {
                 // Resolve dependencies before the measured decision begins, but keep
                 // all post-response work behind the explicit service-owned scope.
                 val engine = screeningEngine
@@ -118,13 +118,29 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
                     },
                     dispatchUx = ::dispatchDecisionUx
                 )
-            } catch (e: TimeoutCancellationException) {
-                Timber.e(e, "SECURITY_FAILURE — screening decision exceeded internal deadline")
-                onSecurityFailure(phoneNumber)
-            } catch (e: Exception) {
-                Timber.e(e, "SECURITY_FAILURE — unhandled screening error")
-                onSecurityFailure(phoneNumber)
             }
+        }
+    }
+
+    /**
+     * Converts any unexpected screening failure into one explicit security
+     * failure callback. Keeping this choreography separate prevents a future
+     * change in dependency resolution or consequence handling from silently
+     * bypassing the Telecom response fallback.
+     */
+    internal suspend fun executeScreeningSafely(
+        phoneNumber: String,
+        onSecurityFailure: (String) -> Unit,
+        work: suspend () -> Unit
+    ) {
+        try {
+            work()
+        } catch (e: TimeoutCancellationException) {
+            Timber.e(e, "SECURITY_FAILURE — screening decision exceeded internal deadline")
+            onSecurityFailure(phoneNumber)
+        } catch (e: Exception) {
+            Timber.e(e, "SECURITY_FAILURE — unhandled screening error")
+            onSecurityFailure(phoneNumber)
         }
     }
 

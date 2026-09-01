@@ -854,3 +854,12 @@ Validation evidence: Policy-test CI and build-plan reconciliation workflows are 
 Rationale: The first priority has the highest live-call blast radius; ingestion and parser work must not outrank proving that malformed input, timeout, exception, persistence failure, and UX failure still produce exactly one safe Telecom response.
 Status: Handoff priority update is ready for commit/push. Continue with the first priority using a narrowly scoped, network-free service regression.
 Signature: Manus AI — 2026-08-31
+
+2026-08-31 — Service exception choreography extracted and regression-tested
+Who: Manus AI.
+What: Extracted SignalGateCallScreeningService.executeScreeningSafely() so unexpected screening exceptions and decision timeouts consistently route through one explicit security-failure callback. Added a regression proving an unexpected screening exception invokes that callback exactly once with the original phone context. Existing null-handle, persistence-failure, and response-before-persistence tests remain unchanged.
+Files touched: android/app/src/main/java/com/signalgate/pulse/SignalGateCallScreeningService.kt; android/app/src/test/kotlin/com/signalgate/pulse/ScreeningServiceDeadlineTest.kt; PROJECT_LEDGER.md
+Contract alignment: First item in the security-first continuation order; strengthens 4.0.1/4.0.7 failure choreography without changing the deliberate SECURITY_FAILURE Telecom policy.
+Validation: Static diff validation and mandatory CI pending. Local Android Gradle execution remains unavailable because the sandbox has no Android SDK.
+Status: Ready for commit/push. Exactly-one response remains dependent on the existing handleSecurityFailure path and should be verified in Android/instrumented execution as well as JVM callback tests.
+Signature: Manus AI — 2026-08-31

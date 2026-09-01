@@ -117,4 +117,23 @@ class ScreeningServiceDeadlineTest {
         assertEquals(ScreeningAction.SECURITY_FAILURE.name, auditEntry.decision)
         assertEquals(CallTier.SECURITY_FAILURE.name, auditEntry.notes)
     }
+
+    @Test
+    fun unexpectedScreeningException_invokesSecurityFailureExactlyOnce() = runBlocking {
+        var failureCount = 0
+        var failurePhone: String? = null
+
+        service.executeScreeningSafely(
+            phoneNumber = "+15551234567",
+            onSecurityFailure = { phoneNumber ->
+                failureCount++
+                failurePhone = phoneNumber
+            }
+        ) {
+            throw IllegalStateException("unexpected screening failure")
+        }
+
+        assertEquals(1, failureCount)
+        assertEquals("+15551234567", failurePhone)
+    }
 }
