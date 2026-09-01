@@ -16,8 +16,8 @@ import org.junit.runner.RunWith
 
 /**
  * Verifies the write-side INV-001 boundary: Room is authoritative and Bloom is
- * derived. A committed authoritative write is invisible to a warm Bloom fast-pass
- * until rebuildDerivedIndexes() is invoked explicitly after the write completes.
+ * derived. During the post-write/pre-rebuild window, Bloom is unavailable to the
+ * fast-pass and reads must fall through to authoritative Room.
  */
 @RunWith(AndroidJUnit4::class)
 class BloomPostCommitOrderingTest {
@@ -55,6 +55,35 @@ class BloomPostCommitOrderingTest {
     }
 
     @Test
+    fun authoritativeWrite_duringWindow_roomIsConsulted_notBloomFastPass() = runBlocking {
+        repository.rehydrateBloomFilters()
+        val number = "+18005550888"
+
+        repository.insertEntriesAuthoritative(
+            listOf(
+                UnifiedEntryEntity(
+                    phoneNumber = number,
+                    action = "BLOCK",
+                    sourceId = sourceId
+                )
+            )
+        )
+
+        assertEquals(
+            "During the post-write/pre-rebuild window, Room must return the committed BLOCK",
+            "BLOCK",
+            repository.getCallDecision(number).action
+        )
+
+        repository.rebuildDerivedIndexes()
+        assertEquals(
+            "Rebuild must preserve the authoritative BLOCK decision",
+            "BLOCK",
+            repository.getCallDecision(number).action
+        )
+    }
+
+    @Test
     fun authoritativeWrite_doesNotMutateWarmBloom_untilExplicitRebuild() = runBlocking {
         val number = "+18005550999"
         repository.insertEntriesAuthoritative(
@@ -68,7 +97,7 @@ class BloomPostCommitOrderingTest {
         )
 
         assertEquals(
-            "Warm Bloom must not claim a newly committed row before rebuild",
+            "The pre-rebuild decision must use the authoritative lookup path",
             "ALLOW",
             repository.getCallDecision(number).action
         )
