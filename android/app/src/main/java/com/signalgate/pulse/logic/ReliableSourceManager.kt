@@ -345,7 +345,7 @@ class ReliableSourceManager(
             malformedRecordCount = malformed,
             fetchedAt = body.fetchedAt,
             expectedContentTypes = setOf("application/json", "text/plain"),
-            snapshotVersion = json.optString("generated_at", null),
+            snapshotVersion = if (json.has("generated_at")) json.getString("generated_at") else null,
             snapshotHash = sha256Hex(body.bytes)
         )
     }
