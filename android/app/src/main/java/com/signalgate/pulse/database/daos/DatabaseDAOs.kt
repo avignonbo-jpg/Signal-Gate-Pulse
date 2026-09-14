@@ -62,6 +62,18 @@ interface SourceDao {
 }
 
 /**
+ * Lightweight projection of just the two columns Bloom filter rehydration
+ * reads (see DataSourceRepository.rehydrateBloomFilters()). Room maps query
+ * results straight into this instead of a full UnifiedEntryEntity, so a page
+ * of rows doesn't also carry category/metadata/confidence/riskLevel/etc that
+ * rehydration never touches.
+ */
+data class PhoneNumberPatternProjection(
+    val phoneNumber: String,
+    val isPattern: Boolean
+)
+
+/**
  * DAO for UnifiedEntryEntity operations.
  */
 @Dao
@@ -104,6 +116,28 @@ interface UnifiedEntryDao {
 
     @Query("SELECT * FROM unified_entries")
     suspend fun getAllEntries(): List<UnifiedEntryEntity>
+
+    /**
+     * Paged phoneNumber/isPattern projection, ordered by id, for Bloom filter
+     * rehydration (see DataSourceRepository.rehydrateBloomFilters()).
+     *
+     * getAllEntries() above materializes the entire table — every column, of
+     * every row — as one in-memory List before a caller can process a single
+     * element. At the 500,000-row capacity BloomFilterEngine is sized for,
+     * that one-shot allocation is what was showing up as sustained young-GC
+     * churn and native-alloc pressure during startup and after every rule
+     * change. This query lets the caller pull the table LIMIT/OFFSET-style,
+     * a bounded page at a time, so peak heap stays flat regardless of table
+     * size — the same streaming approach SecureCsvParser already uses for
+     * large source imports rather than reading a whole file into memory.
+     *
+     * ORDER BY id keeps paging stable across calls: rows already paged past
+     * keep their position even if a write lands mid-rehydration, so a new
+     * row either appears in a later page or not at all this pass — it can
+     * never cause an already-read row to be skipped or duplicated.
+     */
+    @Query("SELECT phoneNumber, isPattern FROM unified_entries ORDER BY id LIMIT :limit OFFSET :offset")
+    suspend fun getPhoneNumberPatternPage(limit: Int, offset: Int): List<PhoneNumberPatternProjection>
 
     @Query("SELECT * FROM unified_entries WHERE sourceId = :sourceId")
     suspend fun getAllBySource(sourceId: Int): List<UnifiedEntryEntity>
