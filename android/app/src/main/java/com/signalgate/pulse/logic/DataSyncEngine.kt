@@ -296,21 +296,6 @@ class DataSyncEngine(
         ) { batch -> emitBatch(batch) }
     }
 
-    /**
-     * Inserts a list of entries in chunks of CHUNK_SIZE to avoid binding too
-     * many parameters in a single Room transaction.
-     */
-    suspend fun insertEntries(entries: List<UnifiedEntryEntity>) = withContext(Dispatchers.IO) {
-        var inserted = 0
-        entries.chunked(CHUNK_SIZE).forEach { chunk ->
-            dataSourceRepository.insertEntriesAuthoritative(chunk)
-            dataSourceRepository.rebuildDerivedIndexes()
-            inserted += chunk.size
-            Timber.tag(TAG).d("Inserted $inserted / ${entries.size}")
-        }
-        Timber.tag(TAG).i("Batch insert complete: $inserted entries")
-    }
-
     // ── Core XLSX parser ─────────────────────────────────────────────────────
 
     /**
