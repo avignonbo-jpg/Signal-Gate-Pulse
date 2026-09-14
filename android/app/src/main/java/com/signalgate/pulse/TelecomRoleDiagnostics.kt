@@ -29,14 +29,15 @@ object TelecomRoleDiagnostics {
         try {
             val available = roleManager.isRoleAvailable(ROLE)
             val held = roleManager.isRoleHeld(ROLE)
-            val holders = roleManager.getRoleHolders(ROLE)
 
             Log.i(TAG, "TELECOM_ROLE_DIAGNOSTIC: role=$ROLE")
             Log.i(TAG, "TELECOM_ROLE_DIAGNOSTIC: role_available=$available")
             Log.i(TAG, "TELECOM_ROLE_DIAGNOSTIC: role_held_by_this_app=$held")
             Log.i(TAG, "TELECOM_ROLE_DIAGNOSTIC: package=${context.packageName}")
-            Log.i(TAG, "TELECOM_ROLE_DIAGNOSTIC: service=com.signalgate.pulse.SignalGateCallScreeningService")
-            Log.i(TAG, "TELECOM_ROLE_DIAGNOSTIC: role_holders=$holders")
+            Log.i(
+                TAG,
+                "TELECOM_ROLE_DIAGNOSTIC: service=com.signalgate.pulse.SignalGateCallScreeningService"
+            )
         } catch (e: Exception) {
             Log.e(TAG, "TELECOM_ROLE_DIAGNOSTIC: role_query_failed", e)
         }
