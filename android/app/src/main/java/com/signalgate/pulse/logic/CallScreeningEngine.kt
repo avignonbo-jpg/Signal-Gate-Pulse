@@ -49,7 +49,13 @@ class CallScreeningEngine(
 ) {
 
     companion object {
-        private const val TAG = "CallScreeningEngine"
+        // Matches SignalGateCallScreeningService.TAG — both ends of the
+        // screening pipeline log under the same tag deliberately, so a
+        // single logcat filter (`-s SignalGate:I SignalGateScreening:D`)
+        // shows the request arriving at the service AND the decision made
+        // inside the engine, without needing a separate CallScreeningEngine
+        // filter entry.
+        private const val TAG = "SignalGateScreening"
         private const val HIGH_CONFIDENCE_THRESHOLD = 70
     }
 
