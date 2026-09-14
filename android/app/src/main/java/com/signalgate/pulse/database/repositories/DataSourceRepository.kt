@@ -89,6 +89,15 @@ class DataSourceRepository(
          * allows to be either disabled or deleted.
          */
         val PROTECTED_SOURCE_TYPES = setOf("MANUAL", "FTC", "FCC")
+
+        /**
+         * Page size for rehydrateBloomFilters()'s paged read. Matches
+         * DataSyncEngine's CHUNK_SIZE convention for the same reason: large
+         * enough that the per-page query overhead is negligible next to
+         * 500,000 rows, small enough that one page is never itself a
+         * meaningful allocation spike.
+         */
+        private const val REHYDRATION_PAGE_SIZE = 1_000
     }
 
     @Volatile
@@ -353,19 +362,36 @@ class DataSourceRepository(
      *
      * Safe to call more than once (e.g. a defensive re-call) without
      * double-inserting, since both filters are cleared first.
+     *
+     * Reads via entryDao.getPhoneNumberPatternPage() in REHYDRATION_PAGE_SIZE
+     * pages rather than entryDao.getAllEntries() — the latter pulled every
+     * column of every row into one in-memory List before this loop could
+     * process a single entry, a multi-hundred-thousand-object spike at scale
+     * since this runs not just at startup but after every manual rule change
+     * (SecurityRuleRepository) and every sync batch (DataSyncEngine). Paging
+     * keeps peak heap bounded regardless of table size; see the DAO method's
+     * doc for why ORDER BY id makes paging safe against concurrent writes.
      */
     suspend fun rehydrateBloomFilters() {
         StartupDiagnostics.mark(StartupDiagnostics.Event.BLOOM_REHYDRATION_BEGIN)
         bloomReady = false
         bloomFilter.clear()
         patternBloomFilter.clear()
-        for (entry in entryDao.getAllEntries()) {
-            if (entry.isPattern) {
-                patternBloomFilter.insert(entry.phoneNumber)
-            } else {
-                bloomFilter.insert(entry.phoneNumber)
+
+        var offset = 0
+        while (true) {
+            val page = entryDao.getPhoneNumberPatternPage(REHYDRATION_PAGE_SIZE, offset)
+            if (page.isEmpty()) break
+            for (row in page) {
+                if (row.isPattern) {
+                    patternBloomFilter.insert(row.phoneNumber)
+                } else {
+                    bloomFilter.insert(row.phoneNumber)
+                }
             }
+            offset += page.size
         }
+
         bloomReady = true
         StartupDiagnostics.mark(StartupDiagnostics.Event.BLOOM_READY)
     }
