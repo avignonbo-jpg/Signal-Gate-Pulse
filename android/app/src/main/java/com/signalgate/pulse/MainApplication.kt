@@ -89,6 +89,8 @@ class MainApplication : Application(), Configuration.Provider {
             // matter, so they're still visible in logcat / bug reports.
             Timber.plant(ReleaseTree())
         }
+        
+        TelecomRoleDiagnostics.log(this)
 
         Timber.tag("SignalGate").i("STARTUP: onCreate begin, elapsed=0ms")
 
