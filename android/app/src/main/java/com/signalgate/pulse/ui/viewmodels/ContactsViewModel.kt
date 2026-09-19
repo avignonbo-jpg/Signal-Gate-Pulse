@@ -1,17 +1,15 @@
 package com.signalgate.pulse.ui.viewmodels
 
 import android.content.Context
-import android.provider.ContactsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.signalgate.pulse.data.repositories.ContactsRepository
 import com.signalgate.pulse.database.repositories.BlocklistRepository
 import com.signalgate.pulse.database.repositories.SettingRepository
 import com.signalgate.pulse.logic.SecurityRuleRepository
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 data class ContactItem(
     val displayName: String,
@@ -23,7 +21,8 @@ data class ContactItem(
 class ContactsViewModel(
     private val securityRuleRepository: SecurityRuleRepository,
     private val blocklistRepository: BlocklistRepository,
-    private val settingRepository: SettingRepository
+    private val settingRepository: SettingRepository,
+    private val contactsRepository: ContactsRepository
 ) : ViewModel() {
 
     private val _contacts = MutableStateFlow<List<ContactItem>>(emptyList())
@@ -57,46 +56,10 @@ class ContactsViewModel(
     val selectedCount: Int
         get() = _contacts.value.count { it.isSelected }
 
-    fun loadContacts(context: Context) {
+    fun loadContacts(@Suppress("UNUSED_PARAMETER") context: Context) {
         viewModelScope.launch {
             _isLoading.value = true
-
-            // ContentResolver.query() against the Contacts provider is a real Binder
-            // IPC that fills a SQLiteCursor on the provider's side — genuine disk I/O,
-            // not just an in-memory call. viewModelScope defaults to
-            // Dispatchers.Main.immediate, so without this withContext the query and
-            // the full cursor walk below both ran on the UI thread (confirmed via a
-            // StrictMode DiskReadViolation pointing straight at this line). Harmless
-            // on a small emulator contacts list, but scales with the user's real
-            // contact count.
-            val loaded = withContext(Dispatchers.IO) {
-                val result = mutableListOf<ContactItem>()
-
-                val cursor = context.contentResolver.query(
-                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                    arrayOf(
-                        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                        ContactsContract.CommonDataKinds.Phone.NUMBER
-                    ),
-                    null, null,
-                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
-                )
-
-                cursor?.use {
-                    val nameIndex = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-                    val numberIndex = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                    while (it.moveToNext()) {
-                        val name = it.getString(nameIndex) ?: continue
-                        val number = it.getString(numberIndex) ?: continue
-                        val normalized = normalizeNumber(number)
-                        if (normalized.isNotBlank()) {
-                            result.add(ContactItem(name, number, normalized))
-                        }
-                    }
-                }
-
-                result
-            }
+            val loaded = contactsRepository.loadContacts()
 
             _contacts.value = loaded
                 .distinctBy { it.normalizedNumber }
@@ -199,10 +162,4 @@ class ContactsViewModel(
         }
     }
 
-    private fun normalizeNumber(raw: String): String {
-        var cleaned = raw.replace(Regex("[^0-9+]"), "")
-        if (cleaned.startsWith("1") && cleaned.length == 11) cleaned = "+$cleaned"
-        else if (!cleaned.startsWith("+")) cleaned = "+1$cleaned"
-        return cleaned
-    }
 }

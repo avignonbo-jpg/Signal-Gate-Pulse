@@ -13,6 +13,7 @@ import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.database.repositories.SyncHistoryRepository
 import com.signalgate.pulse.database.repositories.PendingCardRepository
 import com.signalgate.pulse.database.repositories.SettingRepository
+import com.signalgate.pulse.data.repositories.ContactsRepository
 import com.signalgate.pulse.logic.CallRiskEvaluator
 import com.signalgate.pulse.logic.CallScreeningEngine
 import com.signalgate.pulse.logic.DataSyncEngine
@@ -115,6 +116,7 @@ val repositoryModule = module {
     single { DataSourceRepository(get(), get(), get(), get(named("patternBloom"))) }
     single { CallLogRepository(get()) }
     single { SyncHistoryRepository(get()) }
+    single { ContactsRepository(androidContext()) }
 
     /**
      * Step 0.1 / 2.4 (2026-07-02): BlocklistRepository binding refactored.
@@ -209,7 +211,7 @@ val engineModule = module {
  * Layer 5 Application/Layer 4 Domain logic.
  */
 val viewModelModule = module {
-    viewModel { ContactsViewModel(get(), get(), get()) }
+    viewModel { ContactsViewModel(get(), get(), get(), get()) }
     viewModel { DashboardViewModel(get(), get(), get(), get()) } // Phase 0.4: real source sync boundary added
 
     // Phase 4.2: constructor dependency changed from DataSourceRepository to
