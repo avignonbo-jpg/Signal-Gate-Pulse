@@ -43,6 +43,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.signalgate.pulse.R
 import com.signalgate.pulse.database.repositories.HeuristicsMode
+import com.signalgate.pulse.database.repositories.SettingKeys
 import com.signalgate.pulse.ui.theme.*
 import com.signalgate.pulse.ui.viewmodels.ContactItem
 import com.signalgate.pulse.ui.viewmodels.ContactsViewModel
@@ -87,7 +88,7 @@ fun OnboardingWizardScreen(
     val wizardNavController = rememberNavController()
 
     NavHost(navController = wizardNavController, startDestination = "eula") {
-        composable("eula")        { EulaStep(wizardNavController) }
+        composable("eula")        { EulaStep(wizardNavController, viewModel) }
         composable("welcome")     { WelcomeStep(wizardNavController) }
         composable("permissions") { PermissionsStep(wizardNavController, viewModel) }
         composable("contacts")    { ContactsImportStep(wizardNavController) }
@@ -108,9 +109,14 @@ fun OnboardingWizardScreen(
  * change can force re-acceptance without re-running the whole wizard).
  */
 @Composable
-fun EulaStep(navController: NavHostController) {
-    val context = LocalContext.current
+fun EulaStep(navController: NavHostController, viewModel: OnboardingViewModel) {
     var agreed by remember { mutableStateOf(false) }
+    val eulaAccepted by viewModel.eulaAccepted.collectAsState()
+    val eulaAcceptError by viewModel.eulaAcceptError.collectAsState()
+
+    LaunchedEffect(eulaAccepted) {
+        if (eulaAccepted) navController.navigate("welcome")
+    }
 
     Column(
         modifier = Modifier
@@ -179,29 +185,7 @@ fun EulaStep(navController: NavHostController) {
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
-            onClick = {
-                // Persisted separately from onboarding_complete, on purpose: this is a
-                // legal acceptance record (what was agreed to, and when), not a wizard
-                // progress flag. Keeping it distinct means a future terms version bump
-                // can require re-acceptance without forcing a full onboarding re-run.
-                // Same raw-SharedPreferences approach as RiskThresholdStep's
-                // onboarding_complete write — see that step's PULSE-TODO re: migrating
-                // both to SettingEntry together rather than diverging further.
-                try {
-                    val prefs = context.getSharedPreferences(
-                        "${context.packageName}_preferences",
-                        Context.MODE_PRIVATE
-                    )
-                    prefs.edit()
-                        .putBoolean("eula_accepted", true)
-                        .putString("eula_version", "placeholder-v0")
-                        .putLong("eula_accepted_at", System.currentTimeMillis())
-                        .apply()
-                } catch (e: Exception) {
-                    Timber.tag("OnboardingWizard").e(e, "Failed to persist EULA acceptance")
-                }
-                navController.navigate("welcome")
-            },
+            onClick = { viewModel.markEulaAccepted(SettingKeys.EULA_CURRENT_VERSION) },
             enabled = agreed,
             modifier = Modifier
                 .fillMaxWidth()
@@ -214,6 +198,15 @@ fun EulaStep(navController: NavHostController) {
             shape = RoundedCornerShape(28.dp)
         ) {
             Text("I AGREE  ›", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        }
+
+        if (eulaAcceptError != null) {
+            Text(
+                text = eulaAcceptError ?: "",
+                color = Color(0xFFFF6B6B),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 8.dp)
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))

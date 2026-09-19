@@ -156,6 +156,31 @@ class OnboardingViewModel(
     private val _onboardingCompleted = MutableStateFlow(false)
     val onboardingCompleted = _onboardingCompleted.asStateFlow()
 
+    private val _eulaAccepted = MutableStateFlow(false)
+    val eulaAccepted = _eulaAccepted.asStateFlow()
+
+    private val _eulaAcceptError = MutableStateFlow<String?>(null)
+    val eulaAcceptError = _eulaAcceptError.asStateFlow()
+
+    fun markEulaAccepted(version: String) {
+        viewModelScope.launch {
+            _eulaAcceptError.value = null
+            try {
+                settingRepository.setSetting(SettingKeys.EULA_ACCEPTED, "true")
+                settingRepository.setSetting(SettingKeys.EULA_VERSION, version)
+                settingRepository.setSetting(
+                    SettingKeys.EULA_ACCEPTED_AT,
+                    System.currentTimeMillis().toString()
+                )
+                _eulaAccepted.value = true
+            } catch (e: Exception) {
+                _eulaAccepted.value = false
+                _eulaAcceptError.value = "Couldn't save your agreement — please try again."
+                Timber.tag(TAG).e(e, "Failed to persist EULA acceptance")
+            }
+        }
+    }
+
     fun markOnboardingComplete() {
         viewModelScope.launch {
             try {

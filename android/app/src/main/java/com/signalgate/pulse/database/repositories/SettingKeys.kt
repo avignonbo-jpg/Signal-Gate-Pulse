@@ -20,15 +20,17 @@ package com.signalgate.pulse.database.repositories
  * object as further keys migrate — don't reintroduce raw string literals at
  * new call sites once a key has an entry here.
  *
- * Deliberately NOT included (see Step 2.6 scope decision):
- *   - eula_accepted / eula_version / eula_accepted_at — kept on SharedPreferences.
- *     Independent lifecycle semantics (a future terms-version bump needs to
- *     force re-acceptance without re-running the whole wizard); migrating it
- *     alongside these three would have mixed two different-shaped concerns
- *     into one push.
+ * EULA acceptance is also stored here so the legal acceptance record uses the
+ * same durable key-value repository as the rest of onboarding. Its separate
+ * keys preserve independent lifecycle semantics: a future terms-version bump
+ * can force re-acceptance without re-running the whole wizard.
  */
 object SettingKeys {
     const val ONBOARDING_COMPLETE = "onboarding_complete"
+    const val EULA_ACCEPTED = "eula_accepted"
+    const val EULA_VERSION = "eula_version"
+    const val EULA_CURRENT_VERSION = "placeholder-v0"
+    const val EULA_ACCEPTED_AT = "eula_accepted_at"
     const val SHIELD_RED = "shield_red"
     const val SHIELD_GREEN = "shield_green"
     const val SHIELD_BLUE = "shield_blue"
