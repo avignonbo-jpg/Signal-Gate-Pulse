@@ -6,6 +6,7 @@ import com.signalgate.pulse.data.security.SanitizationEngine
 import com.signalgate.pulse.database.daos.SourceDao
 import com.signalgate.pulse.database.daos.UnifiedEntryDao
 import com.signalgate.pulse.database.entities.SourceEntity
+import com.signalgate.pulse.database.entities.SourceType
 import com.signalgate.pulse.database.entities.UnifiedEntryEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -88,7 +89,8 @@ class DataSourceRepository(
          * type — those identify user-created sources, which the contract
          * allows to be either disabled or deleted.
          */
-        val PROTECTED_SOURCE_TYPES = setOf("MANUAL", "FTC", "FCC")
+        val PROTECTED_SOURCE_TYPES = SourceType.values()
+            .mapTo(mutableSetOf()) { it.persistedValue }
 
         /**
          * Page size for rehydrateBloomFilters()'s paged read. Matches
@@ -140,7 +142,7 @@ class DataSourceRepository(
      * reached is what makes that impossible rather than just unlikely.
      */
     suspend fun deleteSource(source: SourceEntity) {
-        if (source.type in PROTECTED_SOURCE_TYPES) {
+        if (SourceType.fromPersisted(source.type)?.persistedValue in PROTECTED_SOURCE_TYPES) {
             throw ProtectedSourceDeletionException(source)
         }
         sourceDao.deleteSource(source)
@@ -408,7 +410,7 @@ class DataSourceRepository(
      * still block but won't apply the FEDERAL_BLOCK tier treatment.
      */
     private suspend fun isManualSource(sourceId: Int): Boolean {
-        return sourceDao.getSourceById(sourceId)?.priority == 100
+        return SourceType.fromPersisted(sourceDao.getSourceById(sourceId)?.type ?: "") == SourceType.MANUAL
     }
 
     /**

@@ -7,6 +7,23 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
+ * Source types with application-level lifecycle semantics.
+ *
+ * The database column remains a String for schema compatibility; this enum is
+ * the compiler-checked vocabulary at decision and lifecycle call sites.
+ */
+enum class SourceType(val persistedValue: String) {
+    MANUAL("MANUAL"),
+    FTC("FTC"),
+    FCC("FCC");
+
+    companion object {
+        fun fromPersisted(value: String): SourceType? =
+            values().firstOrNull { it.persistedValue == value }
+    }
+}
+
+/**
  * SourceEntity represents a data source (local file or remote URL) in the MultiPoint Hub.
  */
 @Entity(
