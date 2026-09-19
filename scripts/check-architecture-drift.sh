@@ -170,7 +170,7 @@ for d in "${CROSS_CUTTING_DIRS[@]}"; do
     while IFS=: read -r file _line content; do
         [ -z "$file" ] && continue
         fail "$RULE" "${file#$PROJECT_ROOT/}" "$content"
-    done < <(grep -rn "^import \(androidx\.room\|com\.signalgate\.multipoint\.database\.daos\|android\.content\.Context\)" "$d" --include="*.kt" 2>/dev/null)
+    done < <(grep -rn "^import \(androidx\.room\|com\.signalgate\.pulse\.database\.daos\|android\.content\.Context\)" "$d" --include="*.kt" 2>/dev/null)
 done
 
 # ---------------------------------------------------------------------------
