@@ -1073,4 +1073,6 @@ Files touched: `android/app/src/main/java/com/signalgate/pulse/SignalGateCallScr
 Contract consulted: no separate architecture change was introduced; the production default path and timeout remain unchanged.
 Validation: `git diff --check` passed. Android unit-test execution remains pending because the local environment has no Android SDK (`SDK location not found`).
 Commit: follow-up ledger-only commit after `f8307be`; pushed with the production change so the ledger gate sees both in the same branch update.
-Signature: Manus AI — 2026-09-20
+Signature: Manus AI — 
+
+2026-09-20 - OnboardingViewModelEulaTest.kt addition allowed by owner made by Claude, Manus and ChatGPT.
