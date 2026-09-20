@@ -1109,3 +1109,10 @@ full JVM suite.
 Files touched: this ledger entry only. No source file changed as part of
 closing this out.
 Signature: Project Director (Claude) — 2026-09-20
+
+2026-09-20 — Consumer dashboard content scrolling fix
+What: Added `rememberScrollState` and `.verticalScroll(rememberScrollState())` to the inner dashboard content `Column` in `ConsumerDashboardScreen.kt`. The outer `Column` and fixed top bar remain unchanged, and the SETTINGS button styling was not modified. This allows the hero card, stat cards, and SETTINGS button to remain reachable on short and landscape viewports without overlapping the system navigation bar.
+Files touched: `android/app/src/main/java/com/signalgate/pulse/ui/screens/ConsumerDashboardScreen.kt` and this ledger.
+Validation: `git diff --check` passed. `:app:compilePulseDebugKotlin` resolved correctly but could not run because the sandbox lacks an Android SDK (`ANDROID_HOME`/`local.properties` not configured). The scoped source diff was committed and pushed to `consumer-v1` as `7d591a5` (`fix: make consumer dashboard content scrollable`).
+Contract consulted: no architecture change; UI-only modifier/import fix.
+Signature: Manus AI — 2026-09-20
