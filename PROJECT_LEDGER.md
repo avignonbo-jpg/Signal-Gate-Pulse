@@ -1056,3 +1056,8 @@ Contract consulted: yes — the Chunk 3 manifest, every workflow in `.github/wor
 Validation: `bash -n scripts/check-architecture-drift.sh` and `git diff --check` are required final checks. Local GitHub Actions execution and a fresh remote CI run are still required to prove all JVM classes execute, the new permissions are sufficient, the secret scan passes clean, the action pins work, and the actual test count/pass-fail result. A deliberate dummy-secret workflow run was not executed locally because GitHub Actions cannot be emulated in this sandbox; no dummy secret was committed to the repository. Previous ledger claims of mandatory JVM CI coverage remain unconfirmed for the 21 files excluded by the old filter until a fresh unfiltered CI run completes.
 Status: Implementation is ready for remote CI and review; no push was performed in this implementation pass.
 Signature: Manus AI — 2026-09-19
+
+
+## Regression Fixes
+
+2026-09-19 — `OnboardingViewModelEulaTest.kt` failed to compile once the JVM test filter was removed (see `CRITICAL-jvm-test-filter-restriction`) — two suspend calls to `SettingRepository.setSetting()` were inside non-suspend `verify()`/`doThrow()` blocks. Fixed by wrapping both test bodies in `runBlocking { }`, matching `DataSourceRepositoryDeletionTest.kt`'s existing idiom. No production code changed. This is evidence for, not against, `CRITICAL-jvm-test-filter-restriction`: it is the class of gap that the filter was hiding. A fresh full unfiltered `testPulseDebugUnitTest` run remains required after this first surfaced compile failure to check for any additional latent failures.
