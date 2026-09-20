@@ -43,6 +43,10 @@
 #   7. No orphaned XML layouts             res/layout/*.xml files with zero
 #      references anywhere in src/main/java are drift — this app is
 #      Compose-first; legacy View XML should not silently accumulate.
+#   8. Layer 1 Platform/Edge classes       must not import database.daos.*
+#      directly — persistence access goes through the repository boundary.
+#      Rules 9-10 remain unspecified in the current contract and are not
+#      guessed at here.
 #
 # Note on package-to-layer mapping: the `logic/` package holds files from
 # two different architecture layers (Layer 4 decision engines and Layer 5
@@ -188,6 +192,28 @@ if [ -d "$RES_LAYOUT" ]; then
         fi
     done
 fi
+
+# ---------------------------------------------------------------------------
+# Rule 8: Layer 1 Platform/Edge -> DAO import
+# ---------------------------------------------------------------------------
+RULE="Layer1-Platform/Edge -> DAO"
+LAYER1_FILES=(
+    "$SRC/CallActionReceiver.kt"
+    "$SRC/MainActivity.kt"
+    "$SRC/MainApplication.kt"
+    "$SRC/PhoneStateReceiver.kt"
+    "$SRC/SignalGateCallScreeningService.kt"
+    "$SRC/workers/CommunitySyncWorker.kt"
+    "$SRC/workers/SyncBootReceiver.kt"
+    "$SRC/ui/notifications/NotificationChannelManager.kt"
+)
+for f in "${LAYER1_FILES[@]}"; do
+    [ -f "$f" ] || continue
+    while IFS=: read -r _line content; do
+        [ -z "$content" ] && continue
+        fail "$RULE" "${f#$PROJECT_ROOT/}" "$content"
+    done < <(grep -n "^import com\.signalgate\.pulse\.database\.daos" "$f")
+done
 
 echo
 if [ "$VIOLATIONS" -eq 0 ]; then
