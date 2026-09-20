@@ -1,26 +1,62 @@
 package com.signalgate.pulse.ui.onboarding
 
 import android.os.Looper
+import com.signalgate.pulse.database.daos.SettingDao
+import com.signalgate.pulse.database.entities.SettingEntry
 import com.signalgate.pulse.database.repositories.SettingKeys
 import com.signalgate.pulse.database.repositories.SettingRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.kotlin.any
-import org.mockito.kotlin.doThrow
-import org.mockito.kotlin.mock
-import org.mockito.kotlin.onBlocking
-import org.mockito.kotlin.stub
-import org.mockito.kotlin.verifyBlocking
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
+
+/**
+ * Hand-rolled fake instead of a Mockito mock, deliberately. SettingRepository
+ * wraps suspend DAO calls with `any()` matchers involved in what this test
+ * needs to verify, and plain Mockito's matcher stack does not reliably align
+ * against a suspend function's hidden Continuation parameter -- see the
+ * regression history in PROJECT_LEDGER.md for this file. A real in-memory
+ * SettingDao sidesteps that class of problem entirely: no matchers, no
+ * suspend/mock interop, just a map.
+ */
+private class FakeSettingDao : SettingDao {
+    val stored = mutableMapOf<String, String>()
+    var shouldThrow = false
+
+    override suspend fun insertSetting(setting: SettingEntry): Long {
+        if (shouldThrow) throw IllegalStateException("database unavailable")
+        stored[setting.key] = setting.value
+        return 1L
+    }
+
+    override suspend fun updateSetting(setting: SettingEntry) {
+        if (shouldThrow) throw IllegalStateException("database unavailable")
+        stored[setting.key] = setting.value
+    }
+
+    override suspend fun getSettingByKey(key: String): SettingEntry? =
+        stored[key]?.let { SettingEntry(key = key, value = it) }
+
+    override suspend fun getSettingValue(key: String): String? = stored[key]
+
+    override suspend fun updateSettingValue(key: String, value: String, timestamp: Long) {
+        if (shouldThrow) throw IllegalStateException("database unavailable")
+        stored[key] = value
+    }
+
+    override suspend fun getAllSettings(): List<SettingEntry> =
+        stored.map { SettingEntry(key = it.key, value = it.value) }
+}
 
 @RunWith(RobolectricTestRunner::class)
 class OnboardingViewModelEulaTest {
 
-    private val settingRepository = mock<SettingRepository>()
+    private val fakeDao = FakeSettingDao()
+    private val settingRepository = SettingRepository(fakeDao)
 
     private fun drainMainDispatcher() {
         Shadows.shadowOf(Looper.getMainLooper()).idle()
@@ -35,22 +71,14 @@ class OnboardingViewModelEulaTest {
 
         assertTrue(viewModel.eulaAccepted.value)
         assertEquals(null, viewModel.eulaAcceptError.value)
-        verifyBlocking(settingRepository) {
-            setSetting(SettingKeys.EULA_ACCEPTED, "true")
-        }
-        verifyBlocking(settingRepository) {
-            setSetting(SettingKeys.EULA_VERSION, SettingKeys.EULA_CURRENT_VERSION)
-        }
-        verifyBlocking(settingRepository) {
-            setSetting(SettingKeys.EULA_ACCEPTED_AT, any())
-        }
+        assertEquals("true", fakeDao.stored[SettingKeys.EULA_ACCEPTED])
+        assertEquals(SettingKeys.EULA_CURRENT_VERSION, fakeDao.stored[SettingKeys.EULA_VERSION])
+        assertNotNull(fakeDao.stored[SettingKeys.EULA_ACCEPTED_AT])
     }
 
     @Test
     fun markEulaAccepted_persistenceFailureLeavesStateFalseAndSurfacesError() {
-        settingRepository.stub {
-            onBlocking { setSetting(any(), any()) } doThrow IllegalStateException("database unavailable")
-        }
+        fakeDao.shouldThrow = true
         val viewModel = OnboardingViewModel(settingRepository)
 
         viewModel.markEulaAccepted(SettingKeys.EULA_CURRENT_VERSION)
@@ -61,5 +89,6 @@ class OnboardingViewModelEulaTest {
             "Couldn't save your agreement — please try again.",
             viewModel.eulaAcceptError.value
         )
+        assertTrue(fakeDao.stored.isEmpty())
     }
 }
