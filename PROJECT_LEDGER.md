@@ -1116,3 +1116,12 @@ Files touched: `android/app/src/main/java/com/signalgate/pulse/ui/screens/Consum
 Validation: `git diff --check` passed. `:app:compilePulseDebugKotlin` resolved correctly but could not run because the sandbox lacks an Android SDK (`ANDROID_HOME`/`local.properties` not configured). The scoped source diff was committed and pushed to `consumer-v1` as `7d591a5` (`fix: make consumer dashboard content scrollable`).
 Contract consulted: no architecture change; UI-only modifier/import fix.
 Signature: Manus AI — 2026-09-20
+
+2026-09-20 — Background Reliability battery toggle fix
+Who: Manus AI.
+What: Fixed the Background Reliability toggle so Android can launch the battery-optimization exemption flow. Declared REQUEST_IGNORE_BATTERY_OPTIMIZATIONS in the manifest, added a fallback from the direct exemption dialog to the general battery-optimization settings and then app settings, and documented the setting's purpose plus OEM-specific battery-manager guidance. Existing ON_RESUME state re-check and the scoped BatteryLife lint suppression were preserved.
+Files touched: android/app/src/main/AndroidManifest.xml, android/app/src/main/java/com/signalgate/pulse/ui/screens/PermissionSettingsScreen.kt, and this ledger.
+Contract consulted: yes — this is a Layer 7 UI/platform-settings fix; no architectural ownership or navigation changes were introduced.
+Validation: git diff --check and requested static checks passed. The Android debug build could not run because the sandbox has no configured Android SDK (ANDROID_HOME/local.properties missing).
+Commit: production fix 62860ee; this ledger update is the required follow-up commit and will be pushed to consumer-v1.
+Signature: Manus AI — 2026-09-20
