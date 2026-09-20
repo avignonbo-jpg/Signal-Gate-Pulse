@@ -3,6 +3,7 @@ package com.signalgate.pulse.ui.onboarding
 import android.os.Looper
 import com.signalgate.pulse.database.repositories.SettingKeys
 import com.signalgate.pulse.database.repositories.SettingRepository
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -25,7 +26,7 @@ class OnboardingViewModelEulaTest {
     }
 
     @Test
-    fun markEulaAccepted_successPersistsAllFieldsAndSetsAccepted() {
+    fun markEulaAccepted_successPersistsAllFieldsAndSetsAccepted() = runBlocking {
         val viewModel = OnboardingViewModel(settingRepository)
 
         viewModel.markEulaAccepted(SettingKeys.EULA_CURRENT_VERSION)
@@ -45,7 +46,7 @@ class OnboardingViewModelEulaTest {
     }
 
     @Test
-    fun markEulaAccepted_persistenceFailureLeavesStateFalseAndSurfacesError() {
+    fun markEulaAccepted_persistenceFailureLeavesStateFalseAndSurfacesError() = runBlocking {
         doThrow(IllegalStateException("database unavailable"))
             .`when`(settingRepository)
             .setSetting(any(), any())
