@@ -1065,3 +1065,12 @@ Signature: Manus AI — 2026-09-19
 
 2026-09-19 — Compose Metrics CI Android SDK package regression
 `Compose Metrics CI` failed at the `Set up Android SDK` step after `github-actions-sha-pinning` landed: `android-actions/setup-android` with no `packages:` override attempted to install the legacy `tools` package, which Google's SDK repository no longer serves. Evidence indicates this was a pre-existing latent break independent of the SHA pin itself: the pin was resolved against the live `v3` tag via `git ls-remote`, and the step had no `packages:` override before or after the pinning change. The likely trigger was the upstream SDK repository or runner image dropping the legacy package; a cache-key effect remains a residual uncertainty. Fixed by adding `packages: "platform-tools platforms;android-35 build-tools;35.0.0"`, matching `compileSdkVersion=35` and `buildToolsVersion=35.0.0` in `android/build.gradle`, so the action's default package list is bypassed. No action SHA/ref or Android SDK version was changed. A fresh remote Compose Metrics CI run remains required to confirm setup succeeds and the full job uploads its artifact.
+
+2026-09-20 — Screening timing-test harness fix
+Who: Manus AI, continuing the timing-budget investigation.
+What: Added an optional suspend `screen` operation to `SignalGateCallScreeningService.processScreeningCall`, defaulting to the existing `engine.screenCall(phoneNumber, details)` production path. Replaced the timing test's brittle Mockito hidden-Continuation manipulation with a direct delayed suspend fake, so the test measures actual 500 ms/2,000 ms/3,400 ms/3,600 ms behavior and preserves the 3.5-second fail-closed timeout.
+Files touched: `android/app/src/main/java/com/signalgate/pulse/SignalGateCallScreeningService.kt`, `android/app/src/test/kotlin/com/signalgate/pulse/ScreeningServiceTimingBudgetTest.kt`, and this ledger.
+Contract consulted: no separate architecture change was introduced; the production default path and timeout remain unchanged.
+Validation: `git diff --check` passed. Android unit-test execution remains pending because the local environment has no Android SDK (`SDK location not found`).
+Commit: follow-up ledger-only commit after `f8307be`; pushed with the production change so the ledger gate sees both in the same branch update.
+Signature: Manus AI — 2026-09-20
