@@ -185,11 +185,17 @@ fun PermissionSettingsScreen(
             item {
                 PermissionRow(
                     title = "Background Reliability",
-                    description = "Some manufacturers (Samsung, Xiaomi, Huawei, OnePlus) kill background apps aggressively. Exempting SignalGate keeps screening reliable.",
+                    description = "Allow SignalGate to run during battery-saving modes so call screening can continue reliably in the background.",
                     isRequired = false,
                     isGranted = batteryExempt,
                     onToggleOn = { requestBatteryOptimizationExemption(context) },
                     onToggleOff = { openApplicationSettings(context) }
+                )
+                Text(
+                    text = "Some manufacturers (Samsung, Xiaomi, Huawei, OnePlus) apply their own battery managers. If screening quietly stops, also allow SignalGate to run unrestricted in that manufacturer's battery or auto-start settings.",
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp)
                 )
             }
         }
@@ -252,10 +258,18 @@ private fun isIgnoringBatteryOptimizations(context: Context): Boolean {
 // core feature to function. Suppression scoped to this single call site only.
 @SuppressLint("BatteryLife")
 private fun requestBatteryOptimizationExemption(context: Context) {
-    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+    val directIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
         data = Uri.parse("package:${context.packageName}")
     }
-    context.startActivity(intent)
+    try {
+        context.startActivity(directIntent)
+    } catch (e: Exception) {
+        try {
+            context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        } catch (e2: Exception) {
+            openApplicationSettings(context)
+        }
+    }
 }
 
 private fun openApplicationSettings(context: Context) {

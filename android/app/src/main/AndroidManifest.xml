@@ -15,6 +15,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Required for ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, used by the
+         Background Reliability toggle on PermissionSettingsScreen. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET" />
 
