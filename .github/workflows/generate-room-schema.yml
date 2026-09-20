@@ -3,6 +3,9 @@ name: Generate Room Schema 2
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   generate-schema:
     runs-on: ubuntu-latest

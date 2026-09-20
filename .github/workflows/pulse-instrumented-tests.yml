@@ -19,6 +19,9 @@ on:
   pull_request:
     branches: [ consumer-v1 ]
 
+permissions:
+  contents: read
+
 jobs:
   instrumented-tests:
     name: Pulse Debug — Instrumented Tests (emulator)

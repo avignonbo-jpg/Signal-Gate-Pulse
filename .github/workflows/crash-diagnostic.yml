@@ -3,6 +3,9 @@ name: Crash Diagnostic
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   crash-diagnostic:
     runs-on: ubuntu-latest
