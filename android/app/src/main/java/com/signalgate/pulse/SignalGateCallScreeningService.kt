@@ -162,9 +162,10 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
         respond: (CallResponse) -> Unit,
         persist: suspend (CallInfo, ScreeningDecision) -> Unit,
         dispatchUx: (CallInfo, ScreeningDecision) -> Unit,
-        responseFactory: (ScreeningAction) -> CallResponse = ::toCallResponse
+        responseFactory: (ScreeningAction) -> CallResponse = ::toCallResponse,
+        screen: suspend () -> CallInfo = { engine.screenCall(phoneNumber, details) }
     ) {
-        val callInfo = withTimeout(3_500) { engine.screenCall(phoneNumber, details) }
+        val callInfo = withTimeout(3_500) { screen() }
         val decision = callInfo.screeningDecision
 
         // Telecom response is the deadline-critical operation. It deliberately

@@ -4,21 +4,14 @@ import android.telecom.Call
 import android.telecom.CallScreeningService.CallResponse
 import com.signalgate.pulse.logic.CallScreeningEngine
 import com.signalgate.pulse.logic.ScreeningAction
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
-import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
-import kotlin.coroutines.resume
 import kotlin.system.measureTimeMillis
 
 @RunWith(RobolectricTestRunner::class)
@@ -46,16 +39,6 @@ class ScreeningServiceTimingBudgetTest {
             val actions = mutableListOf<ScreeningAction>()
             val elapsedMs = measureTimeMillis {
                 runBlocking {
-                    whenever(engine.screenCall(any(), any())).thenAnswer { invocation ->
-                        @Suppress("UNCHECKED_CAST")
-                        val continuation = invocation.arguments.last() as Continuation<CallInfo>
-                        CoroutineScope(continuation.context).launch {
-                            delay(delayMs)
-                            continuation.resume(allowInfo())
-                        }
-                        COROUTINE_SUSPENDED
-                    }
-
                     service.executeScreeningSafely(
                         phoneNumber = "+15551234567",
                         onSecurityFailure = {
@@ -72,6 +55,10 @@ class ScreeningServiceTimingBudgetTest {
                             responseFactory = { action ->
                                 actions += action
                                 mock<CallResponse>()
+                            },
+                            screen = {
+                                delay(delayMs)
+                                allowInfo()
                             }
                         )
                     }
