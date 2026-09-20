@@ -38,9 +38,7 @@ jobs:
       - name: Run Unit Tests (Pulse)
         working-directory: ./android
         run: |
-          ./gradlew :app:testPulseDebugUnitTest \
-            --tests com.signalgate.pulse.ui.navigation.NavGraphRoutePolicyTest \
-            --no-daemon --stacktrace
+          ./gradlew :app:testPulseDebugUnitTest --no-daemon --stacktrace
 
       - name: Run Lint Check (Pulse)
         if: always()
