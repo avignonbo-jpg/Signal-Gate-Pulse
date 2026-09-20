@@ -1125,3 +1125,11 @@ Contract consulted: yes — this is a Layer 7 UI/platform-settings fix; no archi
 Validation: git diff --check and requested static checks passed. The Android debug build could not run because the sandbox has no configured Android SDK (ANDROID_HOME/local.properties missing).
 Commit: production fix 62860ee; this ledger update is the required follow-up commit and will be pushed to consumer-v1.
 Signature: Manus AI — 2026-09-20
+
+2026-09-20 — Predictive-back callback opt-in
+What: Added `android:enableOnBackInvokedCallback="true"` to the application manifest. This opts the app into Android's modern predictive-back dispatch used by Navigation-Compose, addressing the `WindowOnBackDispatcher` warning and the related NavController back-stack mismatch observed on Android 13+ devices. No custom `OnBackInvokedCallback` or back-press handling was added.
+Files touched: android/app/src/main/AndroidManifest.xml and this ledger.
+Contract consulted: yes — manifest-only platform opt-in; no navigation ownership or architecture changes were introduced.
+Validation: `git diff --check` passed. Source inspection found no app-owned `popBackStack()` calls. Device verification and Android build remain pending because the sandbox has no configured Android SDK (`ANDROID_HOME`/`local.properties` missing).
+Status: applied-pending-device-verification.
+Signature: Manus AI — 2026-09-20
