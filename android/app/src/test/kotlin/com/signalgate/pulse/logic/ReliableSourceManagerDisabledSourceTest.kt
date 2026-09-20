@@ -46,6 +46,7 @@ class ReliableSourceManagerDisabledSourceTest {
         assertTrue(results.isEmpty())
         verify(dataSourceRepository).getSourceByName("FTC Do Not Call Registry")
         verify(dataSourceRepository).getSourceByName("FCC Consumer Complaints")
+        Unit
     }
 
     @Test
@@ -64,6 +65,7 @@ class ReliableSourceManagerDisabledSourceTest {
         assertEquals("User-disabled federal source", result.sourceName)
         assertEquals("Source is not a managed federal source", result.errorMessage)
         verify(dataSourceRepository).getSourceById(11)
+        Unit
     }
 
     @Test
@@ -77,5 +79,6 @@ class ReliableSourceManagerDisabledSourceTest {
         // regression test's responsibility.
         assertTrue(ReliableSourceManager.shouldSyncAutomatically(null))
         verify(dataSourceRepository, org.mockito.kotlin.never()).getSourceByName("unused")
+        Unit
     }
 }
