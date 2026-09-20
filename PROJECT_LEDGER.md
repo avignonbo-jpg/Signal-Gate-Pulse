@@ -1076,3 +1076,36 @@ Commit: follow-up ledger-only commit after `f8307be`; pushed with the production
 Signature: Manus AI — 
 
 2026-09-20 - OnboardingViewModelEulaTest.kt addition allowed by owner made by Claude, Manus and ChatGPT.
+
+2026-09-20 — Full unfiltered JVM suite confirmed clean; regression round closed
+What: testPulseDebugUnitTest ran the complete, unfiltered suite (25 test
+classes, 102 tests) and returned 0 failures, 0 errors, 0 skipped. This is
+the first clean full-suite run since CRITICAL-jvm-test-filter-restriction
+was fixed and is accepted as its closing evidence: the mandatory CI gate
+now actually executes all 25 classes, not the single NavGraphRoutePolicyTest
+it was silently narrowed to before.
+ScreeningServiceTimingBudgetTest — 1/1 passing. The screen seam on
+SignalGateCallScreeningService.processScreeningCall (ratified in the
+entry above) correctly resolves all four boundary cases (500 ms/2,000 ms/
+3,400 ms → ALLOW; 3,600 ms → SECURITY_FAILURE) via genuine delay() and
+the real withTimeout(3_500), no mock fragility remaining.
+ReliableSourceManagerDisabledSourceTest — 3/3 passing. The trailing
+Unit fix resolved the JUnit4 InvalidTestClassError (non-void @Test
+methods caused by a trailing verify(...) call returning SourceEntity?).
+OnboardingViewModelEulaTest — 2/2 passing. Rewritten a third time to
+drop Mockito for this file entirely in favor of a hand-rolled
+FakeSettingDao implementing the SettingDao interface directly, after
+two prior attempts (runBlocking-only, then mockito-kotlin's
+onBlocking/stub/verifyBlocking) each failed for different
+suspend/matcher-interop reasons. No production file required any change
+for this one.
+Status: CRITICAL-jvm-test-filter-restriction (Chunk 3) is now closed.
+Per that issue's own caveat, every "CI-verified" JVM claim recorded between
+whenever the filter was introduced and this run should still be treated as
+having been unconfirmed for the 24 previously-excluded classes during that
+window, not retroactively assumed passing on the strength of this run alone
+— but going forward, mandatory CI green again means what it says for the
+full JVM suite.
+Files touched: this ledger entry only. No source file changed as part of
+closing this out.
+Signature: Project Director (Claude) — 2026-09-20
