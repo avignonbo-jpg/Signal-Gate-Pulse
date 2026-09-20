@@ -31,6 +31,15 @@ jobs:
           chmod +x ./scripts/check-architecture-drift.sh
           ./scripts/check-architecture-drift.sh
 
+      - name: Check Production Ledger Update
+        run: |
+          chmod +x ./scripts/check-ledger-updated.sh
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ./scripts/check-ledger-updated.sh "${{ github.event.pull_request.base.sha }}"
+          else
+            ./scripts/check-ledger-updated.sh "${{ github.event.before }}"
+          fi
+
       - name: Grant execute permission for gradlew
         run: chmod +x ./android/gradlew
 
