@@ -1133,3 +1133,10 @@ Contract consulted: yes — manifest-only platform opt-in; no navigation ownersh
 Validation: `git diff --check` passed. Source inspection found no app-owned `popBackStack()` calls. Device verification and Android build remain pending because the sandbox has no configured Android SDK (`ANDROID_HOME`/`local.properties` missing).
 Status: applied-pending-device-verification.
 Signature: Manus AI — 2026-09-20
+2026-09-21 — SQLCipher JNI keep rules
+What: Replaced the earlier temporary SQLCipher keep rule with the specified append-only R8 block protecting `net.zetetic.database.**` classes and interfaces using `includedescriptorclasses`. This targets JNI field lookup for `SQLiteCustomFunction.name` and `numArgs` without changing dependencies, build flags, startup code, or existing Room/WorkManager/coroutine rules.
+Files touched: android/app/proguard-rules.pro and this ledger.
+Validation: Both specified `-keep,includedescriptorclasses` rules are present exactly once; the diff against the repository baseline is limited to the requested appended block. No release build was attempted; the sandbox still lacks an Android SDK configuration (`ANDROID_HOME`/`local.properties`).
+Contract consulted: no architecture change; this is a scoped Layer 0 build/shrinker configuration fix.
+Status: applied-pending-release-build-verification.
+Signature: Manus AI — 2026-09-21

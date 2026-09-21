@@ -26,3 +26,11 @@
 -dontwarn org.jetbrains.annotations.**
 -dontwarn kotlinx.coroutines.**
 -dontwarn com.google.android.material.**
+
+# SQLCipher (net.zetetic:sqlcipher-android) — AAR ships no consumer-rules.pro/proguard.txt.
+# register_android_database_SQLiteConnection() looks up SQLiteCustomFunction's 'name' (String)
+# and 'numArgs' (int) fields by name via JNI GetFieldID during JNI_OnLoad. A failed lookup here
+# is fatal (ART calls Runtime::Abort, not a catchable Java exception). includedescriptorclasses
+# additionally protects types referenced only in field/method descriptors, which plain -keep does not.
+-keep,includedescriptorclasses class net.zetetic.database.** { *; }
+-keep,includedescriptorclasses interface net.zetetic.database.** { *; }
