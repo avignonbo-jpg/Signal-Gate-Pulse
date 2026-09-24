@@ -21,6 +21,19 @@
 # polling, and stopping logcat — inside ONE script invocation (one line in the
 # YAML), so control flow and variables behave like a normal shell script.
 #
+# CALL-SCREENING VERIFICATION (added):
+# Headless CI has no way to tap through the system ROLE_CALL_SCREENING
+# picker dialog, so the role is granted directly via the `cmd role` shell
+# command before any call is simulated. Two calls are then placed via the
+# emulator console (`adb emu gsm call`), with a gap between them, to check
+# whether onScreenCall fires for both — this was added to investigate a
+# "screening works for one call, then silently stops" regression seen on a
+# physical test device. Note: this AVD has no OEM battery manager, so it
+# cannot reproduce an OEM background-kill cause even if that turns out to
+# be the real explanation on the physical device — a pass here only rules
+# out an app/Telecom-emulator-level cause, it doesn't confirm the OEM
+# battery theory either way.
+#
 # Usage:
 #   verify-launch-and-capture.sh <component> <package> <workspace_dir>
 #
@@ -75,11 +88,41 @@ else
     echo "::warning::adb shell pidof never saw $PACKAGE running during the 15s window"
 fi
 
+echo "=== Granting ROLE_CALL_SCREENING (no UI picker available in headless CI) ==="
+adb shell cmd role add-role-holder android.app.role.CALL_SCREENING "$PACKAGE"
+ROLE_HELD="$(adb shell cmd role holders android.app.role.CALL_SCREENING)"
+echo "Role holders for CALL_SCREENING: $ROLE_HELD"
+if ! echo "$ROLE_HELD" | grep -q "$PACKAGE"; then
+    echo "::warning::$PACKAGE is not listed as CALL_SCREENING role holder after add-role-holder — onScreenCall will not fire below."
+fi
+
+echo "=== Simulating call #1 ==="
+adb emu gsm call 5551234567
+sleep 3
+adb emu gsm cancel 5551234567
+
+echo "=== Waiting 20s between calls (gap for backgrounding/process changes) ==="
+sleep 20
+
+echo "=== Simulating call #2 ==="
+adb emu gsm call 5559876543
+sleep 3
+adb emu gsm cancel 5559876543
+
+sleep 2
+
 kill "$LOGCAT_PID" 2>/dev/null || true
 cp /tmp/full_logcat.txt "$WORKSPACE_DIR/full_logcat.txt"
+
 echo "=== CRASH LOG ==="
 grep -iE "AndroidRuntime|FATAL|Exception|Caused by|signalgate|SignalGateScreening|koin" /tmp/full_logcat.txt || echo "No crash lines found"
 echo "=== END CRASH LOG ==="
+
+echo "=== SCREENING LOG (both simulated calls) ==="
+grep -iE "SignalGateScreening|onScreenCall|TELECOM_ROLE_DIAGNOSTIC|Start proc.*$PACKAGE|Process.*$PACKAGE.*died" /tmp/full_logcat.txt \
+    | tee "$WORKSPACE_DIR/signalgate_diagnostic_logcat.txt" \
+    || echo "No screening-related lines found" | tee "$WORKSPACE_DIR/signalgate_diagnostic_logcat.txt"
+echo "=== END SCREENING LOG ==="
 
 if [ "$LAUNCH_OK" -ne 1 ]; then
     echo "::error::App process never started. 'am start' likely targeted a component/applicationId that isn't installed, or the process died before pidof could observe it. See the full_logcat artifact for what actually happened (or didn't)."
