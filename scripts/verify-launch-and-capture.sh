@@ -90,7 +90,7 @@ fi
 
 echo "=== Granting ROLE_CALL_SCREENING (no UI picker available in headless CI) ==="
 adb shell cmd role add-role-holder android.app.role.CALL_SCREENING "$PACKAGE"
-ROLE_HELD="$(adb shell cmd role holders android.app.role.CALL_SCREENING)"
+ROLE_HELD="$(adb shell cmd role get-role-holders android.app.role.CALL_SCREENING)"
 echo "Role holders for CALL_SCREENING: $ROLE_HELD"
 if ! echo "$ROLE_HELD" | grep -q "$PACKAGE"; then
     echo "::warning::$PACKAGE is not listed as CALL_SCREENING role holder after add-role-holder — onScreenCall will not fire below."
