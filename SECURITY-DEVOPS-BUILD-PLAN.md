@@ -232,7 +232,7 @@ Phase 4 — Architecture and Product Completion 4.0 Edge Execution & Control-Pla
 
 
 
-CallScreeningService response guarantee and deadline architecture — OPEN, highest priority in this phase Two related defects in SignalGateCallScreeningService.onScreenCall(): Problem A — silent non-response: details.handle?.schemeSpecificPart ?: return can exit the function without ever calling respondToCall(). Android's CallScreeningService contract requires a response within 5 seconds; if none arrives, the framework unbinds and the call proceeds as if allowed. A null/malformed handle currently produces exactly the implicit-ALLOW failure mode Phase 0.6 was built to eliminate, just from a different entry point that Phase 0.6's test coverage doesn't reach. Problem B — unstructured concurrency: CoroutineScope(Dispatchers.Default).launch { ... } creates a new unmanaged scope per call with no structured cancellation, no lifecycle relationship to the service, no concurrency limit, and no deadline enforcement. Decision, response, DB persistence, notification, and haptic dispatch all currently run inside that same coroutine, so a slow persistence write can push the response itself past the platform's 5-second deadline. Required shape: Code The response must not be able to block on persistence, notification, or haptic work succeeding or failing. A null/invalid handle must produce an explicit, audited response (SECURITY_FAILURE or an explicit safe-default), never a silent return. Exit test (required, not optional): a JVM/instrumented test proving the screening response is still produced when persistence blocks or throws, and a second test proving a null/invalid handle produces an explicit audited response rather than a silent return. See 4.9.A/4.9.B/4.9.C below for the full set.
+CallScreeningService response guarantee and deadline architecture — **✅ COMPLETE**, CI-verified 2026-09-25 on commit `635c368` and ledger closure commit `5d01377`. The service now converts null/malformed handles into an explicit audited `SECURITY_FAILURE`, uses a service-owned bounded coroutine scope, enforces a 3,500 ms decision timeout, emits the Telecom response before persistence/notification/haptic work, and prevents persistence failures from suppressing or duplicating the response. Consumer CI run `36081160447` passed with `ScreeningServiceDeadlineTest` (6 tests), `ScreeningServiceTimingBudgetTest` (1 test), and `ScreeningServiceCallResponseMappingTest` (1 test), all with zero failures/errors; Instrumented Tests run `36081160443` also passed. This closes the 4.0.1 issue and its named regression requirements. Broader 4.0.7 real-device, process-death, privacy, and release-gate criteria remain separate and open.
 
 
 ### 4.0.2 — SourceType policy enum, source-identity bug, and Sources-screen/Contacts wiring audit
@@ -372,7 +372,7 @@ XLSX shared-string limit needs a byte budget, not just a count — **✅ COMPLET
 
 
 
-CallScreeningService deadline test — **PARTIALLY EVIDENCED**, CI-verified typed-timeout fallback 2026-09-01. `ScreeningServiceDeadlineTest.decisionTimeout_emitsOneSecurityFailureResponseAndAudits` drives the supported `withTimeout` path and confirms one explicit `SECURITY_FAILURE` response plus an audit record when the internal decision bound expires. Commit `721b8f1` passed Pulse Consumer CI `33465291591`, Pulse Instrumented Tests `33465291567`, Compose Metrics CI `33465291580`, and Dependency/CVE Scan `33465291605`. Full closure remains open: the suite does not yet measure a deliberately slow `CallScreeningEngine` path against the 3.5-second internal response budget or establish real-device Telecom timing. Covers 4.0.1.
+CallScreeningService deadline test — **✅ COMPLETE**, CI-verified 2026-09-25. `ScreeningServiceDeadlineTest` passed 6 tests and `ScreeningServiceTimingBudgetTest` passed 1 test on Consumer CI run `36081160447`, with zero failures/errors. The suite covers response-before-blocked-persistence, persistence exceptions, null-handle audited failure, unexpected service exceptions, decision-timeout audited failure, and measured 500 ms/2,000 ms/3,400 ms/3,600 ms decision delays against the 3,500 ms internal budget. Instrumented Tests run `36081160443` also passed. Real-device Telecom timing remains a broader 4.0.7 gate criterion, not an unclosed 4.0.1 regression requirement.
 
 
 ### 4.9.B — Null-handle test
@@ -544,7 +544,7 @@ Phase 7 — Release Candidate Gate A release candidate may be promoted only when
 - [ ] R8 release build is validated 
 - [ ] SBOM/checksum/provenance/signing artifacts exist 
 - [ ] Manifest/exported-component/privacy reviews are complete 
-- [ ] CallScreeningService guarantees exactly one response per invocation under null-handle and slow-persistence conditions, with passing tests (4.0.1 / 4.9.A-C) 
+- [x] CallScreeningService guarantees exactly one response per invocation under null-handle and slow-persistence conditions, with passing tests (4.0.1 / 4.9.A-C) — CI-verified 2026-09-25 
 - [ ] Bloom mutation is provably post-commit-only, with a rollback/contamination test passing (4.0.3 / 4.9.D) 
 - [ ] SourceType is the enforced source-identity discriminator; priority is not used for identity anywhere (4.0.2) 
 - [ ] Manifest permissions are individually justified against actual runtime use (6.5)
