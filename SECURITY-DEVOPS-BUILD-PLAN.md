@@ -544,7 +544,7 @@ Phase 7 — Release Candidate Gate A release candidate may be promoted only when
 - [ ] R8 release build is validated 
 - [ ] SBOM/checksum/provenance/signing artifacts exist 
 - [ ] Manifest/exported-component/privacy reviews are complete 
-- [x] CallScreeningService guarantees exactly one response per invocation under null-handle and slow-persistence conditions, with passing tests (4.0.1 / 4.9.A-C) — CI-verified 2026-09-25 
+- [x] CallScreeningService guarantees exactly one response per invocation under null-handle and slow-persistence conditions, with passing tests (4.0.1 / 4.9.A-C) — CI-verified 2026-09-25
 - [ ] Bloom mutation is provably post-commit-only, with a rollback/contamination test passing (4.0.3 / 4.9.D) 
 - [ ] SourceType is the enforced source-identity discriminator; priority is not used for identity anywhere (4.0.2) 
 - [ ] Manifest permissions are individually justified against actual runtime use (6.5)
