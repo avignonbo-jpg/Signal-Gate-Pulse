@@ -24,9 +24,11 @@ import com.signalgate.pulse.ui.notifications.PulseHapticsController
 import com.signalgate.pulse.ui.notifications.PulseTriggerLimiter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.TimeoutCancellationException
 import org.koin.android.ext.android.inject
@@ -173,7 +175,16 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
         respond(responseFactory(decision.callAction))
 
         try {
-            persist(callInfo, decision)
+            // Reproduced in crash-diagnostic.yml's two-call emulator test (2026-09):
+            // Telecom can tear down this Service (onDestroy -> serviceScope.cancel())
+            // immediately after respond() returns, before this suspend call finishes.
+            // Without NonCancellable, that cancellation propagates into persist() and
+            // the audit/review write is silently lost even though respond() already
+            // succeeded. NonCancellable does not protect against the process itself
+            // being killed outright — only against this Job-cancellation race.
+            withContext(NonCancellable) {
+                persist(callInfo, decision)
+            }
         } catch (e: Exception) {
             // The decision response is already complete. A persistence failure must
             // not trigger a second response or rewrite the completed call outcome.
