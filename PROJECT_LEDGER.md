@@ -1225,3 +1225,10 @@ Files touched: `android/app/src/androidTest/kotlin/com/signalgate/pulse/DrawerNa
 Validation: The initial Pulse Instrumented Tests run `36236694817` exposed only the test-thread setup error; Pulse Consumer CI, Compose Metrics CI, Dependency/CVE Scan, and Secret Scan passed. `git diff --check` and mandatory instrumented rerun remain pending.
 Status: Corrected test fixture pushed to the existing PR branch; new emulator result pending.
 Signature: Manus AI — 2026-09-26
+
+
+2026-09-26 — Drawer back-stack fix and emulator regression CI-verified
+What: The corrected `DrawerNavigationBackStackTest` ran successfully on the API 33 emulator. Its three targeted cases passed: post-startup navigation with Startup absent from the back stack, drawer navigation from a deep-link-style Digest entry, and preserving startup/onboarding against drawer bypass. The initial run's UI-thread fixture error was corrected before this successful run.
+Evidence: Pulse Instrumented Tests run [36237249002](https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/36237249002) passed; downloaded JUnit XML records all three named test cases with no failures/errors (suite: tests=46, failures=0, errors=0, skipped=0). For commit `1b9f5dc`, Pulse Consumer CI, Compose Metrics CI, Dependency and CVE Scan, and Secret Scan also passed. Release build was skipped as configured for this PR workflow.
+Status: Drawer navigation no longer uses the removed startup destination as its `popUpTo` anchor; fix and regression are CI-verified. PR #3 remains open and unmerged. The original device log excerpt did not contain the `No package ID 25` warning, so disappearance of that separate reported warning remains unverified on the owner's device.
+Signature: Manus AI — 2026-09-26
