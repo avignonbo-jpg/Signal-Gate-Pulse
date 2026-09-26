@@ -1206,3 +1206,29 @@ Contract consulted: yes — the attached scoped issue manifest, `Architecture-Co
 Validation: CI unit-test step passed for the pushed test commit. Documentation diff checked for whitespace/errors before commit.
 Status: 4.9.G's total- and partial-persistence-failure test evidence is CI-verified. 4.0.5 remains PARTIALLY resolved, not closed: the test confirms the present inconsistent split-write behavior; a coherent agreement record and explicit product/design decision remain outstanding. No implementation of any proposed storage option was authorized here. 4.0.3 and 4.0.4 remain closed; 4.0.6 remains an independent open design review.
 Signature: Manus AI — 2026-09-25
+
+
+2026-09-26 — Drawer navigation back-stack target regression fix
+Who: Manus AI, following owner instruction to keep changes directly scoped to this fix.
+What: Replaced MainActivity's drawer `popUpTo(navController.graph.startDestinationId)` with `navigateToDrawerDestination()`. Startup and onboarding are guarded from drawer navigation; the helper anchors ordinary drawer switching to Dashboard when Dashboard is on the stack, and falls back to the current destination for direct deep links. Added `DrawerNavigationBackStackTest` covering post-startup navigation after Startup has been removed, deep-link-style entry without Dashboard on the stack, and the startup/onboarding guard. Added only the matching AndroidX Navigation testing dependency (2.7.7) needed by the emulator test.
+Files touched: `android/app/src/main/java/com/signalgate/pulse/MainActivity.kt`; `android/app/src/androidTest/kotlin/com/signalgate/pulse/DrawerNavigationBackStackTest.kt`; `android/app/build.gradle`; `PROJECT_LEDGER.md`.
+Layers touched: Layer 7 activity/navigation and Android instrumented regression coverage. No graph redesign, resources, consent policy, screening behavior, or unrelated UI was changed.
+Contract consulted: yes — Architecture-Contract.md confirms the single-activity Compose navigation ownership and required preservation of onboarding/consent route policy.
+Validation: `git diff --check` passed. This sandbox has no configured Android SDK, so the emulator test was not run locally. Mandatory `Pulse Instrumented Tests` CI is required before considering the change verified; exact device log confirmation of the resource warning remains separate and is not claimed here.
+Status: Scoped fix and regression test prepared on branch `fix/drawer-pop-up-target`; CI result pending.
+Signature: Manus AI — 2026-09-26
+
+
+2026-09-26 — Drawer-navigation regression test now initializes on the UI thread
+What: The first PR emulator run compiled the code and executed all three `DrawerNavigationBackStackTest` methods, but each failed during TestNavHostController setup with `IllegalStateException: Method addObserver must be called on the main thread`. Added AndroidX `@UiThreadTest` to those test methods. No production behavior changed in this follow-up.
+Files touched: `android/app/src/androidTest/kotlin/com/signalgate/pulse/DrawerNavigationBackStackTest.kt`; `PROJECT_LEDGER.md`.
+Validation: The initial Pulse Instrumented Tests run `36236694817` exposed only the test-thread setup error; Pulse Consumer CI, Compose Metrics CI, Dependency/CVE Scan, and Secret Scan passed. `git diff --check` and mandatory instrumented rerun remain pending.
+Status: Corrected test fixture pushed to the existing PR branch; new emulator result pending.
+Signature: Manus AI — 2026-09-26
+
+
+2026-09-26 — Drawer back-stack fix and emulator regression CI-verified
+What: The corrected `DrawerNavigationBackStackTest` ran successfully on the API 33 emulator. Its three targeted cases passed: post-startup navigation with Startup absent from the back stack, drawer navigation from a deep-link-style Digest entry, and preserving startup/onboarding against drawer bypass. The initial run's UI-thread fixture error was corrected before this successful run.
+Evidence: Pulse Instrumented Tests run [36237249002](https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/36237249002) passed; downloaded JUnit XML records all three named test cases with no failures/errors (suite: tests=46, failures=0, errors=0, skipped=0). For commit `1b9f5dc`, Pulse Consumer CI, Compose Metrics CI, Dependency and CVE Scan, and Secret Scan also passed. Release build was skipped as configured for this PR workflow.
+Status: Drawer navigation no longer uses the removed startup destination as its `popUpTo` anchor; fix and regression are CI-verified. PR #3 remains open and unmerged. The original device log excerpt did not contain the `No package ID 25` warning, so disappearance of that separate reported warning remains unverified on the owner's device.
+Signature: Manus AI — 2026-09-26

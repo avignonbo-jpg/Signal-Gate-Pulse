@@ -9,10 +9,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.signalgate.pulse.security.DatabaseResetEvent
 import com.signalgate.pulse.ui.components.GlassmorphicDrawerContent
+import com.signalgate.pulse.ui.navigation.Screen
 import com.signalgate.pulse.ui.navigation.SignalGateNavGraph
 import com.signalgate.pulse.ui.theme.SignalGateTheme
 import kotlinx.coroutines.launch
@@ -78,15 +80,7 @@ class MainActivity : ComponentActivity() {
                             currentRoute = currentRoute,
                             onDestinationSelected = { screen ->
                                 scope.launch { drawerState.close() }
-                                if (currentRoute != screen.route) {
-                                    navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.startDestinationId) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
+                                navController.navigateToDrawerDestination(screen.route)
                             }
                         )
                     }
@@ -102,5 +96,30 @@ class MainActivity : ComponentActivity() {
             }
         }
         StartupDiagnostics.mark(StartupDiagnostics.Event.ACTIVITY_CONTENT_SET)
+    }
+}
+
+/**
+ * Drawer navigation must not pop to the NavHost's startup route: that route is
+ * deliberately removed after startup routing. Prefer Dashboard as the stable
+ * drawer anchor, falling back to the current destination for direct deep links.
+ */
+internal fun NavController.navigateToDrawerDestination(route: String) {
+    val currentRoute = currentDestination?.route ?: return
+    val startupRoute = graph.findNode(graph.startDestinationId)?.route
+    if (currentRoute == startupRoute || currentRoute == Screen.Onboarding.route) return
+    if (currentRoute == route) return
+
+    val anchorRoute = runCatching {
+        getBackStackEntry(Screen.Dashboard.route)
+        Screen.Dashboard.route
+    }.getOrDefault(currentRoute)
+
+    navigate(route) {
+        popUpTo(anchorRoute) {
+            saveState = true
+        }
+        launchSingleTop = true
+        restoreState = true
     }
 }

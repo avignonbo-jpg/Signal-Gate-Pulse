@@ -231,6 +231,7 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1' //noinspection GradleDependency — pinned, matched to androidx.test:core 1.5.0
     androidTestImplementation 'androidx.test:runner:1.5.2' //noinspection GradleDependency — pinned, matched to androidx.test:core 1.5.0
     androidTestImplementation 'androidx.test:rules:1.5.0' //noinspection GradleDependency — pinned, matched to androidx.test:core 1.5.0
+    androidTestImplementation 'androidx.navigation:navigation-testing:2.7.7' //noinspection GradleDependency — aligned with navigation-compose
 
     // Room MigrationTestHelper — validates MIGRATION_1_2 and MIGRATION_2_3 schemas against entity definitions.
     // Requires exportSchema = true in @Database (already set) and the
