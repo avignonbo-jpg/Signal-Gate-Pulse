@@ -1194,3 +1194,15 @@ Contract consulted: yes — Architecture-Contract.md, this ledger's 2026-08-31/2
 Validation: Source-read verification only; no build or CI run performed, since no production or test code changed. `git diff --check` was not run in this sandbox pass.
 Status: 4.0.3 and 4.0.4 are source-verified CLOSED. 4.0.5 is PARTIALLY resolved — the race is fixed, the coherent-record requirement and a partial-failure test are not, and this must not be marked complete until that gap is addressed or explicitly descoped. 4.0.6 remains open as a design review, unaffected by this pass.
 Signature: Claude — 2026-09-25
+
+
+2026-09-25 — 4.0.5 partial-write behavior test CI-verified; coherent-record decision remains open
+Who: Manus AI, following the request to update the build plan and ledger after CI completed.
+What: Recorded the new `OnboardingViewModelEulaTest.markEulaAccepted_versionWriteFailureLeavesAcceptedFlagPersistedWithoutMetadata` test. It configures the fake DAO to fail on `EULA_VERSION` after the earlier `EULA_ACCEPTED` write succeeds. Assertions document the current partial-write state: the ViewModel remains unaccepted and surfaces an error, while the stored accepted flag is `true` and version/timestamp are absent.
+Evidence: Pulse Consumer CI run [36205908886](https://github.com/avignonbo-jpg/Signal-Gate-Pulse/actions/runs/36205908886) on commit `e81bf5a595d86b359d3cd285739a8a5b8212c76b` completed successfully; its `Run Unit Tests (Pulse)` step succeeded. The test change is in that commit.
+Files touched by this update: `SECURITY-DEVOPS-BUILD-PLAN.md` and this append-only ledger entry. The test file was delivered earlier in commit `e81bf5a`; no production code or schema changed.
+Layers touched: documentation only in this update; previously committed test-only coverage.
+Contract consulted: yes — the attached scoped issue manifest, `Architecture-Contract.md`, and the current 4.0.5/4.9.G build-plan text.
+Validation: CI unit-test step passed for the pushed test commit. Documentation diff checked for whitespace/errors before commit.
+Status: 4.9.G's total- and partial-persistence-failure test evidence is CI-verified. 4.0.5 remains PARTIALLY resolved, not closed: the test confirms the present inconsistent split-write behavior; a coherent agreement record and explicit product/design decision remain outstanding. No implementation of any proposed storage option was authorized here. 4.0.3 and 4.0.4 remain closed; 4.0.6 remains an independent open design review.
+Signature: Manus AI — 2026-09-25
