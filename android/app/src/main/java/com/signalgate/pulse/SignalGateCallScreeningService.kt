@@ -30,6 +30,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.TimeoutCancellationException
 import org.koin.android.ext.android.inject
 import timber.log.Timber
@@ -175,15 +176,24 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
         respond(responseFactory(decision.callAction))
 
         try {
-            // Reproduced in crash-diagnostic.yml's two-call emulator test (2026-09):
-            // Telecom can tear down this Service (onDestroy -> serviceScope.cancel())
-            // immediately after respond() returns, before this suspend call finishes.
-            // Without NonCancellable, that cancellation propagates into persist() and
-            // the audit/review write is silently lost even though respond() already
-            // succeeded. NonCancellable does not protect against the process itself
-            // being killed outright — only against this Job-cancellation race.
+            // Reproduced independently twice: in this session's live-device logcats
+            // (release build, PROJECT_LEDGER.md 2026-09-24 entry) and in a separate
+            // session's crash-diagnostic.yml two-call CI emulator test (2026-09-24,
+            // same day). Telecom can tear down this Service (onDestroy ->
+            // serviceScope.cancel()) immediately after respond() returns, before this
+            // suspend call finishes. Without NonCancellable, that cancellation
+            // propagates into persist() and the audit/review write is silently lost
+            // even though respond() already succeeded. NonCancellable does not protect
+            // against the process itself being killed outright — only against this
+            // Job-cancellation race.
+            //
+            // withTimeoutOrNull bounds it: NonCancellable alone has no escape hatch if
+            // a write ever genuinely hangs (DB lock, disk issue), which on this
+            // 4-thread-limited dispatcher could starve it across repeated calls. These
+            // are local SQLCipher/Room writes, normally sub-millisecond, so 2s is
+            // generous headroom, not a deadline this is expected to hit.
             withContext(NonCancellable) {
-                persist(callInfo, decision)
+                withTimeoutOrNull(2_000) { persist(callInfo, decision) }
             }
         } catch (e: Exception) {
             // The decision response is already complete. A persistence failure must
@@ -266,10 +276,18 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
             notes = CallTier.SECURITY_FAILURE.name
         )
         serviceScope.launch {
-            try {
-                audit(failureEntry)
-            } catch (e: Exception) {
-                Timber.tag(TAG).e(e, "Failed to write SECURITY_FAILURE audit record")
+            // Same shield as processScreeningCall's persist() call, and for the same
+            // reason — see that call site's comment. This one was missed by the prior
+            // partial fix (PROJECT_LEDGER.md 2026-09-24 "drafted, not committed" entry
+            // only covered processScreeningCall's persist()); it's arguably the more
+            // important of the two, since it's the audit record for a SECURITY_FAILURE
+            // — the one write you least want silently lost to a teardown race.
+            withContext(NonCancellable) {
+                try {
+                    withTimeoutOrNull(2_000) { audit(failureEntry) }
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "Failed to write SECURITY_FAILURE audit record")
+                }
             }
         }
     }
