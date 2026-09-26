@@ -8,6 +8,7 @@ import com.signalgate.pulse.database.repositories.SettingRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,15 +27,22 @@ import org.robolectric.Shadows
 private class FakeSettingDao : SettingDao {
     val stored = mutableMapOf<String, String>()
     var shouldThrow = false
+    var throwOnKey: String? = null
+
+    private fun failIfRequested(key: String) {
+        if (shouldThrow || key == throwOnKey) {
+            throw IllegalStateException("database unavailable")
+        }
+    }
 
     override suspend fun insertSetting(setting: SettingEntry): Long {
-        if (shouldThrow) throw IllegalStateException("database unavailable")
+        failIfRequested(setting.key)
         stored[setting.key] = setting.value
         return 1L
     }
 
     override suspend fun updateSetting(setting: SettingEntry) {
-        if (shouldThrow) throw IllegalStateException("database unavailable")
+        failIfRequested(setting.key)
         stored[setting.key] = setting.value
     }
 
@@ -44,7 +52,7 @@ private class FakeSettingDao : SettingDao {
     override suspend fun getSettingValue(key: String): String? = stored[key]
 
     override suspend fun updateSettingValue(key: String, value: String, timestamp: Long) {
-        if (shouldThrow) throw IllegalStateException("database unavailable")
+        failIfRequested(key)
         stored[key] = value
     }
 
@@ -90,5 +98,23 @@ class OnboardingViewModelEulaTest {
             viewModel.eulaAcceptError.value
         )
         assertTrue(fakeDao.stored.isEmpty())
+    }
+
+    @Test
+    fun markEulaAccepted_versionWriteFailureLeavesAcceptedFlagPersistedWithoutMetadata() {
+        fakeDao.throwOnKey = SettingKeys.EULA_VERSION
+        val viewModel = OnboardingViewModel(settingRepository)
+
+        viewModel.markEulaAccepted(SettingKeys.EULA_CURRENT_VERSION)
+        drainMainDispatcher()
+
+        assertFalse(viewModel.eulaAccepted.value)
+        assertEquals(
+            "Couldn't save your agreement — please try again.",
+            viewModel.eulaAcceptError.value
+        )
+        assertEquals("true", fakeDao.stored[SettingKeys.EULA_ACCEPTED])
+        assertNull(fakeDao.stored[SettingKeys.EULA_VERSION])
+        assertNull(fakeDao.stored[SettingKeys.EULA_ACCEPTED_AT])
     }
 }
