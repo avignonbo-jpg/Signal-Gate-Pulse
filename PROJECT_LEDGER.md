@@ -1217,3 +1217,11 @@ Contract consulted: yes — Architecture-Contract.md confirms the single-activit
 Validation: `git diff --check` passed. This sandbox has no configured Android SDK, so the emulator test was not run locally. Mandatory `Pulse Instrumented Tests` CI is required before considering the change verified; exact device log confirmation of the resource warning remains separate and is not claimed here.
 Status: Scoped fix and regression test prepared on branch `fix/drawer-pop-up-target`; CI result pending.
 Signature: Manus AI — 2026-09-26
+
+
+2026-09-26 — Drawer-navigation regression test now initializes on the UI thread
+What: The first PR emulator run compiled the code and executed all three `DrawerNavigationBackStackTest` methods, but each failed during TestNavHostController setup with `IllegalStateException: Method addObserver must be called on the main thread`. Added AndroidX `@UiThreadTest` to those test methods. No production behavior changed in this follow-up.
+Files touched: `android/app/src/androidTest/kotlin/com/signalgate/pulse/DrawerNavigationBackStackTest.kt`; `PROJECT_LEDGER.md`.
+Validation: The initial Pulse Instrumented Tests run `36236694817` exposed only the test-thread setup error; Pulse Consumer CI, Compose Metrics CI, Dependency/CVE Scan, and Secret Scan passed. `git diff --check` and mandatory instrumented rerun remain pending.
+Status: Corrected test fixture pushed to the existing PR branch; new emulator result pending.
+Signature: Manus AI — 2026-09-26

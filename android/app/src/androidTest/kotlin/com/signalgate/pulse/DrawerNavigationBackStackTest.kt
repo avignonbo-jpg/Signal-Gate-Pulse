@@ -5,6 +5,7 @@ import androidx.navigation.createGraph
 import androidx.navigation.compose.ComposeNavigator
 import androidx.navigation.compose.composable
 import androidx.navigation.testing.TestNavHostController
+import androidx.test.annotation.UiThreadTest
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
@@ -17,6 +18,7 @@ import org.junit.runner.RunWith
 class DrawerNavigationBackStackTest {
 
     @Test
+    @UiThreadTest
     fun drawerNavigationAfterStartupUsesDashboardNotRemovedStartupRoute() {
         val navController = createController()
         navController.navigate(DASHBOARD_ROUTE) {
@@ -35,6 +37,7 @@ class DrawerNavigationBackStackTest {
     }
 
     @Test
+    @UiThreadTest
     fun drawerNavigationFromDeepLinkDestinationUsesCurrentDestinationAsAnchor() {
         val navController = createController().apply {
             navigate(DIGEST_ROUTE) {
@@ -49,6 +52,7 @@ class DrawerNavigationBackStackTest {
     }
 
     @Test
+    @UiThreadTest
     fun drawerNavigationCannotBypassStartupOrOnboarding() {
         val startupController = createController()
         startupController.navigateToDrawerDestination(DASHBOARD_ROUTE)
