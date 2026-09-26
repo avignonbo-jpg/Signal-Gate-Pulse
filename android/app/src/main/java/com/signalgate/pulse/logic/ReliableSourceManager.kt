@@ -52,8 +52,18 @@ import java.util.concurrent.TimeUnit
  *   phone numbers but is not a curated blocklist — treat as medium-confidence
  *   signal (confidence = 70), not a hard block source. The primary URL is the
  *   Socrata DOWNLOAD endpoint; the fallback queries the Socrata API directly
- *   with a row limit. Neither was independently verified against live FCC data
- *   this session — confirm both URLs resolve before shipping.
+ *   with a row limit.
+ *
+ *   2026-09-01 live verification (see PROJECT_LEDGER.md): FCC_PRIMARY_URL
+ *   returned no text to the extractor — it did not resolve to usable data
+ *   in that session. FCC_FALLBACK_URL did resolve and returned a current
+ *   CSV with "Ticket ID" as its first column and "Caller ID Number" as the
+ *   caller-number header, which is the header streamColumnByHeader() below
+ *   is pinned to. Fallback behavior is therefore the only live-verified
+ *   path as of that session. FCC_PRIMARY_URL's failure has not been
+ *   independently re-checked since and may be transient or may mean the
+ *   primary endpoint is no longer valid — do not assume it resolves
+ *   without re-testing it live.
  *
  * Fallback strategy:
  *   Each source has a fallback URL list. On primary failure, each fallback is
