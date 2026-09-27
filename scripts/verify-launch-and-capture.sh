@@ -111,17 +111,31 @@ adb emu gsm cancel 5559876543
 
 sleep 2
 
+echo "=== WORKMANAGER STATE (community_sync) ==="
+{
+    echo "--- jobscheduler ---"
+    adb shell dumpsys jobscheduler 2>/dev/null | grep -A 15 "$PACKAGE" | grep -B2 -A 12 -i "community_sync\|WorkManager" || echo "No matching jobscheduler entry found for $PACKAGE"
+    echo "--- WorkManager service dump ---"
+    adb shell dumpsys activity service com.signalgate.pulse.MainApplication 2>/dev/null | grep -A 20 -i "community_sync" || true
+    adb shell dumpsys jobscheduler 2>/dev/null | grep -B5 -A 20 "androidx.work.impl.background.systemjob.SystemJobService" | grep -A 15 "$PACKAGE" || echo "No SystemJobService entries found for $PACKAGE"
+} | tee "$WORKSPACE_DIR/workmanager_state.txt"
+echo "=== END WORKMANAGER STATE ==="
+
 kill "$LOGCAT_PID" 2>/dev/null || true
 cp /tmp/full_logcat.txt "$WORKSPACE_DIR/full_logcat.txt"
 
 echo "=== CRASH LOG ==="
-grep -iE "AndroidRuntime|FATAL|Exception|Caused by|signalgate|SignalGateScreening|koin" /tmp/full_logcat.txt || echo "No crash lines found"
+{
+    grep -iE "AndroidRuntime|FATAL|Exception|Caused by|signalgate|SignalGateScreening|koin" /tmp/full_logcat.txt \
+        || echo "No crash lines found"
+} | tee "$WORKSPACE_DIR/signalgate_diagnostic_logcat.txt"
 echo "=== END CRASH LOG ==="
 
 echo "=== SCREENING LOG (both simulated calls) ==="
-grep -iE "SignalGateScreening|onScreenCall|TELECOM_ROLE_DIAGNOSTIC|Start proc.*$PACKAGE|Process.*$PACKAGE.*died" /tmp/full_logcat.txt \
-    | tee "$WORKSPACE_DIR/signalgate_diagnostic_logcat.txt" \
-    || echo "No screening-related lines found" | tee "$WORKSPACE_DIR/signalgate_diagnostic_logcat.txt"
+{
+    grep -iE "SignalGateScreening|onScreenCall|TELECOM_ROLE_DIAGNOSTIC|Start proc.*$PACKAGE|Process.*$PACKAGE.*died" /tmp/full_logcat.txt \
+        || echo "No screening-related lines found"
+} | tee "$WORKSPACE_DIR/signalgate_screening_log.txt"
 echo "=== END SCREENING LOG ==="
 
 if [ "$LAUNCH_OK" -ne 1 ]; then
