@@ -80,6 +80,24 @@ jobs:
           path: signalgate_diagnostic_logcat.txt
           retention-days: 7
 
+      - name: Upload Screening Log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signalgate-screening-log
+          path: signalgate_screening_log.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload WorkManager State
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: workmanager-state
+          path: workmanager_state.txt
+          if-no-files-found: warn
+          retention-days: 7
+
   crash-diagnostic-release:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -178,4 +196,22 @@ jobs:
         with:
           name: signalgate-diagnostic-logcat-release
           path: signalgate_diagnostic_logcat.txt
+          retention-days: 7
+
+      - name: Upload Screening Log (Release)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signalgate-screening-log-release
+          path: signalgate_screening_log.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload WorkManager State (Release)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: workmanager-state-release
+          path: workmanager_state.txt
+          if-no-files-found: warn
           retention-days: 7
