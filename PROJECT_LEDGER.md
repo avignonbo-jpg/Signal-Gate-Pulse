@@ -53,6 +53,12 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-09-29 — Foreground-permission and notification-channel comment cleanup
+Who: Manus (this session).
+What: Clarified that foreground-service and self-managed-call permissions are intentionally absent for the current implementation, and that SYNC_STATUS and SECURITY_ALERT are reserved channels with no current posting path. These comment-only changes were committed as 83055b7 on task1-docs-comments. This follow-up adds the append-only ledger record required for the documentation changes; it does not amend 83055b7.
+Files touched: android/app/src/main/AndroidManifest.xml, android/app/src/main/java/com/signalgate/pulse/ui/notifications/NotificationChannelManager.kt, PROJECT_LEDGER.md (this entry).
+Contract consulted: No — comment-only documentation update; no implementation or contract change.
+Follow-up needed: Re-run branch build/CI after this ledger update to verify the ledger check. Task 1b and Task 2 were not started.
 2026-08-25 — Governance document consolidation: v4 adopted as Architecture-Contract.md, Manus CI Guardrails extracted to its own file, 4.0.2 SourceType finding corrected in two documents, document map added
 Who: Claude (Sonnet), same-day continuation of this session's earlier CallScreeningService verification work.
 What: The repo had accumulated five overlapping governance-adjacent files (Architecture-Contract.md v3, Architecture-Contract-v4.md, SECURITY-DEVOPS-BUILD-PLAN.md, SignalGate-Pulse-Release-Roadmap.md, SIGNALGATE-PULSE-NEXT-ARCHITECTURAL-BUILD-PLAN.md) plus a stray duplicate ledger export, with no stated relationship between them — read all of them in full before acting, after an earlier partial read had wrongly dismissed NEXT-ARCHITECTURAL-BUILD-PLAN.md as a low-value draft. Full read reversed that: it contains a real, otherwise-undocumented safety layer (protected-artifact classification, Manus CI enforcement) and a genuine new lead on the startup investigation (a candidate useLegacyPackaging = false build config fix, not yet tested).
