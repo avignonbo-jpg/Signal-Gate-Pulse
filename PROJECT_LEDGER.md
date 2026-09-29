@@ -53,6 +53,13 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-09-29 — FTC/FCC startup rows and explicit unsynced UI state
+Who: Manus (this session).
+What: After Task 1 merged at 8121180, added ensureFederalRows() to create the fixed FTC/FCC rows idempotently on Dispatchers.IO, guarded by a Koin-singleton shared mutex and a Room IGNORE insert/re-read path for name conflicts. Called it during startup after required local-row seeding. SourcesScreen now shows display-only “Not synced yet” when accepted-snapshot and attempted-sync timestamps are both null; persisted lifecycleState defaults remain unchanged. Added Robolectric/Room in-memory tests for empty-database creation, repeat calls, preservation of a disabled row, enabled-ID selection, and concurrent ensures. Local verification: :app:testPulseDebugUnitTest passed (108 tests; 0 failures, errors, or skips), and :app:assemblePulseDebug passed.
+Files touched: android/app/src/main/java/com/signalgate/pulse/database/daos/DatabaseDAOs.kt; android/app/src/main/java/com/signalgate/pulse/database/repositories/DataSourceRepository.kt; android/app/src/main/java/com/signalgate/pulse/di/AppModule.kt; android/app/src/main/java/com/signalgate/pulse/logic/ReliableSourceManager.kt; android/app/src/main/java/com/signalgate/pulse/ui/screens/SourcesScreen.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/ReliableSourceManagerEnsureFederalRowsTest.kt; PROJECT_LEDGER.md (this entry).
+Layers touched: persistence, application/domain orchestration, presentation, and tests.
+Contract consulted: No — no new layer, contract, or dependency was introduced.
+Follow-up needed: Push only the Task 1b commit to task1b-federal-rows. Task 2 was not started.
 2026-09-29 — Foreground-permission and notification-channel comment cleanup
 Who: Manus (this session).
 What: Clarified that foreground-service and self-managed-call permissions are intentionally absent for the current implementation, and that SYNC_STATUS and SECURITY_ALERT are reserved channels with no current posting path. These comment-only changes were committed as 83055b7 on task1-docs-comments. This follow-up adds the append-only ledger record required for the documentation changes; it does not amend 83055b7.

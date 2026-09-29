@@ -10,6 +10,8 @@ import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.database.repositories.SyncHistoryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -170,6 +172,17 @@ class ReliableSourceManager(
         .connectTimeout(CONNECT_TIMEOUT_SEC, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_SEC, TimeUnit.SECONDS)
         .build()
+
+    // AppModule binds this manager as a singleton, shared by startup and the worker.
+    private val ensureSourceRowMutex = Mutex()
+
+    /**
+     * Ensure both managed federal rows exist without contacting either source.
+     * Each lookup/insert uses the same mutex as syncSource()'s row creation.
+     */
+    suspend fun ensureFederalRows() = withContext(Dispatchers.IO) {
+        SOURCES.forEach { ensureSourceRow(it) }
+    }
 
     suspend fun syncAllFederalSources(): List<SyncResult> = withContext(Dispatchers.IO) {
         // Automatic/background sync must honor the persisted enablement toggle.
@@ -490,20 +503,27 @@ class ReliableSourceManager(
             ?.trim('"')
             ?: "UTF-8"
 
-    private suspend fun ensureSourceRow(source: FederalSource): Int {
-        val existing = dataSourceRepository.getSourceByName(source.name)
-        if (existing != null) return existing.id
-        val newId = dataSourceRepository.insertSource(
-            SourceEntity(
-                name      = source.name,
-                type      = source.sourceType,
-                pathOrUrl = source.primaryUrl,
-                isEnabled = true,
-                priority  = source.priority
+    private suspend fun ensureSourceRow(source: FederalSource): Int =
+        ensureSourceRowMutex.withLock {
+            val existing = dataSourceRepository.getSourceByName(source.name)
+            if (existing != null) return@withLock existing.id
+
+            val insertedId = dataSourceRepository.insertSourceIfAbsent(
+                SourceEntity(
+                    name = source.name,
+                    type = source.sourceType,
+                    pathOrUrl = source.primaryUrl,
+                    isEnabled = true,
+                    priority = source.priority
+                )
             )
-        )
-        return newId.toInt()
-    }
+            if (insertedId >= 0L) return@withLock insertedId.toInt()
+
+            // IGNORE returns -1 when another writer already inserted the unique
+            // source name; return that persisted row unchanged (including its toggle).
+            dataSourceRepository.getSourceByName(source.name)?.id
+                ?: error("Source insert was ignored but '${source.name}' could not be re-read")
+        }
 
     private fun lifecycleFailureState(
         reason: String,

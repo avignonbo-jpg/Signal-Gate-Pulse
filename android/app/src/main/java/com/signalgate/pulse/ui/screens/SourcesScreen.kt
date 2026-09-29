@@ -98,9 +98,15 @@ private fun SourceRow(
                 Text(source.displaySourceName(), style = MaterialTheme.typography.titleMedium)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isRemoteSource) {
+                        val isNotSyncedYet =
+                            source.lastAcceptedSnapshot == null && source.lastAttemptedSync == null
                         Text(
-                            text = source.lifecycleState,
-                            color = getLifecycleColor(source.lifecycleState),
+                            text = if (isNotSyncedYet) "Not synced yet" else source.lifecycleState,
+                            color = if (isNotSyncedYet) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                getLifecycleColor(source.lifecycleState)
+                            },
                             style = MaterialTheme.typography.labelMedium
                         )
                         Spacer(Modifier.width(8.dp))
