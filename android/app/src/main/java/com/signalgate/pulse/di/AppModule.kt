@@ -281,11 +281,12 @@ val appModule = listOf(
 )
 
 /**
- * initializeDatabase — Seeds required sources before any Koin binding is resolved.
+ * initializeDatabase — Seeds required local sources, then managed FTC/FCC rows.
  *
- * Called synchronously in MainApplication.onCreate() via runBlocking.
- * Contract §2 requirement: Database initialization must complete BEFORE any
- * CallScreeningService callback can resolve a Koin binding (BlocklistRepository).
+ * Called synchronously in MainApplication.onCreate() via runBlocking after Koin
+ * starts. MANUAL/CONTACTS rows are seeded first; ReliableSourceManager then
+ * ensures FTC/FCC rows on Dispatchers.IO without making network requests.
+ * Completion remains before the Activity and WorkManager startup path.
  *
  * Step 0.1 (2026-07-02): No changes. Still called synchronously.
  * runBlocking was removed from BlocklistRepository binding, not from this function.
@@ -303,6 +304,7 @@ suspend fun initializeDatabase(context: Context) {
     val sourceDao = koin.get<SourceDao>()
     val settingDao = koin.get<SettingDao>()
     DatabaseInitializer.seedRequiredSources(context, sourceDao, settingDao)
+    koin.get<ReliableSourceManager>().ensureFederalRows()
     StartupDiagnostics.mark(StartupDiagnostics.Event.SOURCE_SEED_END)
 }
 

@@ -8,8 +8,11 @@ import com.signalgate.pulse.database.entities.SourceEntity
 import com.signalgate.pulse.database.entities.UnifiedEntryEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.database.repositories.SyncHistoryRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -171,6 +174,27 @@ class ReliableSourceManager(
         .readTimeout(READ_TIMEOUT_SEC, TimeUnit.SECONDS)
         .build()
 
+    // AppModule binds this manager as a singleton, shared by startup and the worker.
+    private val ensureSourceRowMutex = Mutex()
+
+    /**
+     * Ensure both managed federal rows exist without contacting either source.
+     * Each lookup/insert uses the same mutex as syncSource()'s row creation.
+     */
+    suspend fun ensureFederalRows() = withContext(Dispatchers.IO) {
+        SOURCES.forEach { source ->
+            try {
+                if (ensureSourceRow(source) == null) {
+                    Timber.tag(TAG).e("Could not ensure source row for ${source.name}")
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                Timber.tag(TAG).e(failure, "Could not ensure source row for ${source.name}")
+            }
+        }
+    }
+
     suspend fun syncAllFederalSources(): List<SyncResult> = withContext(Dispatchers.IO) {
         // Automatic/background sync must honor the persisted enablement toggle.
         // A missing row is still eligible so the first scheduled run can seed
@@ -197,7 +221,12 @@ class ReliableSourceManager(
         var hadAcceptedSnapshot = false
         Timber.tag(TAG).i("Starting sync: ${source.name} (strategy=${source.strategy})")
         return try {
-            val sourceId = knownSourceId ?: ensureSourceRow(source).also { sourceIdForFailure = it }
+            val sourceId = knownSourceId ?: ensureSourceRow(source)
+            if (sourceId == null) {
+                Timber.tag(TAG).e("Could not ensure source row for ${source.name}; sync skipped")
+                return SyncResult(source.name, 0, false, "Unable to ensure source row")
+            }
+            sourceIdForFailure = sourceId
             hadAcceptedSnapshot = dataSourceRepository.getSourceById(sourceId)?.lastAcceptedSnapshot != null
             val attemptTimestamp = securityRuleRepository.beginSourceSync(sourceId)
             val fetchStartMs = System.currentTimeMillis()
@@ -490,20 +519,31 @@ class ReliableSourceManager(
             ?.trim('"')
             ?: "UTF-8"
 
-    private suspend fun ensureSourceRow(source: FederalSource): Int {
-        val existing = dataSourceRepository.getSourceByName(source.name)
-        if (existing != null) return existing.id
-        val newId = dataSourceRepository.insertSource(
-            SourceEntity(
-                name      = source.name,
-                type      = source.sourceType,
+    private suspend fun ensureSourceRow(source: FederalSource): Int? =
+        ensureSourceRowMutex.withLock {
+            val existing = dataSourceRepository.getSourceByName(source.name)
+            if (existing != null) return@withLock existing.id
+
+            val row = SourceEntity(
+                name = source.name,
+                type = source.sourceType,
                 pathOrUrl = source.primaryUrl,
                 isEnabled = true,
-                priority  = source.priority
+                priority = source.priority
             )
-        )
-        return newId.toInt()
-    }
+            val insertedId = dataSourceRepository.insertSourceIfAbsent(row)
+            if (insertedId >= 0L) return@withLock insertedId.toInt()
+
+            // IGNORE returns -1 when another writer already inserted the unique
+            // source name; return that persisted row unchanged (including its toggle).
+            // If a concurrent remover wins before the reread, retry once; never
+            // throw a duplicate-name constraint error or invent a row ID.
+            dataSourceRepository.getSourceByName(source.name)?.id
+                ?: dataSourceRepository.insertSourceIfAbsent(row)
+                    .takeIf { it >= 0L }
+                    ?.toInt()
+                ?: dataSourceRepository.getSourceByName(source.name)?.id
+        }
 
     private fun lifecycleFailureState(
         reason: String,

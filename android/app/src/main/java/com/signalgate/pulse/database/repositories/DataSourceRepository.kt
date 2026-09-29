@@ -124,6 +124,9 @@ class DataSourceRepository(
 
     suspend fun insertSource(source: SourceEntity): Long = sourceDao.insertSource(source)
 
+    /** Insert a source if its unique name is not already persisted; returns -1 on conflict. */
+    suspend fun insertSourceIfAbsent(source: SourceEntity): Long = sourceDao.insertSourceIfAbsent(source)
+
     suspend fun updateSource(source: SourceEntity) = sourceDao.updateSource(source)
 
     /**
