@@ -188,7 +188,7 @@ val engineModule = module {
     // singleton registered above — ReliableSourceManager now streams federal CSV
     // feeds through it instead of a hand-rolled parser. See ReliableSourceManager.
     single { ReliableSourceManager(get(), get(), get(), get(), get()) }
-    single { SourceSyncUseCase(get()) }
+    single { SourceSyncUseCase(get(), get()) }
 
     // Layer 4 Domain — decision boundary
     // CallRiskEvaluator is a stateless object — registered so CallScreeningEngine
