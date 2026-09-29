@@ -1263,3 +1263,13 @@ Contract consulted: no architecture change — same scoped coroutine-context fix
 Validation: read the full file before editing. Confirmed via diff that the three JVM test files exercising these functions (ScreeningServiceTimingBudgetTest.kt, ScreeningServiceDeadlineTest.kt, ScreeningServiceEdgeExecutionTest.kt) are byte-identical to a private-session copy of this file I'd already reviewed for compatibility — none call onDestroy() mid-test, so NonCancellable/withTimeoutOrNull remain inert in test context. Brace/paren balance sanity-checked post-edit. Sandbox has no Android SDK/network, so the suite was NOT executed this session — inspection-based compatibility review only, not a green test run, same caveat as the entries this builds on.
 Follow-up needed: same as the 2026-09-24 entry's own open item, still open — run the JVM test suite for real; capture another live-call logcat (more than two calls) on a build containing this fix to confirm JobCancellationException no longer appears on either call site; consider adding an actual test that cancels serviceScope mid-persist to close the coverage gap noted above, since no closure entry to date has covered that case with a real test.
 Signature: Claude (Sonnet) — 2026-09-26
+
+2026-09-28 worked with Claude Manus ChatGPT
+The 105 unit tests and assemblePulseDebug passed in the sandbox.
+The 2/2 accepted line is verified by assertion and static wiring, not observed as a runtime log.
+No local or device run happened, and CI status is pending.
+Known open items: FTC and FCC rows don't exist until the first worker run (Task 1b), protected sources (Task 2), and the _isSyncing race (Task 3).
+FYI FOLLOw UP!!!!!
+The new SourcesViewModel comment dropped the reason "Add Source" was removed. That reason was that added sources were inert. Someone could re-add the flow without knowing.
+
+5

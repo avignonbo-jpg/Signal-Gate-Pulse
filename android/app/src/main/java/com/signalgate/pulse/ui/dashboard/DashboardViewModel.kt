@@ -195,12 +195,9 @@ class DashboardViewModel(
         viewModelScope.launch {
             _isSyncing.value = true
             try {
-                val enabledSourceIds = dataSources.first()
-                    .filter { it.isEnabled }
-                    .map { it.id }
-                val results = sourceSyncUseCase.syncSources(enabledSourceIds)
-                val accepted = results.count { it.success }
-                Timber.tag(TAG).i("Enabled source sync complete: $accepted/${results.size} accepted")
+                val enabledFederalIds = SourceSyncUseCase.enabledFederalSourceIds(dataSources.first())
+                val result = sourceSyncUseCase.syncSources(enabledFederalIds)
+                Timber.tag(TAG).i(result.summaryLine)
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to sync all sources")
             } finally {

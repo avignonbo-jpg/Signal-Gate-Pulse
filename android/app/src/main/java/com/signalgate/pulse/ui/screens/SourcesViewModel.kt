@@ -19,15 +19,10 @@ import timber.log.Timber
  * Exposes real SourceEntity data from DataSourceRepository: health status,
  * enable/disable, manual "sync now", and removal.
  *
- * Removed: the "Add Source" custom CSV/URL/XLSX flow. That was not part of the
- * SignalGate Pulse set-and-forget experience —
- * ReliableSourceManager doesn't read the sources table at all, it works off
- * its own hardcoded federal source list, so anything added through this flow
- * was silently inert regardless of type. Pulse's actual source model is
- * fixed: FCC (default), the community blocklist (default), and MANUAL
- * (contacts + post-call decisions) — none of which need a free-text
- * add-a-URL entry point. If this screen's real estate ends up serving
- * something else later, that's a fresh design, not a repurposed dialog.
+ * The source model is fixed: FTC Do Not Call, FCC Consumer Complaints,
+ * Manual User Rules, and Contacts Allow List. Only the two federal sources
+ * are remotely synchronized. There is no free-text source-creation flow; any
+ * future use for this screen's remaining space needs a separate design.
  */
 class SourcesViewModel(
     private val dataSourceRepository: DataSourceRepository,
@@ -89,12 +84,9 @@ class SourcesViewModel(
         viewModelScope.launch {
             _isSyncing.value = true
             try {
-                val enabledSourceIds = sources.first()
-                    .filter { it.isEnabled }
-                    .map { it.id }
-                val results = sourceSyncUseCase.syncSources(enabledSourceIds)
-                val accepted = results.count { it.success }
-                Timber.tag(TAG).i("Enabled source sync complete: $accepted/${results.size} accepted")
+                val enabledFederalIds = SourceSyncUseCase.enabledFederalSourceIds(sources.first())
+                val result = sourceSyncUseCase.syncSources(enabledFederalIds)
+                Timber.tag(TAG).i(result.summaryLine)
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to sync all sources")
             } finally {
