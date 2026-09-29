@@ -8,16 +8,19 @@ import timber.log.Timber
 /**
  * NotificationChannelManager — Phase 4.8.
  *
- * Single registration point for every notification channel.
- * Called from MainApplication.onCreate() before any notification fires.
+ * Central channel registry, called from MainApplication.onCreate() during startup.
+ * SignalGateCallScreeningService also re-registers BLOCKED_CALL_REVIEW immediately
+ * before posting; keep that duplicate definition aligned with this one.
  * Re-registering an existing channel ID is a safe no-op — user settings preserved.
  *
  * BLOCKED_CALL_REVIEW: HIGH — Tier 3 heuristic blocks. User needs prompt visibility
  *   for false-positive recovery. Sound/vibration off (call just ended).
- * SYNC_STATUS: DEFAULT — WorkManager sync progress/completion. Also used as the
- *   foreground-service notification channel for Phase 4.9.
- * SECURITY_ALERT: HIGH — Role loss or critical permission revocation. Vibration on.
- *   Used by Phase 4.12 PermissionHealthCheckWorker (not yet built).
+ * SYNC_STATUS: DEFAULT — Reserved for possible future background-sync
+ *   progress/completion notifications. The current CommunitySyncWorker does not post
+ *   notifications or use foreground-work execution.
+ * SECURITY_ALERT: HIGH — Reserved for possible future alerts about call-screening
+ *   role loss or critical permission revocation. No worker or notification-posting
+ *   path currently uses this channel.
  */
 object NotificationChannelManager {
 
