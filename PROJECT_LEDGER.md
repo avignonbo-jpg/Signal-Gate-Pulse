@@ -53,6 +53,13 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 Session Log
 (Newest entry on top).
+2026-09-29 — Task 1b verification follow-up
+Who: Manus (this session).
+What: This follow-up supersedes the Task 1b validation details recorded by f5b661b. That earlier validation counted 108 tests while three methods combined some requested behaviors; after splitting, the five required tests are individually named and the suite reports 110 total. Removed the explicit error() conflict fallback: Room IGNORE is followed by re-read/retry, and ensureFederalRows catches and logs per-source exceptions (rethrowing cancellation) rather than letting a source-row setup failure abort startup. All five tests use Robolectric with a real in-memory Room database, not a fake DAO. Sandbox verification on the corrected code: 110 unit tests passed (0 failures, errors, or skips) and :app:assemblePulseDebug passed; GitHub CI is pending. SourcesScreen was not observed on a device. Task 2 (protected-source repository safeguards) and Task 3 (the _isSyncing race) remain open; the community/GitHub blocklist question remains unresolved.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/ReliableSourceManager.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/ReliableSourceManagerEnsureFederalRowsTest.kt; PROJECT_LEDGER.md (this entry).
+Layers touched: application orchestration, tests, and project ledger.
+Contract consulted: No — no new layer, contract, or dependency was introduced.
+Follow-up needed: Await user review before committing or pushing this correction. Task 2 and Task 3 were not started.
 2026-09-29 — FTC/FCC startup rows and explicit unsynced UI state
 Who: Manus (this session).
 What: After Task 1 merged at 8121180, added ensureFederalRows() to create the fixed FTC/FCC rows idempotently on Dispatchers.IO, guarded by a Koin-singleton shared mutex and a Room IGNORE insert/re-read path for name conflicts. Called it during startup after required local-row seeding. SourcesScreen now shows display-only “Not synced yet” when accepted-snapshot and attempted-sync timestamps are both null; persisted lifecycleState defaults remain unchanged. Added Robolectric/Room in-memory tests for empty-database creation, repeat calls, preservation of a disabled row, enabled-ID selection, and concurrent ensures. Local verification: :app:testPulseDebugUnitTest passed (108 tests; 0 failures, errors, or skips), and :app:assemblePulseDebug passed.

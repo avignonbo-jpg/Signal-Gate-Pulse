@@ -56,29 +56,41 @@ class ReliableSourceManagerEnsureFederalRowsTest {
     }
 
     @Test
-    fun ensureFederalRows_onEmptyDatabaseCreatesOnlyFtcAndFccAndIsIdempotent(): Unit = runBlocking {
-        val manager = createManager()
+    fun ensureFederalRows_onEmptyDatabaseCreatesExactlyOneFtcAndOneFcc(): Unit = runBlocking {
+        createManager().ensureFederalRows()
 
+        val rows = sourceDao.getAllSources().first()
+        assertEquals(2, rows.size)
+        assertEquals(1, rows.count { it.type == "FTC" && it.name == "FTC Do Not Call Registry" })
+        assertEquals(1, rows.count { it.type == "FCC" && it.name == "FCC Consumer Complaints" })
+        assertTrue(rows.all { it.isEnabled })
+        assertTrue(rows.all { it.lifecycleState == "ENABLED" })
+    }
+
+    @Test
+    fun ensureFederalRows_secondCallAddsNoDuplicates(): Unit = runBlocking {
+        val manager = createManager()
         manager.ensureFederalRows()
         val firstRows = sourceDao.getAllSources().first()
-
-        assertEquals(2, firstRows.size)
-        assertEquals(
-            listOf("FTC Do Not Call Registry", "FCC Consumer Complaints"),
-            firstRows.map { it.name }
-        )
-        assertTrue(firstRows.all { it.isEnabled })
-        assertTrue(firstRows.all { it.lifecycleState == "ENABLED" })
-        assertEquals(
-            firstRows.map { it.id },
-            SourceSyncUseCase.enabledFederalSourceIds(firstRows)
-        )
 
         manager.ensureFederalRows()
         val secondRows = sourceDao.getAllSources().first()
 
         assertEquals(2, secondRows.size)
         assertEquals(firstRows, secondRows)
+    }
+
+    @Test
+    fun enabledFederalSourceIds_returnsBothIdsAfterRowsAreEnsured(): Unit = runBlocking {
+        createManager().ensureFederalRows()
+
+        val rows = sourceDao.getAllSources().first()
+        val ftcId = rows.single { it.type == "FTC" }.id
+        val fccId = rows.single { it.type == "FCC" }.id
+        val enabledIds = SourceSyncUseCase.enabledFederalSourceIds(rows)
+
+        assertEquals(2, enabledIds.size)
+        assertEquals(setOf(ftcId, fccId), enabledIds.toSet())
     }
 
     @Test
