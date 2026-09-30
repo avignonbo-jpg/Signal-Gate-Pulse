@@ -50,8 +50,11 @@ class DashboardViewModel(
     val enabledSourcesCount: Flow<Int> = dataSourceRepository.getEnabledSourceCount()
     val enabledSourcesEntryCount: Flow<Int> = dataSourceRepository.getEnabledSourcesEntryCount()
 
-    private val _isSyncing = MutableStateFlow(false)
-    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+    val isSyncing: StateFlow<Boolean> = sourceSyncUseCase.isSyncing.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        false
+    )
 
     private val _sourceActionError = MutableStateFlow<String?>(null)
     val sourceActionError: StateFlow<String?> = _sourceActionError.asStateFlow()
@@ -184,7 +187,6 @@ class DashboardViewModel(
 
     fun syncSource(sourceId: Int) {
         viewModelScope.launch {
-            _isSyncing.value = true
             try {
                 val result = sourceSyncUseCase.syncSource(sourceId)
                 if (result.success) {
@@ -194,23 +196,18 @@ class DashboardViewModel(
                 }
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to sync source $sourceId")
-            } finally {
-                _isSyncing.value = false
             }
         }
     }
 
     fun syncAllSources() {
         viewModelScope.launch {
-            _isSyncing.value = true
             try {
                 val enabledFederalIds = SourceSyncUseCase.enabledFederalSourceIds(dataSources.first())
                 val result = sourceSyncUseCase.syncSources(enabledFederalIds)
                 Timber.tag(TAG).i(result.summaryLine)
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to sync all sources")
-            } finally {
-                _isSyncing.value = false
             }
         }
     }

@@ -8,10 +8,12 @@ import com.signalgate.pulse.database.repositories.ProtectedSourceDeletionExcepti
 import com.signalgate.pulse.logic.SourceSyncUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.stateIn
 import timber.log.Timber
 
 /**
@@ -36,8 +38,11 @@ class SourcesViewModel(
 
     val sources: Flow<List<SourceEntity>> = dataSourceRepository.getAllSources()
 
-    private val _isSyncing = MutableStateFlow(false)
-    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+    val isSyncing: StateFlow<Boolean> = sourceSyncUseCase.isSyncing.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        false
+    )
 
     private val _sourceActionError = MutableStateFlow<String?>(null)
     val sourceActionError: StateFlow<String?> = _sourceActionError.asStateFlow()
@@ -52,7 +57,6 @@ class SourcesViewModel(
      */
     fun syncSource(sourceId: Int) {
         viewModelScope.launch {
-            _isSyncing.value = true
             try {
                 val result = sourceSyncUseCase.syncSource(sourceId)
                 if (result.success) {
@@ -62,8 +66,6 @@ class SourcesViewModel(
                 }
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to sync source $sourceId")
-            } finally {
-                _isSyncing.value = false
             }
         }
     }
@@ -92,15 +94,12 @@ class SourcesViewModel(
      */
     fun syncAllSources() {
         viewModelScope.launch {
-            _isSyncing.value = true
             try {
                 val enabledFederalIds = SourceSyncUseCase.enabledFederalSourceIds(sources.first())
                 val result = sourceSyncUseCase.syncSources(enabledFederalIds)
                 Timber.tag(TAG).i(result.summaryLine)
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to sync all sources")
-            } finally {
-                _isSyncing.value = false
             }
         }
     }
