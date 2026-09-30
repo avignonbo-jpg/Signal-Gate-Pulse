@@ -53,6 +53,13 @@ class DashboardViewModel(
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
+    private val _sourceActionError = MutableStateFlow<String?>(null)
+    val sourceActionError: StateFlow<String?> = _sourceActionError.asStateFlow()
+
+    fun clearSourceActionError() {
+        _sourceActionError.value = null
+    }
+
     private val _ledStates = MutableStateFlow<Map<Int, Boolean>>(emptyMap())
     val ledStates: StateFlow<Map<Int, Boolean>> = _ledStates.asStateFlow()
 
@@ -164,11 +171,13 @@ class DashboardViewModel(
 
     fun toggleSourceEnabled(sourceId: Int, isEnabled: Boolean) {
         viewModelScope.launch {
+            _sourceActionError.value = null
             try {
                 dataSourceRepository.toggleSourceEnabled(sourceId, isEnabled)
                 Timber.tag(TAG).d("Source $sourceId toggled to $isEnabled")
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to toggle source $sourceId")
+                _sourceActionError.value = "Couldn't update this source. Please try again."
             }
         }
     }

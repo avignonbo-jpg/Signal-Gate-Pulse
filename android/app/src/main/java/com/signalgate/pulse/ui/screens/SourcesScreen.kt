@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.signalgate.pulse.database.entities.SourceEntity
+import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.ui.components.GlassCard
 import com.signalgate.pulse.utils.humanReadable
 import org.koin.androidx.compose.koinViewModel
@@ -24,15 +25,26 @@ import org.koin.androidx.compose.koinViewModel
  *
  * The source model is fixed: FTC Do Not Call, FCC Consumer Complaints,
  * Manual User Rules, and Contacts Allow List. Only FTC and FCC have remote
- * sync status; local-source rows omit those fields and actions.
+ * sync status; Manual User Rules shows read-only enabled status and a management
+ * hint, while Contacts Allow List retains its enable/disable control.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SourcesScreen(viewModel: SourcesViewModel = koinViewModel()) {
     val sources by viewModel.sources.collectAsState(initial = emptyList())
     val isSyncing by viewModel.isSyncing.collectAsState()
+    val sourceActionError by viewModel.sourceActionError.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(sourceActionError) {
+        sourceActionError?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearSourceActionError()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Data Sources") },
@@ -87,6 +99,8 @@ private fun SourceRow(
     onToggleEnabled: (Boolean) -> Unit
 ) {
     val isRemoteSource = source.type == "FTC" || source.type == "FCC"
+    val isProtectedSource = source.type in DataSourceRepository.PROTECTED_SOURCE_TYPES
+    val isManualUserRules = source.type == "MANUAL" && source.pathOrUrl == "local"
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth()) {
@@ -111,10 +125,29 @@ private fun SourceRow(
                         )
                         Spacer(Modifier.width(8.dp))
                     }
-                    Switch(
-                        checked = source.isEnabled,
-                        onCheckedChange = onToggleEnabled
-                    )
+                    if (isManualUserRules) {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = if (source.isEnabled) "Enabled" else "Disabled",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (source.isEnabled) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                            Text(
+                                text = "Manage elsewhere",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        Switch(
+                            checked = source.isEnabled,
+                            onCheckedChange = onToggleEnabled
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(4.dp))
@@ -142,7 +175,7 @@ private fun SourceRow(
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (isRemoteSource) TextButton(onClick = onSync) { Text("Sync now") }
-                TextButton(onClick = onDelete) { Text("Remove") }
+                if (!isProtectedSource) TextButton(onClick = onDelete) { Text("Remove") }
             }
         }
     }
