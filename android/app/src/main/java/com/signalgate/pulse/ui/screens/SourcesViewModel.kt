@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.signalgate.pulse.database.entities.SourceEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
+import com.signalgate.pulse.database.repositories.ProtectedSourceDeletionException
 import com.signalgate.pulse.logic.SourceSyncUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +39,13 @@ class SourcesViewModel(
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
+    private val _sourceActionError = MutableStateFlow<String?>(null)
+    val sourceActionError: StateFlow<String?> = _sourceActionError.asStateFlow()
+
+    fun clearSourceActionError() {
+        _sourceActionError.value = null
+    }
+
     /**
      * Manual "sync now" for a single source. The result comes from the real
      * fetch-and-atomic-activation path; this method never fabricates HEALTHY.
@@ -67,11 +75,13 @@ class SourcesViewModel(
      */
     fun toggleSourceEnabled(sourceId: Int, isEnabled: Boolean) {
         viewModelScope.launch {
+            _sourceActionError.value = null
             try {
                 dataSourceRepository.toggleSourceEnabled(sourceId, isEnabled)
                 Timber.tag(TAG).d("Source $sourceId toggled to $isEnabled")
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to toggle source $sourceId")
+                _sourceActionError.value = "Couldn't update this source. Please try again."
             }
         }
     }
@@ -97,9 +107,13 @@ class SourcesViewModel(
 
     fun deleteSource(source: SourceEntity) {
         viewModelScope.launch {
+            _sourceActionError.value = null
             try {
                 dataSourceRepository.deleteSource(source)
                 Timber.tag(TAG).i("Source deleted: ${source.name}")
+            } catch (e: ProtectedSourceDeletionException) {
+                Timber.tag(TAG).w("Refused deletion of protected source ${source.name}")
+                _sourceActionError.value = "This source can't be removed."
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to delete source ${source.name}")
             }

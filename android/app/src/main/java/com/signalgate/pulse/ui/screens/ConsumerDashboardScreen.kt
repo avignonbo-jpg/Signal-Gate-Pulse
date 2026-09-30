@@ -2,6 +2,7 @@ package com.signalgate.pulse.ui.screens
 
 import android.app.role.RoleManager
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -68,6 +69,14 @@ fun ConsumerDashboardScreen(
     val shieldActive by viewModel.shieldActive.collectAsState()
     val blockedToday by viewModel.blockedToday.collectAsState()
     val callsScreened by viewModel.callsScreenedToday.collectAsState(initial = 0)
+    val sourceActionError by viewModel.sourceActionError.collectAsState()
+
+    LaunchedEffect(sourceActionError) {
+        sourceActionError?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            viewModel.clearSourceActionError()
+        }
+    }
 
     // First-launch → onboarding routing, ported from the retired OperationalDashboard.
     // Step 2.6: now reads isOnboardingComplete from DashboardViewModel (backed by
