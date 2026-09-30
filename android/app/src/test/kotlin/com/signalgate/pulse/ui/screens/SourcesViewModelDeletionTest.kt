@@ -61,7 +61,9 @@ class SourcesViewModelDeletionTest {
             bloomFilter = BloomFilterEngine(),
             patternBloomFilter = BloomFilterEngine()
         )
-        viewModel = SourcesViewModel(repository, mock<SourceSyncUseCase>())
+        val sourceSyncUseCase = mock<SourceSyncUseCase>()
+        whenever(sourceSyncUseCase.isSyncing).thenReturn(flowOf(false))
+        viewModel = SourcesViewModel(repository, sourceSyncUseCase)
     }
 
     @Test

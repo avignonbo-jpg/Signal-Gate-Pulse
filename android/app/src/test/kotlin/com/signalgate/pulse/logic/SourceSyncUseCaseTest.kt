@@ -2,11 +2,13 @@ package com.signalgate.pulse.logic
 
 import com.signalgate.pulse.database.entities.SourceEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -14,7 +16,15 @@ import org.mockito.kotlin.whenever
 
 class SourceSyncUseCaseTest {
 
-    private val reliableSourceManager = mock<ReliableSourceManager>()
+    private val reliableSourceManager = mock<ReliableSourceManager>().also { manager ->
+        whenever(manager.isSyncing).thenReturn(flowOf(false))
+        runBlocking {
+            whenever(manager.trackSyncing<Any?>(any())).thenAnswer { invocation ->
+                val block = invocation.getArgument<suspend () -> Any?>(0)
+                runBlocking { block() }
+            }
+        }
+    }
     private val dataSourceRepository = mock<DataSourceRepository>()
     private val useCase = SourceSyncUseCase(reliableSourceManager, dataSourceRepository)
 

@@ -11,6 +11,11 @@ import com.signalgate.pulse.database.repositories.SyncHistoryRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
@@ -78,7 +83,8 @@ class ReliableSourceManager(
     private val securityRuleRepository: SecurityRuleRepository,
     private val syncHistoryRepository: SyncHistoryRepository,
     private val secureCsvParser: SecureCsvParser,
-    private val snapshotSanityValidator: SnapshotSanityValidator
+    private val snapshotSanityValidator: SnapshotSanityValidator,
+    private val httpClient: OkHttpClient = newHttpClient()
 ) {
 
     companion object {
@@ -88,6 +94,11 @@ class ReliableSourceManager(
         private const val MAX_ENTRIES_PER_SOURCE = 50_000
         private const val MIN_NUMBER_LENGTH = 10
         private const val MAX_NUMBER_LENGTH = 15
+
+        private fun newHttpClient(): OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(CONNECT_TIMEOUT_SEC, TimeUnit.SECONDS)
+            .readTimeout(READ_TIMEOUT_SEC, TimeUnit.SECONDS)
+            .build()
 
         private const val FTC_API_BASE  =
             "https://raw.githubusercontent.com/avignonbo-jpg/signalgate-dnc-mirror/dnc-mirror-pulse/dnc-numbers.json"
@@ -169,13 +180,24 @@ class ReliableSourceManager(
         val snapshotHash: String?
     )
 
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(CONNECT_TIMEOUT_SEC, TimeUnit.SECONDS)
-        .readTimeout(READ_TIMEOUT_SEC, TimeUnit.SECONDS)
-        .build()
-
     // AppModule binds this manager as a singleton, shared by startup and the worker.
+    // The sync body and row creation use separate mutexes to avoid reentrant-lock deadlock.
+    private val syncMutex = Mutex()
     private val ensureSourceRowMutex = Mutex()
+    private val inFlightSyncCount = MutableStateFlow(0)
+
+    val isSyncing: Flow<Boolean> = inFlightSyncCount
+        .map { it > 0 }
+        .distinctUntilChanged()
+
+    internal suspend fun <T> trackSyncing(block: suspend () -> T): T {
+        inFlightSyncCount.update { it + 1 }
+        return try {
+            block()
+        } finally {
+            inFlightSyncCount.update { it - 1 }
+        }
+    }
 
     /**
      * Ensure both managed federal rows exist without contacting either source.
@@ -195,36 +217,41 @@ class ReliableSourceManager(
         }
     }
 
-    suspend fun syncAllFederalSources(): List<SyncResult> = withContext(Dispatchers.IO) {
-        // Automatic/background sync must honor the persisted enablement toggle.
-        // A missing row is still eligible so the first scheduled run can seed
-        // the managed federal source; explicit syncSource(sourceId) remains a
-        // deliberate manual refresh and is not silently converted into a no-op.
-        SOURCES
-            .filter { source ->
-                shouldSyncAutomatically(dataSourceRepository.getSourceByName(source.name))
-            }
-            .map { syncSource(it) }
+    suspend fun syncAllFederalSources(): List<SyncResult> = trackSyncing {
+        withContext(Dispatchers.IO) {
+            // Automatic/background sync must honor the persisted enablement toggle.
+            // A missing row is still eligible so the first scheduled run can seed
+            // the managed federal source; explicit syncSource(sourceId) remains a
+            // deliberate manual refresh and is not silently converted into a no-op.
+            SOURCES
+                .filter { source ->
+                    shouldSyncAutomatically(dataSourceRepository.getSourceByName(source.name))
+                }
+                .map { syncSource(it) }
+        }
     }
 
-    suspend fun syncSource(sourceId: Int): SyncResult = withContext(Dispatchers.IO) {
-        val source = dataSourceRepository.getSourceById(sourceId)
-            ?: return@withContext SyncResult("source:$sourceId", 0, false, "Source not found")
-        val federalSource = SOURCES.firstOrNull { it.sourceType == source.type && it.name == source.name }
-            ?: return@withContext SyncResult(source.name, 0, false, "Source is not a managed federal source")
-        syncSource(federalSource, sourceId)
+    suspend fun syncSource(sourceId: Int): SyncResult = trackSyncing {
+        withContext(Dispatchers.IO) {
+            val source = dataSourceRepository.getSourceById(sourceId)
+                ?: return@withContext SyncResult("source:$sourceId", 0, false, "Source not found")
+            val federalSource = SOURCES.firstOrNull { it.sourceType == source.type && it.name == source.name }
+                ?: return@withContext SyncResult(source.name, 0, false, "Source is not a managed federal source")
+            syncSource(federalSource, sourceId)
+        }
     }
 
-    private suspend fun syncSource(source: FederalSource, knownSourceId: Int? = null): SyncResult {
+    private suspend fun syncSource(source: FederalSource, knownSourceId: Int? = null): SyncResult =
+        syncMutex.withLock {
         val syncStartMs = System.currentTimeMillis()
         var sourceIdForFailure: Int? = knownSourceId
         var hadAcceptedSnapshot = false
         Timber.tag(TAG).i("Starting sync: ${source.name} (strategy=${source.strategy})")
-        return try {
+        try {
             val sourceId = knownSourceId ?: ensureSourceRow(source)
             if (sourceId == null) {
                 Timber.tag(TAG).e("Could not ensure source row for ${source.name}; sync skipped")
-                return SyncResult(source.name, 0, false, "Unable to ensure source row")
+                return@withLock SyncResult(source.name, 0, false, "Unable to ensure source row")
             }
             sourceIdForFailure = sourceId
             hadAcceptedSnapshot = dataSourceRepository.getSourceById(sourceId)?.lastAcceptedSnapshot != null
@@ -290,6 +317,8 @@ class ReliableSourceManager(
                 "Sync complete: ${source.name} — $inserted entries, total_duration_ms=$totalDurationMs"
             )
             SyncResult(source.name, inserted, true)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             val reason = e.message ?: "Source sync failed"
             sourceIdForFailure?.let { sourceId ->

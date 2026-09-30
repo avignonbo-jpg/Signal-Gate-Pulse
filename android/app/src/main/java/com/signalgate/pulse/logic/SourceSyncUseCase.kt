@@ -2,6 +2,7 @@ package com.signalgate.pulse.logic
 
 import com.signalgate.pulse.database.entities.SourceEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Phase 0.4 application boundary for source synchronization.
@@ -15,6 +16,8 @@ class SourceSyncUseCase(
     private val reliableSourceManager: ReliableSourceManager,
     private val dataSourceRepository: DataSourceRepository
 ) {
+    val isSyncing: Flow<Boolean> = reliableSourceManager.isSyncing
+
     data class BatchResult(
         val results: List<ReliableSourceManager.SyncResult>
     ) {
@@ -62,7 +65,9 @@ class SourceSyncUseCase(
      * data and must not be counted as failed network syncs.
      */
     suspend fun syncSources(sourceIds: List<Int>): BatchResult =
-        BatchResult(sourceIds.map { syncSource(it) })
+        reliableSourceManager.trackSyncing {
+            BatchResult(sourceIds.map { syncSource(it) })
+        }
 
     suspend fun syncAllFederalSources(): List<ReliableSourceManager.SyncResult> =
         reliableSourceManager.syncAllFederalSources()
