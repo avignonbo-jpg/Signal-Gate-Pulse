@@ -1,385 +1,239 @@
-# Signal-Gate Pulse — Consumer v1
+# Signal-Gate Pulse — Consumer v1 Overview
 
-**The source of truth for the Signal-Gate Pulse consumer-grade call protection app.**
+This document is a practical project overview and setup guide for people who want to understand the app, run it locally, or explore collaboration opportunities.
+
+It is intended to help future users and contributors understand the project direction and technical structure, not to serve as a strict, authoritative design specification.
 
 ---
 
 ## What is Signal-Gate Pulse?
 
-**Pulse** is a native Android application (Kotlin) that provides real-time call screening and blocking for everyday users who want safety without managing complex rules.
+Signal-Gate Pulse is a native Android application built with Kotlin to provide real-time call screening and protection for everyday users.
 
-### Mission
-Turn call protection from a reactive utility into a convenient, always-on consumer experience.
+### Core purpose
+- screen incoming calls before they reach the user
+- apply local filtering and blocking logic
+- support user-friendly, low-friction protection
+- minimize setup complexity for a consumer-focused experience
 
-### Core Purpose
-- **Real-time call screening** — Intercepts incoming calls instantly
-- **Pattern learning** — Improves filtering over time
-- **Low friction** — Set-and-forget protection with minimal user management
-- **Smart routing** — Blocks, screens, or quietly routes suspicious calls
-
-### Use Cases
-- Spam defense
-- Scam reduction
-- Nuisance-call suppression
-- Personal call management without technical overhead
+### Main use cases
+- spam and scam prevention
+- nuisance-call suppression
+- personal call filtering without technical overhead
 
 ---
 
-## Project Overview
+## Project overview
 
 **Repository**: `avignonbo-jpg/Signal-Gate-Pulse`  
-**Active Branch**: `consumer-v1` (default)  
+**Branch**: `consumer-v1`  
 **Language**: Kotlin  
-**Platform**: Android (native)  
-**Build System**: Gradle  
-**Last Updated**: 2026-09-30
+**Platform**: Android  
+**Build system**: Gradle  
 
-### Key Technologies
-- **Kotlin** — Modern Android language
-- **Room Database** — Local data persistence
-- **Jetpack Compose** — Modern UI framework (where applicable)
-- **CallScreeningService** — Android call interception API
-- **KSP** — Kotlin Symbol Processing for compile-time optimization
+### Technologies in use
+- Kotlin
+- Android SDK / app components
+- Room Database
+- Gradle build tooling
+- Jetpack Compose where applicable
+- Android telecom / call-screening APIs
 
 ---
 
-## Project Structure
+## Project structure
 
-```
+```text
 Signal-Gate-Pulse/
 ├── android/
 │   ├── app/
-│   │   ├── build.gradle              # App-level config (dependencies, signing)
+│   │   ├── build.gradle
 │   │   ├── src/main/
-│   │   │   ├── AndroidManifest.xml   # App permissions and components
+│   │   │   ├── AndroidManifest.xml
 │   │   │   ├── java/com/signalgate/multipoint/
-│   │   │   │   ├── CallScreeningService.kt       # Core call interception logic
-│   │   │   │   ├── MainActivity.kt               # App entry point
-│   │   │   │   ├── MainApplication.kt            # App initialization
+│   │   │   │   ├── CallScreeningService.kt
+│   │   │   │   ├── MainActivity.kt
+│   │   │   │   ├── MainApplication.kt
 │   │   │   │   ├── database/
-│   │   │   │   │   ├── SignalGateDatabase.kt     # Room Database definition
-│   │   │   │   │   ├── entities/                 # Data models (UnifiedEntryEntity, etc.)
-│   │   │   │   │   └── daos/                     # Data Access Objects
-│   │   │   │   └── ui/                           # UI screens and components
-│   │   │   └── res/                  # Android resources (icons, strings, layouts, themes)
-│   ├── build.gradle                  # Project-level config
-│   └── gradle.properties              # Gradle build settings
+│   │   │   │   └── ui/
+│   │   │   └── res/
+│   │   └── ...
+│   └── gradle.properties
 ├── tools/
-│   └── metrics-analysis/             # Performance analysis tools (Compose metrics)
-├── docs/                             # Documentation (if present)
-├── README.md                         # This file
-└── .gitignore
-
+│   └── metrics-analysis/
+├── docs/
+├── README.md
+├── .gitignore
+└── ...
 ```
 
-### Key Files Explained
-
-| File | Purpose |
-|------|---------|
-| `CallScreeningService.kt` | The engine — intercepts calls, applies rules, routes handling |
-| `MainActivity.kt` | User-facing UI entry point |
-| `SignalGateDatabase.kt` | Local data store for blocked calls, user settings, patterns |
-| `AndroidManifest.xml` | Declares permissions (READ_PHONE_STATE, CALL_LOG, etc.) |
-| `build.gradle` (app) | Dependencies, compilation targets, plugin config |
+### Key areas
+- `CallScreeningService.kt` — core runtime interception and handling logic
+- `MainActivity.kt` — app entry and UI surface
+- `MainApplication.kt` — app initialization
+- `SignalGateDatabase.kt` — persistence layer definition
+- `database/` — database models and DAOs
+- `tools/metrics-analysis/` — optional performance/metrics tooling
 
 ---
 
-## Getting Started
+## Getting started
 
 ### Prerequisites
-- **Android Studio** (latest version recommended)
-- **JDK 11+** (bundled with Android Studio)
-- **Android SDK** (API 24+, though target is higher for modern features)
-- **Git** (for cloning and version control)
+- Android Studio
+- JDK 11+
+- Android SDK configured for the project
+- Git
 
-### Clone the Repository
+### Clone the repository
 
 ```bash
-# Clone the consumer-v1 branch
-git clone --branch consumer-v1 \
-  https://github.com/avignonbo-jpg/Signal-Gate-Pulse.git
-
+git clone --branch consumer-v1 https://github.com/avignonbo-jpg/Signal-Gate-Pulse.git
 cd Signal-Gate-Pulse
 ```
 
-Or if you already cloned the full repo:
+If you already cloned it:
 
 ```bash
-git clone https://github.com/avignonbo-jpg/Signal-Gate-Pulse.git
-cd Signal-Gate-Pulse
 git checkout consumer-v1
 ```
 
-### Setup in Android Studio
+### Open in Android Studio
+1. Open the project folder in Android Studio
+2. Let Gradle sync complete
+3. Resolve any missing SDKs or toolchains
+4. Build the app
 
-1. **Open the project**: `File → Open` → select `Signal-Gate-Pulse` folder
-2. **Wait for Gradle sync** (first time takes 2–5 minutes)
-3. **Check SDK versions**: `File → Project Structure → Modules → app`
-   - Target SDK should be current (API 35+)
-   - Min SDK is API 24+
-4. **Resolve any dependency issues**: Let Android Studio download missing SDKs/tools
-
-### Build the App
+### Build app
 
 ```bash
-# From the repo root
 cd android
 ./gradlew build
-
-# Or from Android Studio
-Build → Make Project
 ```
 
-### Run on Device or Emulator
-
-```bash
-# From Android Studio
-Run → Run 'app'
-
-# Or command line
-./gradlew installDebug
-```
+### Run app
+Use Android Studio to deploy to an emulator or connected device.
 
 ---
 
-## Development Workflow
+## Intended architecture
 
-### Branch Strategy
+This project is organized around a simple, consumer-facing Android architecture with a clear call-screening path.
 
-- **`consumer-v1`** (default, this branch)
-  - Stable consumer-facing code
-  - All features must be tested and reviewed
-  - Direct commits to this branch are restricted (use pull requests)
+```text
+User / UI
+   ↓
+MainActivity / Settings / Status screens
+   ↓
+Application bootstrap / app configuration
+   ↓
+CallScreeningService
+   ↓
+Rule evaluation + local filtering logic
+   ↓
+Room database / persisted local records
+```
 
-- **Feature branches** (when contributing)
-  - Format: `feature/description` or `fix/description`
-  - Branch from `consumer-v1`
-  - Submit pull request for review before merging
+### Architectural intent
+- keep the call decision flow centralized
+- separate the UI from screening logic
+- keep filtering decisions local and deterministic
+- use Room for persistent local state and call metadata
+- keep the app simple enough for a consumer deployment model
 
-### Making Changes
+This is a design direction, not a formal contract, and it may evolve as the project develops.
+
+---
+
+## Development workflow
+
+### Branching approach
+- `consumer-v1` is the active consumer branch
+- experimental or feature work should generally happen in dedicated branches
+- merge requests should be reviewed before changes are merged to the branch
+
+### Example workflow
 
 ```bash
-# 1. Create a feature branch
-git checkout -b feature/my-feature
-
-# 2. Make your changes
-# (edit files, test locally)
-
-# 3. Commit with clear messages
+git checkout -b feature/my-change
 git add .
-git commit -m "Add feature: description of what changed"
-
-# 4. Push to GitHub
-git push origin feature/my-feature
-
-# 5. Create a Pull Request on GitHub
-# → Go to https://github.com/avignonbo-jpg/Signal-Gate-Pulse
-# → Click "New Pull Request"
-# → Base: consumer-v1, Compare: feature/my-feature
+git commit -m "Add my change"
+git push origin feature/my-change
 ```
 
-### Code Style & Standards
-
-- **Kotlin style**: Follow [Kotlin official conventions](https://kotlinlang.org/docs/coding-conventions.html)
-- **Naming**: Use descriptive names (no single letters except loop vars)
-- **Comments**: Document complex logic, not obvious code
-- **Testing**: Write unit tests for business logic (database, filtering, etc.)
-
-### Testing
-
-```bash
-# Run all unit tests
-./gradlew test
-
-# Run instrumented tests (on device/emulator)
-./gradlew connectedAndroidTest
-
-# Run specific test
-./gradlew test --tests "com.signalgate.multipoint.CallScreeningTest"
-```
+Then open a pull request into `consumer-v1`.
 
 ---
 
-## Build & Deployment
+## Build and validation
 
-### Debug Build
+### Debug build
 
 ```bash
 ./gradlew assembleDebug
-# Output: android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### Release Build
+### Release build
 
 ```bash
 ./gradlew assembleRelease
-# Output: android/app/build/outputs/apk/release/app-release.apk
 ```
 
-**Note**: Release builds require signing configuration (see `build.gradle` for signing config).
-
-### Generating Metrics
-
-For performance analysis (Jetpack Compose optimization):
+### Test run
 
 ```bash
-./gradlew assembleRelease
-# Metrics generated to: android/app/build/compose_metrics/
-
-# Analyze with provided script
-python3 tools/metrics-analysis/analyze_metrics.py \
-  android/app/build/compose_metrics/
+./gradlew test
 ```
-
-See `tools/metrics-analysis/README.md` for detailed performance tuning.
-
----
-
-## Core Architecture
-
-### Call Interception Flow
-
-```
-Incoming Call
-    ↓
-CallScreeningService.onScreenCall()
-    ↓
-Fetch rules from SignalGateDatabase
-    ↓
-Analyze caller (pattern matching, blocklist, ML scoring)
-    ↓
-Decide: Block | Screen | Allow
-    ↓
-Route call (block, silent notification, normal routing)
-```
-
-### Database Schema
-
-The app uses **Room Database** for persistence:
-
-- **UnifiedEntryEntity** — Stores blocked/screened calls with timestamps, caller info
-- **BlockedNumberEntity** (if separate) — User-maintained blocklist
-- **RuleEntity** — Filtering rules and patterns
-- **SettingsEntity** — User preferences
-
-Query DAOs via:
-
-```kotlin
-val database = SignalGateDatabase.getInstance(context)
-val entries = database.unifiedEntryDao().getAllEntries()
-```
-
-### Permissions Required
-
-(Declared in `AndroidManifest.xml`)
-
-```xml
-<uses-permission android:name="android.permission.READ_PHONE_STATE" />
-<uses-permission android:name="android.permission.CALL_LOG" />
-<uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
-<uses-permission android:name="android.permission.READ_CONTACTS" />
-<uses-permission android:name="android.permission.INTERNET" /> <!-- for pattern syncing -->
-```
-
----
-
-## Key Files & Their Responsibilities
-
-| Class | Responsibility |
-|-------|-----------------|
-| `CallScreeningService` | Intercepts calls, applies rules, routes them |
-| `MainActivity` | Main UI; shows blocked calls, settings, dashboard |
-| `MainApplication` | Initializes database, app-wide configuration |
-| `SignalGateDatabase` | Room database singleton; DAO access point |
-| Various `*Entity` classes | Data models (Kotlin data classes mapped to database tables) |
-| Various `*Dao` interfaces | Database queries and mutations (inserts, updates, deletes) |
 
 ---
 
 ## Troubleshooting
 
-### Build Fails with "Gradle Sync Error"
-- Invalidate cache: `File → Invalidate Caches`
-- Update Gradle: `gradle/wrapper/gradle-wrapper.properties` → latest version
-- Check SDK versions in `build.gradle`
+### Gradle sync issues
+- verify Android Studio is using the correct JDK
+- install any missing Android SDK components
+- sync Gradle again after dependencies are downloaded
 
-### App Crashes on Launch
-- Check logcat: `Logcat` panel in Android Studio
-- Ensure permissions are granted on device (Settings → Apps → Pulse → Permissions)
-- Verify database is initialized: check `MainApplication.kt`
+### App permissions
+- ensure Android permissions are granted on device/emulator
+- check `AndroidManifest.xml` for required call-related permissions
 
-### Call Screening Not Working
-- Confirm `CallScreeningService` is enabled in system settings
-- Check that permissions are granted
-- Review logs in `CallScreeningService.onScreenCall()`
-- Verify database has rules/settings (empty database = no filtering)
-
-### Performance Issues (Slow UI)
-- Run Compose metrics: `./gradlew assembleRelease`
-- Check for unstable composables: `android/app/build/compose_metrics/composables.txt`
-- See `tools/metrics-analysis/README.md` for optimization tips
+### Screening not behaving as expected
+- confirm the app is running in the intended mode
+- check logs from the call-screening service
+- verify local database state and settings are initialized correctly
 
 ---
 
-## Contributing
+## Contribution and collaboration
 
-1. **Fork or branch** from `consumer-v1`
-2. **Make your changes** in a feature branch
-3. **Test thoroughly** (local device/emulator + unit tests)
-4. **Push to GitHub**
-5. **Create a Pull Request** with clear description
-6. **Wait for review** before merging
+This repository is organized to support future collaboration and review.
 
-All commits to `consumer-v1` require:
-- ✅ Code review
-- ✅ Tests passing
-- ✅ No merge conflicts
+If you want to contribute:
+1. clone the repo
+2. create a working branch
+3. make focused changes
+4. validate locally
+5. open a pull request for review
 
----
-
-## Resources & Documentation
-
-- **Android Developer Docs**: https://developer.android.com
-- **Kotlin Language**: https://kotlinlang.org
-- **Room Database Guide**: https://developer.android.com/training/data-storage/room
-- **Jetpack Compose**: https://developer.android.com/jetpack/compose
-- **CallScreeningService API**: https://developer.android.com/reference/android/telecom/CallScreeningService
+The goal is simple: help future collaborators understand the project without requiring them to reverse-engineer the architecture.
 
 ---
 
-## Support & Issues
+## Useful references
 
-- **Report bugs**: Open an issue on GitHub
-- **Suggest features**: Discussions tab on GitHub
-- **Ask questions**: Check existing issues first, then open a new discussion
-
----
-
-## License & Ownership
-
-**Owner**: avignonbo-jpg  
-**Repository**: https://github.com/avignonbo-jpg/Signal-Gate-Pulse  
-**Visibility**: Public  
-
-See repository settings for license details.
+- Android Developer Documentation: https://developer.android.com
+- Kotlin: https://kotlinlang.org
+- Room: https://developer.android.com/training/data-storage/room
+- Jetpack Compose: https://developer.android.com/jetpack/compose
 
 ---
 
-**Last Updated**: October 1, 2026  
-**Branch**: `consumer-v1` (default)  
-**Maintained By**: avignonbo-jpg
+## Notes
+
+This repository is being documented for visibility, onboarding, and collaboration. The documentation is intended as a clear overview for people exploring the project, not as a strict source of truth or formal engineering specification.
 
 ---
 
-## Quick Reference
-
-| Need | Command |
-|------|---------|
-| Clone | `git clone --branch consumer-v1 https://github.com/avignonbo-jpg/Signal-Gate-Pulse.git` |
-| Switch to consumer-v1 | `git checkout consumer-v1` |
-| Build debug APK | `./gradlew assembleDebug` |
-| Run app | `./gradlew installDebug` (then open from Android Studio) |
-| Run tests | `./gradlew test` |
-| Check git history | `git log --oneline` |
-| Push changes | `git push origin feature/my-feature` |
-| View remote branches | `git branch -r` |
+**Last updated**: 2026-10-01  
+**Active branch**: `consumer-v1`
