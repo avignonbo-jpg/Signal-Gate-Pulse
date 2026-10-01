@@ -192,8 +192,19 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
             // 4-thread-limited dispatcher could starve it across repeated calls. These
             // are local SQLCipher/Room writes, normally sub-millisecond, so 2s is
             // generous headroom, not a deadline this is expected to hit.
-            withContext(NonCancellable) {
+            val persisted = withContext(NonCancellable) {
                 withTimeoutOrNull(2_000) { persist(callInfo, decision) }
+            }
+            // withTimeoutOrNull returns null on timeout rather than throwing, so
+            // without this check a silent timeout would look identical to success —
+            // neither the catch below nor any prior log line would fire. Added
+            // alongside the crash-diagnostic.yml process-kill scenario, which needs
+            // an explicit success signal in logcat (there was previously no log
+            // line at all for the success path).
+            if (persisted == null) {
+                Timber.tag(TAG).e("AUDIT_PERSIST_TIMEOUT — persist() did not complete within the 2s bound")
+            } else {
+                Timber.tag(TAG).i("AUDIT_PERSIST_SUCCESS")
             }
         } catch (e: Exception) {
             // The decision response is already complete. A persistence failure must
@@ -284,7 +295,12 @@ class SignalGateCallScreeningService : TelecomCallScreeningService() {
             // — the one write you least want silently lost to a teardown race.
             withContext(NonCancellable) {
                 try {
-                    withTimeoutOrNull(2_000) { audit(failureEntry) }
+                    val persisted = withTimeoutOrNull(2_000) { audit(failureEntry) }
+                    if (persisted == null) {
+                        Timber.tag(TAG).e("AUDIT_PERSIST_TIMEOUT — SECURITY_FAILURE audit did not complete within the 2s bound")
+                    } else {
+                        Timber.tag(TAG).i("AUDIT_PERSIST_SUCCESS")
+                    }
                 } catch (e: Exception) {
                     Timber.tag(TAG).e(e, "Failed to write SECURITY_FAILURE audit record")
                 }
