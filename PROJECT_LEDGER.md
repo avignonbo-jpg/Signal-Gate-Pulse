@@ -1311,7 +1311,7 @@ Known open items: FTC and FCC rows don't exist until the first worker run (Task 
 FYI FOLLOw UP!!!!!
 The new SourcesViewModel comment dropped the reason "Add Source" was removed. That reason was that added sources were inert. Someone could re-add the flow without knowing.
 
-5
+55
 
 2026-09-30 — Process-kill scenario added to crash-diagnostic.yml; AUDIT_PERSIST_SUCCESS/TIMEOUT logging added
 Who: Claude (Sonnet), following a request to determine whether the NonCancellable fix's own documented limit — "does not protect against the process itself being killed outright" — was tested anywhere. It wasn't, in any workflow or script.
