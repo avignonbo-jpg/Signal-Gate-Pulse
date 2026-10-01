@@ -34,6 +34,15 @@
 # out an app/Telecom-emulator-level cause, it doesn't confirm the OEM
 # battery theory either way.
 #
+# PROCESS-KILL SCENARIO (added 2026-09-30): a third call, immediately
+# followed by a hard `kill -9` of the app process, to test the one limit
+# the NonCancellable fix (PROJECT_LEDGER.md 2026-09-24/26) explicitly does
+# NOT cover — the process being killed outright rather than just the
+# coroutine scope being cancelled. This is diagnostic only: the audit
+# write being LOST here is the expected, accepted outcome, not a failure
+# to fix. See the inline comment at that step for why `kill -9` is used
+# instead of `am kill`.
+#
 # Usage:
 #   verify-launch-and-capture.sh <component> <package> <workspace_dir>
 #
@@ -111,6 +120,48 @@ adb emu gsm cancel 5559876543
 
 sleep 2
 
+##############################################################################
+# PROCESS-KILL SCENARIO (added 2026-09-30):
+#
+# The NonCancellable fix (PROJECT_LEDGER.md 2026-09-24/26 entries) only
+# shields persist() from serviceScope.cancel() -- the Job-cancellation race.
+# Its own code comment is explicit that it does NOT protect against the
+# hosting process being killed outright, and nothing in this CI has ever
+# tested that distinct scenario. This block does, deliberately as a
+# non-blocking diagnostic: a real OOM reclaim can land at any point during
+# persist()'s ~sub-millisecond-to-a-few-ms window, so AUDIT_PERSIST_SUCCESS
+# being absent here is the EXPECTED, accepted outcome, not a regression --
+# this documents the known limit rather than asserting a pass/fail gate.
+#
+# `adb shell am kill` deliberately refuses to kill a process hosting an
+# active/foreground-ish component, so it won't reliably reproduce a true
+# OOM-style kill here. `kill -9` on the actual PID does, but requires root --
+# available on this google_apis (non-Play） x86_64 image via `adb root`.
+##############################################################################
+echo "=== Simulating call #3 (process-kill scenario) ==="
+SUCCESS_COUNT_BEFORE=$(grep -c "AUDIT_PERSIST_SUCCESS" /tmp/full_logcat.txt 2>/dev/null || echo 0)
+
+adb emu gsm call 5555550123
+adb root >/dev/null 2>&1
+sleep 0.2
+KILL_PID="$(adb shell pidof "$PACKAGE" 2>/dev/null | tr -d '\r')"
+if [ -n "$KILL_PID" ]; then
+    echo "Killing $PACKAGE (pid $KILL_PID) mid-screening to simulate an OS process reclaim"
+    adb shell kill -9 "$KILL_PID" 2>/dev/null || echo "::warning::kill -9 failed (adb root likely unavailable on this image) -- process-kill scenario not actually exercised this run"
+else
+    echo "::warning::Could not find PID for $PACKAGE before call #3 -- process-kill scenario not actually exercised this run"
+fi
+sleep 3
+adb emu gsm cancel 5555550123 2>/dev/null || true
+sleep 2
+
+SUCCESS_COUNT_AFTER=$(grep -c "AUDIT_PERSIST_SUCCESS" /tmp/full_logcat.txt 2>/dev/null || echo 0)
+if [ "$SUCCESS_COUNT_AFTER" -gt "$SUCCESS_COUNT_BEFORE" ]; then
+    echo "PROCESS_KILL_TEST_RESULT: audit write SURVIVED the kill (better than the known/accepted limit -- investigate why, this is not necessarily a problem but is unexpected)"
+else
+    echo "PROCESS_KILL_TEST_RESULT: audit write LOST after kill -- expected, matches the documented NonCancellable-vs-process-death limit, not a regression"
+fi
+
 echo "=== WORKMANAGER STATE (community_sync) ==="
 {
     echo "--- jobscheduler ---"
@@ -133,7 +184,7 @@ echo "=== END CRASH LOG ==="
 
 echo "=== SCREENING LOG (both simulated calls) ==="
 {
-    grep -iE "SignalGateScreening|onScreenCall|TELECOM_ROLE_DIAGNOSTIC|Start proc.*$PACKAGE|Process.*$PACKAGE.*died" /tmp/full_logcat.txt \
+    grep -iE "SignalGateScreening|onScreenCall|TELECOM_ROLE_DIAGNOSTIC|Start proc.*$PACKAGE|Process.*$PACKAGE.*died|AUDIT_PERSIST_SUCCESS|AUDIT_PERSIST_TIMEOUT|PROCESS_KILL_TEST_RESULT" /tmp/full_logcat.txt \
         || echo "No screening-related lines found"
 } | tee "$WORKSPACE_DIR/signalgate_screening_log.txt"
 echo "=== END SCREENING LOG ==="
