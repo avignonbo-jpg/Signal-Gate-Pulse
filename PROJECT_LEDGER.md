@@ -63,7 +63,7 @@ Files touched: `MainApplication.kt`; `diagnostics/AppDiagnosticsTree.kt`; `ui/vi
 Layers touched: application bootstrap, cross-cutting debug logging, UI/ViewModel, and JVM unit tests.
 Contract consulted: yes — Architecture-Contract.md INV-007 was reviewed; the owner has authorized verbatim messages in this debug-only viewer for local call-flow troubleshooting. The release ReleaseTree behavior and required-source startup-seeding order are unchanged.
 Validation: `git diff --check`, `scripts/check-architecture-drift.sh`, and `bash scripts/check-test-integrity.sh origin/consumer-v1 HEAD` passed. With Android API 35 / Build Tools 35.0.0 and temporary Temurin 17.0.20.1, `:app:testPulseDebugUnitTest` passed (121 tests; 0 failures, errors, or skipped; new `AppDiagnosticsTreeTest`: 4/4) and `:app:assemblePulseDebug` succeeded. Gradle emitted an SDK XML v4 compatibility warning, but both tasks passed. Generated build output was removed; no APK was installed.
-Status: Owner review requested.
+Status: Verified locally only; CI pending.
 Signature: Manus AI — 2026-10-06
 
 2026-10-05 — Audit snapshots and BP-01 through BP-16 open-item register

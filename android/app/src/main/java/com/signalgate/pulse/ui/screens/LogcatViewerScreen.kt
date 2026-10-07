@@ -37,7 +37,14 @@ import com.signalgate.pulse.diagnostics.AppLogEntry
 import com.signalgate.pulse.ui.viewmodels.LogcatViewModel
 import org.koin.androidx.compose.koinViewModel
 
-/** Both diagnostic feeds are kept separate and visible at the same time. */
+/**
+ * Debug-only in-app Logcat viewer. The [BuildConfig.DEBUG] guard keeps this screen
+ * blank in release builds.
+ *
+ * The Copy both action exists so logs can be pulled off a real device with no adb
+ * or desktop access. It copies exactly the currently displayed (filtered) entries
+ * from both feeds; refresh the system Logcat snapshot first to include its latest lines.
+ */
 @Composable
 fun LogcatViewerScreen(
     viewModel: LogcatViewModel = koinViewModel()
