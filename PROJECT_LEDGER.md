@@ -56,6 +56,16 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top).
 
+2026-10-09 — WP-2 stale package/applicationId documentation correction
+Who: Manus AI.
+What: Comment and documentation edits only. Corrects stale README and launch-script comments: the Pulse flavor's applicationId is documented as com.signalgate.multipoint.pulse and the Kotlin package as com.signalgate.pulse; the README project tree names the actual source directory and SignalGateCallScreeningService.kt; the launch-script NOTE matches the existing workflow arguments; the Android module build directories are ignored while the root /build rule is kept; CommunitySyncWorker documents its retained legacy name without a rename. No script command or argument, workflow file, contract, production behavior, or test assertion changed.
+Files touched: .gitignore; README.md; scripts/verify-launch-and-capture.sh; SecurityRuleRepository.kt (comments only); SettingsViewModel.kt (comments only); CommunitySyncWorker.kt (KDoc only); PROJECT_LEDGER.md.
+Layers touched: documentation and comments only.
+Contract consulted: no architecture or contract change; the applicationId/Kotlin package distinction is preserved.
+Validation: Changed-line proof with color disabled (git diff --no-color --cached -U0, filtered to +/- content lines): 53 changed lines in four files, all comments. Script: 19 lines, all # comments. SecurityRuleRepository.kt and SettingsViewModel.kt: 16 lines each, all // comments. CommunitySyncWorker.kt: 2 KDoc lines inside the existing comment block. A negative control confirmed the filter catches a real command line. The earlier colored-output check was invalid and is not relied on. Sandbox Gradle could not run: the cached AAPT2 is x86_64 and the sandbox is ARM64. No unit-test total was produced locally. git diff --cached --check passed. scripts/check-architecture-drift.sh passed.
+Status: Sandbox-only verification; CI pending on the draft PR; no device run. Unit-test and assemble results to be recorded in a follow-up entry after CI.
+Signature: Manus AI — 2026-10-09
+
 2026-10-09 — WP-1 protected-source deletion hardening
 Who: Manus AI.
 What: Added an early rejection for caller objects already marked with a protected type, then made all other deletion decisions with one conditional SQL DELETE against the persisted source ID and type. A zero-row result is classified by a follow-up lookup only; protected rows throw using the persisted row, and missing IDs are idempotent no-ops. PROTECTED_SOURCE_TYPES is now an immutable Set<String> with unchanged values. Corrected delete/exception KDoc and added persisted-row regression coverage.

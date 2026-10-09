@@ -53,15 +53,16 @@
 #   <workspace_dir>    Where to copy the final full_logcat.txt (normally
 #                      $GITHUB_WORKSPACE).
 #
-# NOTE on component name: the `pulse` product flavor overrides applicationId
-# to com.signalgate.multipoint.pulse, but AndroidManifest.xml has no `package=`
-# attribute, so `android:name=".MainActivity"` resolves against build.gradle's
-# `namespace` (com.signalgate.multipoint) — NOT the flavor's applicationId.
-# `adb shell am start -n <pkg>/.MainActivity` expands the leading dot against
-# whatever package you give it, so a shorthand call here would try to launch
-# the non-existent class com.signalgate.multipoint.pulse.MainActivity
-# ("Error type 3: Activity class ... does not exist"). Always pass the full
-# class name explicitly: com.signalgate.multipoint.pulse/com.signalgate.multipoint.MainActivity
+# NOTE on component name: the `pulse` product flavor's applicationId is
+# com.signalgate.multipoint.pulse, while the Kotlin package is
+# com.signalgate.pulse. AndroidManifest.xml has no `package=` attribute, so
+# `android:name=".MainActivity"` resolves against the Kotlin package — NOT the
+# flavor's applicationId. `adb shell am start -n <pkg>/.MainActivity` expands
+# the leading dot against whatever package you give it, so a shorthand call
+# would try to launch the non-existent class
+# com.signalgate.multipoint.pulse.MainActivity ("Error type 3: Activity class
+# ... does not exist"). Always pass the full class name explicitly:
+# com.signalgate.multipoint.pulse/com.signalgate.pulse.MainActivity
 ##############################################################################
 
 set -uo pipefail

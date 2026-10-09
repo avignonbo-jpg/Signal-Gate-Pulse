@@ -50,8 +50,8 @@ Signal-Gate-Pulse/
 │   │   ├── build.gradle
 │   │   ├── src/main/
 │   │   │   ├── AndroidManifest.xml
-│   │   │   ├── java/com/signalgate/multipoint/
-│   │   │   │   ├── CallScreeningService.kt
+│   │   │   ├── java/com/signalgate/pulse/
+│   │   │   │   ├── SignalGateCallScreeningService.kt
 │   │   │   │   ├── MainActivity.kt
 │   │   │   │   ├── MainApplication.kt
 │   │   │   │   ├── database/
@@ -68,7 +68,7 @@ Signal-Gate-Pulse/
 ```
 
 ### Key areas
-- `CallScreeningService.kt` — core runtime interception and handling logic
+- `SignalGateCallScreeningService.kt` — core runtime interception and handling logic
 - `MainActivity.kt` — app entry and UI surface
 - `MainApplication.kt` — app initialization
 - `SignalGateDatabase.kt` — persistence layer definition

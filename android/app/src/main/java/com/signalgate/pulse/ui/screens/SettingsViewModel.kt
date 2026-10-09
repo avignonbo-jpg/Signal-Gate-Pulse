@@ -1,11 +1,13 @@
-// DO NOT let this file's package/imports revert to com.signalgate.multipoint.
-// This file was added to consumer-v1 independently of the 2026-08-14/15
+// Keep the Pulse flavor's applicationId (com.signalgate.multipoint.pulse)
+// distinct from the Kotlin package (com.signalgate.pulse). Do not let this
+// file's Kotlin package or imports revert to the pre-rename com.signalgate.multipoint
+// form. This file was added to consumer-v1 independently of the 2026-08-14/15
 // pulse-package-rename merge, so it was never run through that rename script.
-// A prior CI run caught it still declaring "package com.signalgate.multipoint...",
-// which broke compilation for every file that depends on this one (see
-// PROJECT_LEDGER.md, 2026-08-14/15 entry). If this file is ever regenerated,
-// restored from a backup/snapshot, or reintroduced via a future merge, verify
-// its package and every import still say com.signalgate.pulse before trusting it,
+// A prior CI run caught it still declaring the old Kotlin package, which broke
+// compilation for every file that depends on this one (see PROJECT_LEDGER.md,
+// 2026-08-14/15 entry). If this file is ever regenerated, restored from a
+// backup/snapshot, or reintroduced via a future merge, verify that its Kotlin
+// package and every import still say com.signalgate.pulse before trusting it,
 // even if it lands with no conflict markers — "no conflict" is not the same as
 // "correct," as this incident showed.
 package com.signalgate.pulse.ui.screens
