@@ -96,12 +96,21 @@ class SourcesViewModelDeletionTest {
                 pathOrUrl = "local.csv",
                 priority = 10
             )
+            whenever(
+                sourceDao.deleteIfNotProtected(
+                    userSource.id,
+                    DataSourceRepository.PROTECTED_SOURCE_TYPES.toList()
+                )
+            ).thenReturn(1)
 
             viewModel.deleteSource(userSource)
             advanceUntilIdle()
 
             assertNull(viewModel.sourceActionError.value)
-            verify(sourceDao).deleteSource(userSource)
+            verify(sourceDao).deleteIfNotProtected(
+                userSource.id,
+                DataSourceRepository.PROTECTED_SOURCE_TYPES.toList()
+            )
         }
     }
 }

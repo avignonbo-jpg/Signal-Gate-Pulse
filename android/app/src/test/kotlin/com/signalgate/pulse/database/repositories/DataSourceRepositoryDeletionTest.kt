@@ -12,6 +12,7 @@ import org.junit.Test
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
+import org.mockito.kotlin.whenever
 
 /**
  * Phase 0.3 (Security Control-Plane Integrity — source lifecycle semantics,
@@ -110,12 +111,21 @@ class DataSourceRepositoryDeletionTest {
      * successfully, reaching the DAO exactly once.
      */
     @Test
-    fun deleteSource_allowsNonProtectedSource() = runBlocking {
+    fun deleteSource_allowsNonProtectedSource(): Unit = runBlocking {
         val userSource = protectedSource("CSV", "Community Blocklist Mirror")
+        whenever(
+            sourceDao.deleteIfNotProtected(
+                userSource.id,
+                DataSourceRepository.PROTECTED_SOURCE_TYPES.toList()
+            )
+        ).thenReturn(1)
 
         repository.deleteSource(userSource)
 
-        verify(sourceDao).deleteSource(userSource)
+        verify(sourceDao).deleteIfNotProtected(
+            userSource.id,
+            DataSourceRepository.PROTECTED_SOURCE_TYPES.toList()
+        )
     }
 
     @Test
