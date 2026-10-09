@@ -20,6 +20,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * CommunitySyncWorker — Phase 2.5 (Contract §5.3).
+ * The legacy “Community” name is retained; this worker syncs configured federal
+ * sources and does not rename the sources or their persisted identifiers.
  * Exponential backoff, network/battery constraints, foreground service option.
  * Idempotent, retryable vs fatal errors.
  */
