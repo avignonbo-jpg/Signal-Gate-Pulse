@@ -89,8 +89,9 @@ class DataSourceRepository(
          * type — those identify user-created sources, which the contract
          * allows to be either disabled or deleted.
          */
-        val PROTECTED_SOURCE_TYPES = SourceType.values()
-            .mapTo(mutableSetOf()) { it.persistedValue }
+        val PROTECTED_SOURCE_TYPES: Set<String> = SourceType.values()
+            .map { it.persistedValue }
+            .toSet()
 
         /**
          * Page size for rehydrateBloomFilters()'s paged read. Matches
@@ -130,25 +131,33 @@ class DataSourceRepository(
     suspend fun updateSource(source: SourceEntity) = sourceDao.updateSource(source)
 
     /**
-     * Phase 0.3: refuses to delete a protected source (see
-     * [PROTECTED_SOURCE_TYPES]). This is the actual chokepoint every current
-     * caller already routes through (SourcesViewModel today; SecurityRuleRepository
-     * for any future decision-affecting caller) — guarding here means the
-     * refusal holds regardless of which layer calls it, rather than relying on
-     * every future caller to remember to check first.
+     * Deletes a non-protected source by its persisted ID. A caller-supplied
+     * protected type is rejected before any DAO access. Otherwise, the DAO uses
+     * one conditional DELETE against the persisted row, so a forged copy with
+     * the same ID cannot change the protection decision. If no row is affected,
+     * the follow-up lookup is used only to classify the result: a persisted
+     * protected row throws [ProtectedSourceDeletionException], while a missing
+     * ID is an idempotent no-op.
      *
-     * A source deletion cascades (FK CASCADE) into every unified_entries row
-     * and sync_history row for that source — see SourceDeletionCascadeTest.
-     * For a protected source that cascade would silently erase every manual
-     * rule, every contacts-derived allow entry, or an entire federal dataset,
-     * with no independent confirmation step. Refusing before the DAO call is
-     * reached is what makes that impossible rather than just unlikely.
+     * Deleting a source cascades to its unified_entries and sync_history rows;
+     * protected source types must therefore remain undeletable, while federal
+     * sources may still be disabled through [toggleSourceEnabled].
      */
     suspend fun deleteSource(source: SourceEntity) {
         if (SourceType.fromPersisted(source.type)?.persistedValue in PROTECTED_SOURCE_TYPES) {
             throw ProtectedSourceDeletionException(source)
         }
-        sourceDao.deleteSource(source)
+
+        val deletedRows = sourceDao.deleteIfNotProtected(
+            source.id,
+            PROTECTED_SOURCE_TYPES.toList()
+        )
+        if (deletedRows > 0) return
+
+        val persisted = sourceDao.getSourceById(source.id) ?: return
+        if (SourceType.fromPersisted(persisted.type)?.persistedValue in PROTECTED_SOURCE_TYPES) {
+            throw ProtectedSourceDeletionException(persisted)
+        }
     }
 
     suspend fun toggleSourceEnabled(sourceId: Int, isEnabled: Boolean) =
@@ -445,17 +454,15 @@ class DataSourceRepository(
 }
 
 /**
- * Thrown by [DataSourceRepository.deleteSource] when the target source's type
- * is in [DataSourceRepository.PROTECTED_SOURCE_TYPES]. Per Architecture
- * Contract §7 / INV-008, MANUAL, CONTACTS, and federal (FTC/FCC) sources may
- * never be deleted — only their entries, or (for federal sources) disabled
- * via toggleSourceEnabled(). Callers should treat this the same as any other
- * rejected mutation, not as an unexpected failure: SourcesViewModel already
- * catches Exception around this call site and logs it rather than crashing.
+ * Thrown by [DataSourceRepository.deleteSource] when a protected source is
+ * targeted. Per Architecture Contract §7 / INV-008, MANUAL sources (including
+ * Contacts Allow List, which is stored as type MANUAL) and federal FTC/FCC
+ * sources may never be deleted; federal sources may still be disabled. The
+ * Sources screen catches this exception and presents a source-action error.
  */
 class ProtectedSourceDeletionException(source: SourceEntity) : IllegalStateException(
     "Source '${source.name}' (id=${source.id}, type=${source.type}) is protected and " +
-        "cannot be deleted. MANUAL/CONTACTS sources may never be deleted (only their " +
-        "entries); federal sources (FTC/FCC) may be disabled but not deleted. " +
+        "cannot be deleted. MANUAL sources may never be deleted (only their entries); " +
+        "federal sources (FTC/FCC) may be disabled but not deleted. " +
         "See Architecture Contract §7, INV-008."
 )

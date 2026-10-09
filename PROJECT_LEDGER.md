@@ -56,6 +56,17 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top).
 
+2026-10-09 — WP-1 protected-source deletion hardening
+Who: Manus AI.
+What: Added an early rejection for caller objects already marked with a protected type, then made all other deletion decisions with one conditional SQL DELETE against the persisted source ID and type. A zero-row result is classified by a follow-up lookup only; protected rows throw using the persisted row, and missing IDs are idempotent no-ops. PROTECTED_SOURCE_TYPES is now an immutable Set<String> with unchanged values. Corrected delete/exception KDoc and added persisted-row regression coverage.
+Files touched: `android/app/src/main/java/com/signalgate/pulse/database/daos/DatabaseDAOs.kt`; `android/app/src/main/java/com/signalgate/pulse/database/repositories/DataSourceRepository.kt`; `android/app/src/test/kotlin/com/signalgate/pulse/database/repositories/DataSourceRepositoryDeletionTest.kt`; `android/app/src/test/kotlin/com/signalgate/pulse/database/repositories/DataSourceRepositoryPersistedDeletionTest.kt`; `android/app/src/test/kotlin/com/signalgate/pulse/ui/screens/SourcesViewModelDeletionTest.kt`; `PROJECT_LEDGER.md`.
+Layers touched: Room DAO, repository, JVM tests, and project ledger.
+Contract consulted: yes — Architecture-Contract.md §7 / INV-008. The protected type values and federal disablement behavior are unchanged.
+Validation: `:app:testPulseDebugUnitTest` passed (124 tests; 0 failures, errors, or skipped). Three new Robolectric in-memory Room tests cover same-ID CSV spoof refusal with source/entry preservation, non-protected deletion with cascade, and missing-ID no-op. `:app:assemblePulseDebug` succeeded; `git diff --check` and `scripts/check-architecture-drift.sh` passed. Test-integrity passed on the staged snapshot, and the ledger gate passed (1,363 to 1,374 lines). The task's 117-test baseline predates the merged debug Logcat tests (121-test base); these three tests bring the total to 124. No instrumented or device test was run.
+Status: Sandbox-verified; CI status not verified; no device run.
+Follow-up: Supersedes only the exception-KDoc CONTACTS/UI-logging discrepancy in the 2026-10-05 BP-15 register; all other BP items remain as recorded. Owner review is required; the user opens the PR; no merge is authorized.
+Signature: Manus AI — 2026-10-09
+
 2026-10-06 — Dual-source debug Logcat capture
 Who: Manus AI, following the request to show APK-style buffering alongside the live consumer-v1 Logcat reader.
 What: Added a debug-only Timber tree with a live 1,000-entry in-app buffer that preserves logged messages verbatim up to 8,000 characters, then appends the truncation suffix; it mirrors the stored message to Android Logcat. Replaced only the debug Timber.DebugTree with this single tree to avoid duplicate writes; the release ReleaseTree is unchanged. The viewer presents distinct, simultaneously available panels for the live app buffer and the existing `logcat -d -v time SignalGate:*` snapshot (last 500 lines), filters both feeds, refreshes the system snapshot independently, clears only the app buffer, and copies both visible feeds.

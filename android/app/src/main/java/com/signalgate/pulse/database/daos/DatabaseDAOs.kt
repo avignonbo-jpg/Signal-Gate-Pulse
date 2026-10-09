@@ -31,6 +31,10 @@ interface SourceDao {
     @Delete
     suspend fun deleteSource(source: SourceEntity)
 
+    /** Atomically delete a source by ID only when its persisted type is not protected. */
+    @Query("DELETE FROM sources WHERE id = :id AND type NOT IN (:protectedTypes)")
+    suspend fun deleteIfNotProtected(id: Int, protectedTypes: List<String>): Int
+
     @Query("SELECT * FROM sources WHERE id = :id")
     suspend fun getSourceById(id: Int): SourceEntity?
 
