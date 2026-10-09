@@ -56,6 +56,16 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top).
 
+2026-10-06 — Dual-source debug Logcat capture
+Who: Manus AI, following the request to show APK-style buffering alongside the live consumer-v1 Logcat reader.
+What: Added a debug-only Timber tree with a live 1,000-entry in-app buffer that preserves logged messages verbatim up to 8,000 characters, then appends the truncation suffix; it mirrors the stored message to Android Logcat. Replaced only the debug Timber.DebugTree with this single tree to avoid duplicate writes; the release ReleaseTree is unchanged. The viewer presents distinct, simultaneously available panels for the live app buffer and the existing `logcat -d -v time SignalGate:*` snapshot (last 500 lines), filters both feeds, refreshes the system snapshot independently, clears only the app buffer, and copies both visible feeds.
+Files touched: `MainApplication.kt`; `diagnostics/AppDiagnosticsTree.kt`; `ui/viewmodels/LogcatViewModel.kt`; `ui/screens/LogcatViewerScreen.kt`; `diagnostics/AppDiagnosticsTreeTest.kt`; `PROJECT_LEDGER.md`.
+Layers touched: application bootstrap, cross-cutting debug logging, UI/ViewModel, and JVM unit tests.
+Contract consulted: yes — Architecture-Contract.md INV-007 was reviewed; the owner has authorized verbatim messages in this debug-only viewer for local call-flow troubleshooting. The release ReleaseTree behavior and required-source startup-seeding order are unchanged.
+Validation: `git diff --check`, `scripts/check-architecture-drift.sh`, and `bash scripts/check-test-integrity.sh origin/consumer-v1 HEAD` passed. With Android API 35 / Build Tools 35.0.0 and temporary Temurin 17.0.20.1, `:app:testPulseDebugUnitTest` passed (121 tests; 0 failures, errors, or skipped; new `AppDiagnosticsTreeTest`: 4/4) and `:app:assemblePulseDebug` succeeded. Gradle emitted an SDK XML v4 compatibility warning, but both tasks passed. Generated build output was removed; no APK was installed.
+Status: Verified locally only; CI pending.
+Signature: Manus AI — 2026-10-06
+
 2026-10-05 — Audit snapshots and BP-01 through BP-16 open-item register
 Who: Manus AI.
 What: Documentation only. Registers BP-01 through BP-16 as stable, evidence-checkable open-item IDs and adds three read-only audit snapshots under `docs/audit/`. The snapshots describe the code at `a3bae8a083f1f5e86728b98876644b4a76ae99bf` only and are not updated as code changes. Each BP status below is as of that commit, checked by source inspection unless marked otherwise. All items are OPEN. No production code, build, or test was run or changed by this entry.

@@ -3,6 +3,7 @@ package com.signalgate.pulse
 import android.app.Application
 import androidx.work.Configuration
 import com.signalgate.pulse.BuildConfig
+import com.signalgate.pulse.diagnostics.AppLogCapture
 import com.signalgate.pulse.di.KoinWorkerFactory
 import com.signalgate.pulse.di.appModule
 import com.signalgate.pulse.di.initializeDatabase
@@ -80,7 +81,10 @@ class MainApplication : Application(), Configuration.Provider {
         SecurityUtils.enableStrictMode()
 
         if (BuildConfig.DEBUG) {
-            Timber.plant(Timber.DebugTree())
+            // Capture in-process events in a bounded debug-only buffer and mirror
+            // them to Android Logcat, so both reader paths stay available without
+            // planting two duplicate-writing Timber trees.
+            AppLogCapture.install()
         } else {
             // DebugTree is intentionally debug-only (avoids verbose/info spam in release
             // logcat), but that meant WARN/ERROR-level events — like a Keystore
