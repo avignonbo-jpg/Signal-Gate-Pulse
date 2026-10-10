@@ -56,6 +56,16 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top).
 
+2026-10-09 — WP-4 two-manager ensure-row conflict test
+Who: Manus AI.
+What: Test-only regression coverage builds two separate ReliableSourceManager instances from separate DataSourceRepository mocks, with both repositories delegating to the same in-memory Room sourceDao, and calls ensureFederalRows concurrently. The test asserts exactly two total rows: one FTC row and one FCC row. The existing single-manager concurrentEnsureCallsCreateExactlyOneRowPerFederalSource test and all existing assertions remain unchanged. The test cannot show which branch each writer took; it proves only that the final state is correct under concurrent writers. It is a regression guard for the unique name index. It does not prove the row-creation mutex or the insert-ignore re-read and retry branches: those have no deterministic test in this change and remain covered only by code review.
+Files touched: android/app/src/test/kotlin/com/signalgate/pulse/logic/ReliableSourceManagerEnsureFederalRowsTest.kt; PROJECT_LEDGER.md.
+Layers touched: JVM/Robolectric test coverage and project ledger only. No production code, Room schema, migration, protected-source rule, toggle rule, WorkManager name, or CommunitySyncWorker rename changed.
+Contract consulted: yes — the WP-4 specification, ReliableSourceManager ensure-row implementation, SourceEntity unique name index, existing in-memory Room setup, and existing concurrency test were reviewed.
+Validation: `bash ./scripts/check-architecture-drift.sh` passed. `bash ./scripts/check-test-integrity.sh origin/consumer-v1 HEAD` passed. `./gradlew :app:testPulseDebugUnitTest -Pandroid.builder.sdkDownload=false` could not start because the sandbox has no Android SDK location (`SDK location not found`); no local tests ran and no local test total was produced. Baseline from current-base CI run `38027901551`: 125 tests, 0 failures, 0 errors, 0 skipped. Expected post-change total is 126; no other total was observed or assumed. No assemble was run because the unit-test command did not pass. No device run.
+Status: CI pending on the draft PR; sandbox verification is limited by the missing Android SDK; no device run.
+Signature: Manus AI — 2026-10-09
+
 2026-10-09 — WP-3 single federal-source definition
 Who: Manus AI.
 What: Centralized managed-federal-source eligibility in one public ReliableSourceManager predicate that requires both the persisted type and name to match a ReliableSourceManager.SOURCES entry. SourceSyncUseCase, ReliableSourceManager sync routing, and SourcesScreen now use the shared predicate. An FTC- or FCC-typed row with a non-matching name will no longer show Sync now or sync metadata in the UI; the app's normal flows cannot create such rows, so this only matters for hand-edited or corrupted data. The FTC display label now includes Registry; persisted names, types, paths, sync behavior, delete rules, toggle rules, and the fixed source model are unchanged.
