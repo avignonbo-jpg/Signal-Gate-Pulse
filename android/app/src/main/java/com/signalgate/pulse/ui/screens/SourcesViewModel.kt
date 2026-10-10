@@ -5,13 +5,16 @@ import androidx.lifecycle.viewModelScope
 import com.signalgate.pulse.database.entities.SourceEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.database.repositories.ProtectedSourceDeletionException
+import com.signalgate.pulse.database.repositories.SettingRepository
 import com.signalgate.pulse.logic.SourceSyncUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.stateIn
 import timber.log.Timber
@@ -29,14 +32,27 @@ import timber.log.Timber
  */
 class SourcesViewModel(
     private val dataSourceRepository: DataSourceRepository,
-    private val sourceSyncUseCase: SourceSyncUseCase
+    private val sourceSyncUseCase: SourceSyncUseCase,
+    private val settingRepository: SettingRepository
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "SourcesViewModel"
+        private const val CONTACTS_SOURCE_ID_SETTING = "contacts_source_id"
     }
 
     val sources: Flow<List<SourceEntity>> = dataSourceRepository.getAllSources()
+
+    val contactsEntryCount: Flow<Int> = flow {
+        val contactsSourceId = settingRepository
+            .getSettingValue(CONTACTS_SOURCE_ID_SETTING)
+            ?.toIntOrNull()
+        if (contactsSourceId == null) {
+            emit(0)
+        } else {
+            emitAll(dataSourceRepository.observeEntryCountBySourceId(contactsSourceId))
+        }
+    }
 
     val isSyncing: StateFlow<Boolean> = sourceSyncUseCase.isSyncing.stateIn(
         viewModelScope,

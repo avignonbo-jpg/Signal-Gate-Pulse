@@ -113,6 +113,9 @@ interface UnifiedEntryDao {
     @Query("SELECT COUNT(*) FROM unified_entries WHERE sourceId = :sourceId")
     suspend fun getEntryCountBySourceId(sourceId: Int): Int
 
+    @Query("SELECT COUNT(*) FROM unified_entries WHERE sourceId = :sourceId")
+    fun observeEntryCountBySourceId(sourceId: Int): Flow<Int>
+
     @Query("DELETE FROM unified_entries WHERE sourceId = :sourceId")
     suspend fun deleteEntriesBySourceId(sourceId: Int)
 

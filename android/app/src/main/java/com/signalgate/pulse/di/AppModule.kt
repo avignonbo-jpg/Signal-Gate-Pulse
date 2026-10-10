@@ -223,7 +223,7 @@ val viewModelModule = module {
     viewModel { OnboardingViewModel(get()) } // Step 2.6: added SettingRepository for markOnboardingComplete
     viewModel { SettingsViewModel(get()) } // Step 2.6: new — owns shield-color persistence, resolves half of FLAG-1
     viewModel { PendingCardViewModel(get(), get()) }
-    viewModel { SourcesViewModel(get(), get()) } // Phase 0.4: real source sync boundary added
+    viewModel { SourcesViewModel(get(), get(), get()) } // Phase 0.4: real source sync boundary added
 }
 
 /**

@@ -5,6 +5,7 @@ import com.signalgate.pulse.database.daos.SourceDao
 import com.signalgate.pulse.database.daos.UnifiedEntryDao
 import com.signalgate.pulse.database.entities.SourceEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
+import com.signalgate.pulse.database.repositories.SettingRepository
 import com.signalgate.pulse.logic.SourceSyncUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -63,7 +64,7 @@ class SourcesViewModelDeletionTest {
         )
         val sourceSyncUseCase = mock<SourceSyncUseCase>()
         whenever(sourceSyncUseCase.isSyncing).thenReturn(flowOf(false))
-        viewModel = SourcesViewModel(repository, sourceSyncUseCase)
+        viewModel = SourcesViewModel(repository, sourceSyncUseCase, mock<SettingRepository>())
     }
 
     @Test

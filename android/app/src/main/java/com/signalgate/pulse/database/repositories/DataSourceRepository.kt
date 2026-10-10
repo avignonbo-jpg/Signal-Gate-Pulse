@@ -166,6 +166,9 @@ class DataSourceRepository(
     suspend fun getEntryCountBySourceId(sourceId: Int): Int =
         entryDao.getEntryCountBySourceId(sourceId)
 
+    fun observeEntryCountBySourceId(sourceId: Int): Flow<Int> =
+        entryDao.observeEntryCountBySourceId(sourceId)
+
     fun getTotalEntryCount(): Flow<Int> = entryDao.getTotalEntryCount()
 
     fun getEnabledSourcesEntryCount(): Flow<Int> =

@@ -12,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.signalgate.pulse.database.entities.SourceEntity
-import com.signalgate.pulse.database.repositories.DataSourceRepository
 import com.signalgate.pulse.logic.ReliableSourceManager
 import com.signalgate.pulse.ui.components.GlassCard
 import com.signalgate.pulse.utils.humanReadable
@@ -33,6 +32,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun SourcesScreen(viewModel: SourcesViewModel = koinViewModel()) {
     val sources by viewModel.sources.collectAsState(initial = emptyList())
+    val contactCount by viewModel.contactsEntryCount.collectAsState(initial = 0)
     val isSyncing by viewModel.isSyncing.collectAsState()
     val sourceActionError by viewModel.sourceActionError.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -81,6 +81,7 @@ fun SourcesScreen(viewModel: SourcesViewModel = koinViewModel()) {
                     items(sources, key = { it.id }) { source ->
                         SourceRow(
                             source = source,
+                            contactCount = contactCount,
                             onSync = { viewModel.syncSource(source.id) },
                             onDelete = { viewModel.deleteSource(source) },
                             onToggleEnabled = { enabled -> viewModel.toggleSourceEnabled(source.id, enabled) }
@@ -95,13 +96,16 @@ fun SourcesScreen(viewModel: SourcesViewModel = koinViewModel()) {
 @Composable
 private fun SourceRow(
     source: SourceEntity,
+    contactCount: Int,
     onSync: () -> Unit,
     onDelete: () -> Unit,
     onToggleEnabled: (Boolean) -> Unit
 ) {
-    val isRemoteSource = ReliableSourceManager.isManagedFederalSource(source)
-    val isProtectedSource = source.type in DataSourceRepository.PROTECTED_SOURCE_TYPES
-    val isManualUserRules = source.type == "MANUAL" && source.pathOrUrl == "local"
+    val controls = SourceRowControls.controlsFor(
+        source = source,
+        contactCount = contactCount,
+        isFederal = ReliableSourceManager.isManagedFederalSource(source)
+    )
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth()) {
@@ -112,7 +116,7 @@ private fun SourceRow(
             ) {
                 Text(source.displaySourceName(), style = MaterialTheme.typography.titleMedium)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isRemoteSource) {
+                    if (controls.showSyncMetadata) {
                         val isNotSyncedYet =
                             source.lastAcceptedSnapshot == null && source.lastAttemptedSync == null
                         Text(
@@ -126,7 +130,7 @@ private fun SourceRow(
                         )
                         Spacer(Modifier.width(8.dp))
                     }
-                    if (isManualUserRules) {
+                    if (controls.showReadOnlyStatus) {
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
                                 text = if (source.isEnabled) "Enabled" else "Disabled",
@@ -138,12 +142,12 @@ private fun SourceRow(
                                 }
                             )
                             Text(
-                                text = "Manage elsewhere",
+                                text = controls.hintText ?: "Manage elsewhere",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    } else {
+                    } else if (controls.showSwitch) {
                         Switch(
                             checked = source.isEnabled,
                             onCheckedChange = onToggleEnabled
@@ -156,7 +160,7 @@ private fun SourceRow(
                 "Type: ${source.type} • Priority: ${source.priority}",
                 style = MaterialTheme.typography.bodySmall
             )
-            if (isRemoteSource) {
+            if (controls.showSyncMetadata) {
                 Text(
                     "Last accepted: ${source.lastAcceptedSnapshot?.humanReadable() ?: "Never"} • " +
                         "${source.acceptedRecordCount ?: source.entriesCount} entries",
@@ -173,10 +177,16 @@ private fun SourceRow(
                     )
                 }
             }
+            if (!controls.showReadOnlyStatus && controls.hintText != null) {
+                Text(
+                    controls.hintText,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (isRemoteSource) TextButton(onClick = onSync) { Text("Sync now") }
-                if (!isProtectedSource) TextButton(onClick = onDelete) { Text("Remove") }
+                if (controls.showSyncNow) TextButton(onClick = onSync) { Text("Sync now") }
+                if (controls.showRemove) TextButton(onClick = onDelete) { Text("Remove") }
             }
         }
     }
