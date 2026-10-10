@@ -56,6 +56,16 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top).
 
+2026-10-09 — WP-3 single federal-source definition
+Who: Manus AI.
+What: Centralized managed-federal-source eligibility in one public ReliableSourceManager predicate that requires both the persisted type and name to match a ReliableSourceManager.SOURCES entry. SourceSyncUseCase, ReliableSourceManager sync routing, and SourcesScreen now use the shared predicate. An FTC- or FCC-typed row with a non-matching name will no longer show Sync now or sync metadata in the UI; the app's normal flows cannot create such rows, so this only matters for hand-edited or corrupted data. The FTC display label now includes Registry; persisted names, types, paths, sync behavior, delete rules, toggle rules, and the fixed source model are unchanged.
+Files touched: android/app/src/main/java/com/signalgate/pulse/logic/ReliableSourceManager.kt; android/app/src/main/java/com/signalgate/pulse/logic/SourceSyncUseCase.kt; android/app/src/main/java/com/signalgate/pulse/ui/screens/SourcesScreen.kt; android/app/src/test/kotlin/com/signalgate/pulse/logic/ReliableSourceManagerPolicyTest.kt; PROJECT_LEDGER.md.
+Layers touched: source-sync application boundary, source orchestration, UI presentation, and JVM policy tests. No Room schema, entity, DAO, migration, WorkManager name, or CommunitySyncWorker rename changed.
+Contract consulted: yes — the fixed FTC/FCC/Manual source model, protected-source rules, toggle rules, and existing source-sync tests were reviewed. No protected-source or toggle rule changed.
+Validation: `./gradlew :app:testPulseDebugUnitTest -Pandroid.builder.sdkDownload=false` could not start because the sandbox has no Android SDK location (`SDK location not found`; no tests ran and no local unit-test total was produced). `:app:assemblePulseDebug` was not run because the required unit-test command did not pass. Baseline from current-base CI run `38005307056`: 124 tests, 0 failures, 0 errors, 0 skipped; no post-change total is claimed locally. `bash ./scripts/check-architecture-drift.sh` passed. `bash ./scripts/check-test-integrity.sh origin/consumer-v1 HEAD` passed. The display-label assertion precheck found no test or Compose assertion for `FTC Do Not Call`. No device run.
+Status: CI pending on the draft PR; sandbox verification is limited by the missing Android SDK; no device run. WP-4 through WP-11 remain open, and the community/GitHub blocklist question remains open.
+Signature: Manus AI — 2026-10-09
+
 2026-10-09 — WP-2 stale package/applicationId documentation correction
 Who: Manus AI.
 What: Comment and documentation edits only. Corrects stale README and launch-script comments: the Pulse flavor's applicationId is documented as com.signalgate.multipoint.pulse and the Kotlin package as com.signalgate.pulse; the README project tree names the actual source directory and SignalGateCallScreeningService.kt; the launch-script NOTE matches the existing workflow arguments; the Android module build directories are ignored while the root /build rule is kept; CommunitySyncWorker documents its retained legacy name without a rename. No script command or argument, workflow file, contract, production behavior, or test assertion changed.

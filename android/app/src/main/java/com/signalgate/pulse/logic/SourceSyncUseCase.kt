@@ -38,12 +38,8 @@ class SourceSyncUseCase(
     companion object {
         /** Return only enabled FTC/FCC row IDs for the ViewModel's bulk-sync request. */
         fun enabledFederalSourceIds(sources: List<SourceEntity>): List<Int> =
-            sources.filter { it.isEnabled && isManagedFederalSource(it) }.map { it.id }
-
-        private fun isManagedFederalSource(source: SourceEntity): Boolean =
-            ReliableSourceManager.SOURCES.any { managed ->
-                managed.sourceType == source.type && managed.name == source.name
-            }
+            sources.filter { it.isEnabled && ReliableSourceManager.isManagedFederalSource(it) }
+                .map { it.id }
     }
 
     suspend fun syncSource(sourceId: Int): ReliableSourceManager.SyncResult {
@@ -51,7 +47,7 @@ class SourceSyncUseCase(
             ?: return ReliableSourceManager.SyncResult(
                 "source:$sourceId", 0, false, "Source not found"
             )
-        if (!isManagedFederalSource(source)) {
+        if (!ReliableSourceManager.isManagedFederalSource(source)) {
             return ReliableSourceManager.SyncResult(
                 source.name, 0, false, "Source is not a managed federal source"
             )

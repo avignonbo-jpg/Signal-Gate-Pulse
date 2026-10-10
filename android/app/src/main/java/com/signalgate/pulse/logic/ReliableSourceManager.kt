@@ -143,6 +143,14 @@ class ReliableSourceManager(
             )
         )
 
+        fun isManagedFederalSource(source: SourceEntity): Boolean =
+            managedFederalSource(source) != null
+
+        private fun managedFederalSource(source: SourceEntity): FederalSource? =
+            SOURCES.firstOrNull { managed ->
+                managed.sourceType == source.type && managed.name == source.name
+            }
+
         internal fun shouldSyncAutomatically(source: SourceEntity?): Boolean =
             source?.isEnabled != false
     }
@@ -235,7 +243,7 @@ class ReliableSourceManager(
         withContext(Dispatchers.IO) {
             val source = dataSourceRepository.getSourceById(sourceId)
                 ?: return@withContext SyncResult("source:$sourceId", 0, false, "Source not found")
-            val federalSource = SOURCES.firstOrNull { it.sourceType == source.type && it.name == source.name }
+            val federalSource = managedFederalSource(source)
                 ?: return@withContext SyncResult(source.name, 0, false, "Source is not a managed federal source")
             syncSource(federalSource, sourceId)
         }
