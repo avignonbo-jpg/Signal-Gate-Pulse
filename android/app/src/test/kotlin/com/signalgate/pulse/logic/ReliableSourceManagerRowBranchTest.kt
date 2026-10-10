@@ -11,11 +11,12 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.whenever
+import org.mockito.kotlin.verify
 import java.util.concurrent.atomic.AtomicInteger
 
 class ReliableSourceManagerRowBranchTest {
@@ -114,7 +115,7 @@ class ReliableSourceManagerRowBranchTest {
 
         assertEquals(1, ftcInsertCalls.get())
         assertEquals(2, ftcLookupCalls.get())
-        assertFalse(disabledFtc.isEnabled)
+        verify(repository, never()).updateSource(any())
     }
 
     @Test
