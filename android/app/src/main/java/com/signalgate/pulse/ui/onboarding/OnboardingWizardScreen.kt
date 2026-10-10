@@ -839,7 +839,7 @@ fun ContactsImportStep(
             fontWeight = FontWeight.Bold
         )
         Text(
-            text = "Select contacts to automatically allow through the shield.",
+            text = "The app reads your contacts only to show this list. Nothing is saved until you tap IMPORT & CONTINUE. Choose which contacts to allow.",
             color = TextSecondary,
             fontSize = 14.sp,
             modifier = Modifier.padding(top = 6.dp, bottom = 16.dp)
@@ -947,7 +947,7 @@ fun ContactsImportStep(
             enabled = !isLoading && !isSaving
         ) {
             Text(
-                "Skip — I'll manage this later",
+                "Skip contacts",
                 color = TextSecondary,
                 fontSize = 13.sp
             )

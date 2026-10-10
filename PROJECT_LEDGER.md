@@ -56,6 +56,16 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top).
 
+2026-10-10 — WP-6 Contacts wizard copy and no-save tests
+Who: Manus AI.
+What: Changed only the Contacts step body copy to explain that contacts are read for display, nothing is saved until IMPORT & CONTINUE is tapped, and the user chooses which contacts to allow. Changed the Skip label to "Skip contacts" so it does not imply a later management path. Added two ContactsViewModel tests proving loaded contacts remain unselected and that loading and skipping perform no allow-list or entry writes. No ContactsViewModel logic, permission flow, default selection, Room, DAO, repository, or existing assertion changed.
+Files touched: android/app/src/main/java/com/signalgate/pulse/ui/onboarding/OnboardingWizardScreen.kt; android/app/src/test/kotlin/com/signalgate/pulse/ui/viewmodels/ContactsViewModelTest.kt; PROJECT_LEDGER.md.
+Layers touched: onboarding presentation copy, JVM/Robolectric ViewModel tests, and project ledger.
+Contract consulted: yes — the WP-6 S1/S2/S3/S4 requirements, the existing ContactsViewModel write boundaries, default unselected ContactItem state, onboarding-only Contacts route, and approved copy were reviewed. No Room schema or migration change was made.
+Validation: Current-base green CI run `38077333090` on `72582c4cc9ebe9be8a2c3b96ec82bd1e6bd7f6a5` established a baseline of 133 tests, 0 failures, 0 errors, and 0 skipped. Targeted `./gradlew :app:testPulseDebugUnitTest -Pandroid.builder.sdkDownload=false --tests '*ContactsViewModel*' --rerun-tasks --console=plain` passed with 2 tests, 0 failures, 0 errors, and 0 skipped. Full `./gradlew :app:testPulseDebugUnitTest -Pandroid.builder.sdkDownload=false --rerun-tasks --console=plain` passed with 135 tests, 0 failures, 0 errors, and 0 skipped. `./gradlew :app:assemblePulseDebug -Pandroid.builder.sdkDownload=false --rerun-tasks --console=plain` passed. `bash ./scripts/check-architecture-drift.sh` passed. `bash ./scripts/check-test-integrity.sh origin/consumer-v1 HEAD` passed. No device run and no instrumented test run.
+Status: CI pending; sandbox verification completed with the approved JDK 21 and SDK packages; no device run. WP-7 through WP-11 remain open. WP-5 device checks for the Contacts label, live count, and switch remain open. The community/GitHub blocklist question remains open.
+Signature: Manus AI — 2026-10-10
+
 2026-10-10 — WP-5 per-row control function and honest Contacts count
 Who: Manus AI.
 What: Added one pure, tested Sources-row control policy for FTC/FCC federal rows, Manual User Rules, Contacts Allow List, and unknown non-protected rows. Added an observable entry count by the stored contacts_source_id setting and displayed either the imported count or the empty-state Contacts label. Preserved the Contacts switch wording and behavior; no disabled-state-specific wording was added. Added a real in-memory Room seed-order test proving the Manual row is inserted before Contacts and their stored IDs are 1 and 2. The hardcoded sourceId = 1 identity dependency remains on the contract audit list and was not changed.
