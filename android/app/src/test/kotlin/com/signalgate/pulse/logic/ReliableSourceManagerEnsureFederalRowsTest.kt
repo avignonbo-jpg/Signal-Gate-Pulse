@@ -130,6 +130,24 @@ class ReliableSourceManagerEnsureFederalRowsTest {
         assertEquals(1, rows.count { it.type == "FCC" })
     }
 
+    @Test
+    fun twoManagers_concurrentlyEnsureFederalRows_createExactlyOneRowPerFederalSource(): Unit = runBlocking {
+        val firstManager = createManager()
+        val secondManager = createManager()
+
+        coroutineScope {
+            awaitAll(
+                async(Dispatchers.IO) { firstManager.ensureFederalRows() },
+                async(Dispatchers.IO) { secondManager.ensureFederalRows() }
+            )
+        }
+
+        val rows = sourceDao.getAllSources().first()
+        assertEquals(2, rows.size)
+        assertEquals(1, rows.count { it.type == "FTC" })
+        assertEquals(1, rows.count { it.type == "FCC" })
+    }
+
     private fun createManager(): ReliableSourceManager {
         val repository = mock<DataSourceRepository>()
         runBlocking {
