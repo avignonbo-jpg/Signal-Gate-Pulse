@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.signalgate.pulse.database.entities.SourceEntity
 import com.signalgate.pulse.database.repositories.DataSourceRepository
+import com.signalgate.pulse.logic.ReliableSourceManager
 import com.signalgate.pulse.ui.components.GlassCard
 import com.signalgate.pulse.utils.humanReadable
 import org.koin.androidx.compose.koinViewModel
@@ -98,7 +99,7 @@ private fun SourceRow(
     onDelete: () -> Unit,
     onToggleEnabled: (Boolean) -> Unit
 ) {
-    val isRemoteSource = source.type == "FTC" || source.type == "FCC"
+    val isRemoteSource = ReliableSourceManager.isManagedFederalSource(source)
     val isProtectedSource = source.type in DataSourceRepository.PROTECTED_SOURCE_TYPES
     val isManualUserRules = source.type == "MANUAL" && source.pathOrUrl == "local"
 
@@ -182,7 +183,7 @@ private fun SourceRow(
 }
 
 private fun SourceEntity.displaySourceName(): String = when (type) {
-    "FTC" -> "FTC Do Not Call"
+    "FTC" -> "FTC Do Not Call Registry"
     "FCC" -> "FCC Consumer Complaints"
     else -> name
 }
