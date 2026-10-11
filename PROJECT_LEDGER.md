@@ -56,6 +56,16 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top).
 
+2026-10-11 — Device capture tool: redacted behavior capture, self-test, CI validation
+Who: Manus AI.
+What: Added scripts/capture-device-behavior.sh from the supplied capture script with a --self-test option that validates redaction of domestic and international phone-number-like strings while preserving ordinary text. Added a pull-request validation job and a manual debug-emulator capture job using the existing CI emulator/action versions; CI never invokes --raw and uploads only redacted captures. Device testing is only for developer testing, pre-release only; the capture script is not part of the app and is not present in public release builds. The --raw option is for developer test devices only and is never used in CI. Added the captures/ ignore rule. No app code, existing workflow, release path, branch protection, or required-check setting changed.
+Files touched: scripts/capture-device-behavior.sh; .gitignore; .github/workflows/device-capture.yml; PROJECT_LEDGER.md.
+Layers touched: developer device tooling, CI validation/emulator workflow, repository hygiene, and project ledger.
+Contract consulted: yes — the device-capture specification, existing pulse-instrumented-tests.yml and crash-diagnostic.yml emulator setup, redaction requirements, CI no-raw constraint, and pre-release-only scope decision were reviewed. No Android source, Room schema, migration, or existing workflow changed.
+Validation: `bash -n scripts/capture-device-behavior.sh` passed with exit 0 and printed `SYNTAX_OK`. `bash scripts/capture-device-behavior.sh --self-test` passed with `PASS: 10-digit number masked`, `PASS: international number masked`, and `PASS: ordinary text unchanged`, exit 0. `shellcheck scripts/capture-device-behavior.sh` passed with exit 0. `python3 -c "import yaml,sys; yaml.safe_load(open('.github/workflows/device-capture.yml'))"` passed with `YAML_OK`, exit 0. The workflow was checked for the absence of a `--raw` invocation and none was found. `bash ./scripts/check-architecture-drift.sh` passed. `bash ./scripts/check-test-integrity.sh origin/consumer-v1 HEAD` passed. `git diff --cached --check` passed. The emulator job was not run locally or through workflow_dispatch; no device run and no capture output were produced.
+Status: CI pending on the draft PR; sandbox validation is complete within the available tools; no device run. WP-7 through WP-11 remain open. WP-5 device checks for the Contacts label, live count, and switch remain open. The community/GitHub blocklist question remains open.
+Signature: Manus AI — 2026-10-11
+
 2026-10-10 — WP-6 Contacts wizard copy and no-save tests
 Who: Manus AI.
 What: Changed only the Contacts step body copy to explain that contacts are read for display, nothing is saved until IMPORT & CONTINUE is tapped, and the user chooses which contacts to allow. Changed the Skip label to "Skip contacts" so it does not imply a later management path. Added two ContactsViewModel tests proving loaded contacts remain unselected and that loading and skipping perform no allow-list or entry writes. No ContactsViewModel logic, permission flow, default selection, Room, DAO, repository, or existing assertion changed.
