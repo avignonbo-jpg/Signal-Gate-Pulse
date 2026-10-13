@@ -11,6 +11,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.signalgate.pulse.logic.DataSyncEngine
 import com.signalgate.pulse.logic.ReliableSourceManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
@@ -47,6 +48,8 @@ class CommunitySyncWorker(
                 Timber.w("Partial sync failure")
                 Result.retry() // exponential backoff via WorkRequest
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Sync worker fatal error")
             Result.failure()
