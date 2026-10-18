@@ -16,3 +16,6 @@
 .cxx
 local.properties
 captures/
+*.keystore
+*.jks
+!debug.keystore
