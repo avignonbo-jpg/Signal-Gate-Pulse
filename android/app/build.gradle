@@ -77,6 +77,8 @@ android {
                 storePassword System.getenv("RELEASE_KEYSTORE_PASSWORD")
                 keyAlias System.getenv("RELEASE_KEY_ALIAS")
                 keyPassword System.getenv("RELEASE_KEY_PASSWORD")
+            } else if (gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }) {
+                throw new GradleException("Release build requested but RELEASE_KEYSTORE_PATH is not set.")
             }
         }
     }
