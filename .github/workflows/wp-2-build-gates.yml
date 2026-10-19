@@ -108,7 +108,7 @@ jobs:
               for key in totals:
                   totals[key] += int(root.attrib.get(key, "0"))
           print(totals)
-          expected = {"tests": 124, "failures": 0, "errors": 0, "skipped": 0}
+          expected = {"tests": 138, "failures": 0, "errors": 0, "skipped": 0}
           if totals != expected:
               print(f"Expected exactly {expected}; got {totals}", file=sys.stderr)
               raise SystemExit(1)
