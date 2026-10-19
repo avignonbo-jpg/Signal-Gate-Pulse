@@ -56,6 +56,16 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top).
 
+2026-10-18 — Real-engine timeout probe confirms Scenario B handling
+Who: Manus AI, following the open runtime question about cancellation while `CallScreeningEngine` is suspended in `DataSourceRepository.getCallDecision()`.
+What: Ran a temporary, untracked timeout probe against commit `8fd768eaeec0fd63d8c849c626ba4e4426624eac`, which is an ancestor of the current live `consumer-v1` head `d27037961452c833a0a827b2490f57ff6656ef73`. The probe's two cases passed: the real engine propagated `TimeoutCancellationException`, and the production wiring invoked the security-failure callback exactly once without also issuing the normal response. Observed markers were `PROBE1_OUTCOME=THROWS_TimeoutCancellationException` and `PROBE2_normalResponses=[] failureCallbacks=[+15551234567]`.
+Files touched: `PROJECT_LEDGER.md` only. The probe was scratch-only and was deleted; no production or permanent test source changed. The relevant `SignalGateCallScreeningService.kt` and `CallScreeningEngine.kt` files are unchanged between the probe commit and the current live head.
+Layers touched: JVM timeout verification and project ledger; no application behavior was changed.
+Contract consulted: yes — the existing response/deadline behavior and the live service/engine paths were checked before recording the result.
+Validation: temporary Gradle unit-test run completed with 2 tests, 0 failures, 0 errors, and 0 skipped. The original Robolectric runner could not initialize its pinned Conscrypt 2.5.2 native library on this ARM64 sandbox, so the untracked probe was run with the unnecessary Robolectric runner removed; no production code or committed test was altered. The isolated worktree was clean after scratch/build cleanup.
+Status: Scenario B confirmed. A decision timeout reaches `executeScreeningSafely`, triggers the security-failure path once, and does not produce a second normal Telecom response. This resolves the runtime unknown; it does not require a production-code fix.
+Signature: Manus AI — 2026-10-18
+
 2026-10-13 — Rethrow CancellationException in CommunitySyncWorker
 Who: Manus AI.
 What: Added a CancellationException catch before the generic Exception catch in CommunitySyncWorker.doWork() and rethrew cancellation so WorkManager cancellation is not converted into Result.failure(). Added three JVM tests covering cancellation propagation, generic-exception failure, and partial-sync retry behavior. The tests construct the worker directly with a Robolectric application context, a deep-stubbed WorkerParameters, and a Koin-provided mocked ReliableSourceManager; no androidx.work:work-testing dependency was added and no production scheduling or worker name changed.
