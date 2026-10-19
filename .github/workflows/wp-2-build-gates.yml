@@ -1,0 +1,130 @@
+name: WP-2 Build Gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - consumer-v1
+
+permissions:
+  contents: read
+
+jobs:
+  wp2-build-gates:
+    name: WP-2 — x86_64 documentation gates and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@cf27718e65a2b7f5c2d5a3a56e3f2d7af5a7f0a4 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK components
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: 'platforms;android-35 build-tools;35.0.0'
+
+      - name: Verify x86_64 and approved toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "x86_64"
+          java -version
+          test -d "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}/platforms/android-35"
+          test -d "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}/build-tools/35.0.0"
+          if [ -d "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}/platform-tools" ]; then
+            echo "platform-tools is present on the hosted runner; it was not requested by this workflow."
+          fi
+
+      - name: Resolve comparison base
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "ref=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            git fetch origin consumer-v1 --depth=1
+            echo "ref=origin/consumer-v1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check architecture drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./scripts/check-architecture-drift.sh
+          if ! ./scripts/check-architecture-drift.sh; then
+            echo "::error title=Architecture drift::The repository failed the architecture-drift gate."
+            exit 1
+          fi
+
+      - name: Check production ledger update
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./scripts/check-ledger-updated.sh
+          ./scripts/check-ledger-updated.sh "${{ steps.base.outputs.ref }}"
+
+      - name: Check test integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./scripts/check-test-integrity.sh
+          ./scripts/check-test-integrity.sh "${{ steps.base.outputs.ref }}" HEAD
+
+      - name: Check staged-equivalent diff whitespace
+        shell: bash
+        run: git diff --check "${{ steps.base.outputs.ref }}" HEAD
+
+      - name: Grant execute permission for Gradle
+        run: chmod +x ./android/gradlew
+
+      - name: Run Pulse unit suite
+        working-directory: ./android
+        run: ./gradlew :app:testPulseDebugUnitTest -Pandroid.builder.sdkDownload=false --no-daemon --stacktrace
+
+      - name: Enforce unit-test totals
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          files = glob.glob("android/app/build/test-results/testPulseDebugUnitTest/*.xml")
+          if not files:
+              raise SystemExit("No Pulse unit-test XML results found")
+          totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+          for filename in files:
+              root = ET.parse(filename).getroot()
+              for key in totals:
+                  totals[key] += int(root.attrib.get(key, "0"))
+          print(totals)
+          expected = {"tests": 124, "failures": 0, "errors": 0, "skipped": 0}
+          if totals != expected:
+              print(f"Expected exactly {expected}; got {totals}", file=sys.stderr)
+              raise SystemExit(1)
+          PY
+
+      - name: Assemble Pulse debug
+        working-directory: ./android
+        run: ./gradlew :app:assemblePulseDebug -Pandroid.builder.sdkDownload=false --no-daemon --stacktrace
+
+      - name: Upload unit-test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wp2-unit-test-results
+          path: |
+            android/app/build/test-results/testPulseDebugUnitTest/**
+            android/app/build/reports/tests/testPulseDebugUnitTest/**
+          if-no-files-found: warn
+          retention-days: 7
