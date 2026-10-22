@@ -89,6 +89,45 @@ echo "Running architecture drift checks against: ${SRC#$PROJECT_ROOT/}"
 echo
 
 # ---------------------------------------------------------------------------
+# Rule 0: application identity and source-of-truth consistency
+# ---------------------------------------------------------------------------
+RULE="Application identity consistency"
+APP_GRADLE="$PROJECT_ROOT/android/app/build.gradle"
+MANIFEST="$PROJECT_ROOT/android/app/src/main/AndroidManifest.xml"
+LAUNCH_SCRIPT="$PROJECT_ROOT/scripts/verify-launch-and-capture.sh"
+
+if ! grep -Eq "^[[:space:]]*namespace[[:space:]]+\\\"com\\.signalgate\\.pulse\\\"" "$APP_GRADLE"; then
+    fail "$RULE" "android/app/build.gradle" "namespace must be com.signalgate.pulse"
+fi
+if ! grep -Eq "^[[:space:]]*applicationId[[:space:]]+\\\"com\\.signalgate\\.multipoint\\.pulse\\\"" "$APP_GRADLE"; then
+    fail "$RULE" "android/app/build.gradle" "Pulse applicationId must be com.signalgate.multipoint.pulse"
+fi
+if ! grep -Eq "^[[:space:]]*android:name=\\\"\\.MainActivity\\\"" "$MANIFEST"; then
+    fail "$RULE" "android/app/src/main/AndroidManifest.xml" "manifest must declare .MainActivity"
+fi
+if ! grep -Eq "^[[:space:]]*android:name=\\\"\\.SignalGateCallScreeningService\\\"" "$MANIFEST"; then
+    fail "$RULE" "android/app/src/main/AndroidManifest.xml" "manifest must declare .SignalGateCallScreeningService"
+fi
+
+while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    package_line="$(grep -m1 -E '^[[:space:]]*package[[:space:]]+' "$file" || true)"
+    if ! printf '%s\n' "$package_line" | grep -Eq '^[[:space:]]*package[[:space:]]+com\.signalgate\.pulse([.]|[[:space:]]|$)'; then
+        fail "$RULE" "${file#$PROJECT_ROOT/}" "production Kotlin package must be com.signalgate.pulse.*"
+    fi
+done < <(find "$SRC" -type f -name '*.kt' -print)
+
+if ! grep -Fq 'com.signalgate.multipoint.pulse/com.signalgate.pulse.MainActivity' "$LAUNCH_SCRIPT"; then
+    fail "$RULE" "scripts/verify-launch-and-capture.sh" "launch script must document the full applicationId/Kotlin-package component"
+fi
+if grep -Fq 'com.signalgate.multipoint.pulse/com.signalgate.multipoint.MainActivity' "$LAUNCH_SCRIPT"; then
+    fail "$RULE" "scripts/verify-launch-and-capture.sh" "stale pre-rename component reference remains"
+fi
+if grep -Fq 'java/com/signalgate/multipoint/' "$PROJECT_ROOT/README.md" || grep -Eq '`CallScreeningService\.kt`|/CallScreeningService\.kt' "$PROJECT_ROOT/README.md"; then
+    fail "$RULE" "README.md" "stale source-tree or service filename reference remains"
+fi
+
+# ---------------------------------------------------------------------------
 # Rule 1: UI layer (Layer 7) -> DAO import
 # ---------------------------------------------------------------------------
 RULE="Layer7-UI -> DAO"

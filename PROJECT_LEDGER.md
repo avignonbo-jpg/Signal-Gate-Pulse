@@ -56,6 +56,15 @@ Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, fol
 Session Log
 (Newest entry on top).
 
+2026-10-22 — WP-2 validation hardening follow-up
+Who: Manus AI.
+What: Reapplied only the still-valid WP-2 hardening to the current consumer-v1 source of truth. The pre-WP-2 README and script comments were stale and are now corrected in the merged WP-2 cleanup; this follow-up preserves that distinction and corrects the remaining CommunitySyncWorker KDoc wording. Test-integrity matching now covers nested test paths and rename status, workflow weakening, and the existing hyphenated WP-2 workflow structure. The architecture gate now checks namespace/applicationId/manifest/launch-component consistency. The ledger gate now verifies byte-preserving append-only history rather than line growth alone. The live source inventory and existing workflow use 138 JVM tests; the obsolete 124 threshold was not reintroduced.
+Files touched: scripts/check-test-integrity.sh; scripts/check-architecture-drift.sh; scripts/check-ledger-updated.sh; android/app/src/main/java/com/signalgate/pulse/workers/CommunitySyncWorker.kt; PROJECT_LEDGER.md.
+Layers touched: validation scripts, source-of-truth documentation, and comments only.
+Contract consulted: no contract change; applicationId/Kotlin package identity and existing architecture boundaries were checked against the current source.
+Validation: sandbox-only static hardening; x86_64 CI pending; no device run. No local unit-test or assemble result is claimed from this phase.
+Status: WP-2 hardening is prepared for explicit staging and remote validation; CI pending; no device run.
+Signature: Manus AI — 2026-10-22
 2026-10-18 — Real-engine timeout probe confirms Scenario B handling
 Who: Manus AI, following the open runtime question about cancellation while `CallScreeningEngine` is suspended in `DataSourceRepository.getCallDecision()`.
 What: Ran a temporary, untracked timeout probe against commit `8fd768eaeec0fd63d8c849c626ba4e4426624eac`, which is an ancestor of the current live `consumer-v1` head `d27037961452c833a0a827b2490f57ff6656ef73`. The probe's two cases passed: the real engine propagated `TimeoutCancellationException`, and the production wiring invoked the security-failure callback exactly once without also issuing the normal response. Observed markers were `PROBE1_OUTCOME=THROWS_TimeoutCancellationException` and `PROBE2_normalResponses=[] failureCallbacks=[+15551234567]`.
