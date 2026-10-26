@@ -7,7 +7,8 @@ SECURITY-DEVOPS-BUILD-PLAN.md — the technical findings/evidence log for securi
 SignalGate-Pulse-Release-Roadmap.md — the execution sequence. Turns open items into an ordered Step 1-8 (Part 1, path to v1.0) plus a post-v1.0 roadmap (Part 2) that exists nowhere else. Explicitly governed by Architecture-Contract.md.
 SIGNALGATE-PULSE-NEXT-ARCHITECTURAL-BUILD-PLAN.md — the safety/process wrapper. Protects against unsafe or hasty execution of the above, especially by automated agents. Contains real placeholders (specific paths, a timing budget, a baseline commit reference) not yet filled in — the structure and philosophy are complete, some concrete values aren't.
 SIGNALGATE-PULSE-MANUS-CI-GUARDRAILS.md — extracted 2026-08-25 from the above document's Phase 6. The detailed automated-agent CI enforcement contract: step scope manifests, changed-file/deletion/unknown-protection/architecture/edge-to-DAO/test-integrity guards. Also contains real placeholders (no actual workflow YAML or manifest schema exists yet — see that file's own placeholder section).
-Source-Of-Truth.md — a periodically-regenerated factual inventory (files, dependencies, workflows, nav graph). Does not propose fixes or assess desired behavior. An input to the other documents, not a plan itself.
+Source-Of-Truth.md — the prior periodically-regenerated factual inventory (files, dependencies, workflows, nav graph). It does not propose fixes or assess desired behavior.
+SignalGate-Pulse-Consolidated-Build-Plan-Rev6.md — the authoritative current-state source-of-truth audit for the recorded consumer-v1 SHA; it supersedes the prior external/generated audit roll-up for current factual checkout coverage.
 PROJECT_LEDGER.md (this file) — the append-only record of what actually happened, session by session.
 If two of these ever visibly disagree, that's a signal to verify against live source directly, the same way the 2026-08-25 SourceType correction above got resolved — not to silently trust whichever one sounds more authoritative.
 How to use this file (read this first, every session)
@@ -1471,3 +1472,27 @@ Contract consulted: no architecture change — observability + CI diagnostic cov
 Validation: Before writing the CI script change, modeled the exact Job-cancellation/NonCancellable mechanism outside the app (no Android SDK, no network, no kotlinc available in this sandbox — JRE only) as a faithful Job-tree simulation in Python, reproducing the 2026-09-24 race's timing. Confirmed empirically, across 3 runs: without the shield the write is lost every time under the reproduced timing; with the shield (NonCancellable child job, not propagated into by cancel()) the write survives every time; and confirmed separately that withTimeoutOrNull's bound still applies inside NonCancellable (a deliberately-hung write was cut off at its bound rather than hanging forever). This validates the mechanism the committed fix relies on, but is a model of the mechanism, not a run of the actual app — the CI script change itself has NOT been executed (no emulator/network access this session). Needs a real Crash Diagnostic workflow run before PROCESS_KILL_TEST_RESULT can be trusted; in particular, `adb root` may be refused on a future emulator image change, in which case the step logs a warning and the scenario is simply not exercised that run rather than failing silently as a false pass.
 Follow-up needed: run crash-diagnostic.yml for real and confirm (a) AUDIT_PERSIST_SUCCESS appears for calls #1 and #2 as expected, (b) it's absent for call #3 after the kill, (c) `adb root` actually succeeds on the current google_apis x86_64 API 33 image. If a future device/OS surprises us by surviving the kill, that's worth understanding rather than treating as success — it would mean the kill didn't land before persist() finished, not that process-death is now safe in general.
 Signature: Claude (Sonnet) — 2026-09-30
+
+---
+
+2026-10-25 — Current source-of-truth audit adopted as authoritative current-state document
+
+What: Adopted `SignalGate-Pulse-Consolidated-Build-Plan-Rev6.md` as the authoritative current-state source-of-truth audit for `consumer-v1` at commit `fda4c83bd2c24634f7876846398c3df7c51ed6ce`. The document is the amended read-only audit roll-up covering Kotlin inventory, dependencies and resolution, workflows, unresolved IDs/Koin/navigation, manifest, Room, source matrix, sync, screening trace, workers/settings, contract invariants, precedence, tests, dead code/markers, discrepancies, Markdown documentation inventory, BP-01..BP-16, and verification limitations. It incorporates the requested FTC/FCC sync section, Task 3 state, Architecture-Contract INV-001 through INV-010 table, Manual User Rules no-toggle correction, decision-precedence section, and Markdown supersession inventory.
+
+Authority scope: `Architecture-Contract.md` remains the governing invariant-level contract; this Rev6 document is authoritative for the current factual checkout audit and supersedes the prior external/generated audit roll-up as the repository-tracked current-state audit. `PROJECT_LEDGER.md` remains the append-only history of project events and status evidence.
+
+Evidence: Rev6 records audited SHA `fda4c83bd2c24634f7876846398c3df7c51ed6ce` at `SignalGate-Pulse-Consolidated-Build-Plan-Rev6.md:5`, source branch at `:6`, and its final limitations at `:2036-2040`. The checkout was clean before this documentation-only change, and the branch head matched `origin/consumer-v1` before the change.
+
+Files touched: `SignalGate-Pulse-Consolidated-Build-Plan-Rev6.md` (new authoritative current-state audit); `PROJECT_LEDGER.md` (this append-only adoption entry).
+
+Layers touched: Governance/documentation only. No production source, test source, dependency, manifest, workflow, or schema behavior was changed.
+
+Contract consulted: yes — `Architecture-Contract.md`, `PROJECT_LEDGER.md`, the prior source-of-truth audit, and the current live `consumer-v1` checkout were consulted before adoption.
+
+Validation: `git diff --check`, tracked-file presence, repository status checks, and content comparison against the amended audit source after the intentional adoption-status substitution and trailing-whitespace normalization passed. No Android build or runtime test was run because this change only adds audit documentation and ledger evidence.
+
+Status: Adopted in the working tree; commit and push are pending.
+
+Signature: Manus AI — 2026-10-25
+
+--- End of ledger entry ---
