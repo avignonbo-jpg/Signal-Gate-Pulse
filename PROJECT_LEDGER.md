@@ -1,4 +1,4 @@
-SignalGate Pulse — Project Ledger
+# SignalGate Pulse — Project Ledger
 This is the single authoritative log of project state. Every AI session (any model, any tool) reads this file first and appends to it last. This replaces ad hoc tracking across chat history, memory, and ad hoc notes. The current branch-level governance is now anchored to the uploaded audit snapshot `SignalGatePulseAudit_20261025_SOURCE_OF_TRUTH (1).md`.
 
 Current State
@@ -12,6 +12,7 @@ The project contract is the binding architecture for all future work. If impleme
 Open Items
 [ ] Delete 3 orphaned legacy XML layouts + 26 unused view IDs (call_shield_overlay_enhanced.xml, dialog_add_blocked_number.xml, overlay_call_blocked.xml) — carried over, not yet independently revalidated.
 [x] Phase 0 mandatory execution evidence and generated Room schema version 3 — resolved and closed in the Phase 0 ledger entry; retained here only as historical reconciliation.
+[x] StartupTimingTest is part of the mandatory instrumented CI gate and must run in the same `connectedPulseDebugAndroidTest` gate as the other startup/security regression tests. This was verified as part of the active instrumented workflow and is now closed for Phase 0.8.
 [ ] NEW: Migrate remaining BlocklistRepository callers (BlockedNumbersViewModel, ContactsViewModel, PendingCardViewModel) directly onto SecurityRuleRepository, per that class's own deprecation note.
 [ ] Set up pre-push / CI-side YAML and whitespace validation filters — carried over from prior session, still not done.
 [ ] Live call-test READ_PHONE_STATE necessity: confirm on a real device whether anything still needs this permission before removing PhoneStateReceiver, its manifest entries, or correcting the stale analytics/permission logic.
@@ -33,9 +34,20 @@ Review and approve/reject Architecture-Contract-Amendments.md, then fold approve
 Decide on Security/Ops review of Apache POI removal vs. keeping it — moot, folded into the POI correction above; there is no POI dependency to review.
 PermissionSettingsScreen unreachable — resolved by direct source inspection and live routing: `NavGraph.kt` defines `Screen.PermissionSettings.route` and `ConsumerDashboardScreen` navigates there.
 TelemetryViewModel orphaned — resolved by deliberate removal; no class or binding exists in the live branch. Remaining references are stale comments only.
+StartupTimingTest not in mandatory CI — resolved: `.github/workflows/pulse-instrumented-tests.yml` runs `./gradlew :app:connectedPulseDebugAndroidTest`, which includes `android/app/src/androidTest/kotlin/com/signalgate/pulse/StartupTimingTest.kt` in the mandatory instrumented gate.
 
 Session Log
 (Newest entry on top).
+
+2026-10-26 — Add StartupTimingTest to mandatory instrumented CI gate and close the Phase 0.8 gap
+Who: Repository automation / architecture governance.
+What: Confirmed the live instrumented workflow runs the full `connectedPulseDebugAndroidTest` suite, which includes `StartupTimingTest.kt`, and recorded the Phase 0.8 closure in the project ledger. This resolves the previous gap where startup-timing coverage was present in source but not explicitly acknowledged as part of the mandatory branch gate.
+Files touched: `.github/workflows/pulse-instrumented-tests.yml`; `PROJECT_LEDGER.md`.
+Layers touched: CI gate, instrumentation, and project ledger only.
+Contract consulted: yes — the active security/CI contract and the live instrumented workflow were reviewed before closing the gap.
+Validation: Confirmed the workflow script runs `:app:connectedPulseDebugAndroidTest`, and `StartupTimingTest.kt` lives under `android/app/src/androidTest`. The full instrumented suite is the required gate for startup-ordering regressions.
+Status: The Phase 0.8 startup-timing coverage gap is now recorded as resolved and enforced by the mandatory instrumented CI workflow.
+Signature: Repository automation / architecture governance — 2026-10-26
 
 2026-10-26 — Correct stale contract statements about PermissionSettingsScreen and TelemetryViewModel
 Who: Repository automation / architecture governance.
