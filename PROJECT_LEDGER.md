@@ -39,6 +39,17 @@ StartupTimingTest not in mandatory CI — resolved: `.github/workflows/pulse-ins
 Session Log
 (Newest entry on top).
 
+2026-10-28 — MainApplication.onCreate() DB-init deadline added (withTimeoutOrNull)
+Who: Claude (Sonnet), chat session (not Manus AI).
+What: MainApplication.onCreate()'s runBlocking DB/Keystore/seedRequiredSources() block had no timeout — unbounded since the app's inception. This is newly relevant given the 2026-09-10 real-device entry above showing ~1.2s of StrictMode-flagged main-thread work in that exact block, and given the open §4.0.7 pre-release gate. Wrapped the existing work in withTimeoutOrNull(DATABASE_INIT_BUDGET_MS = 2000L): on expiry, logs an explicit "SECURITY:" line and lets onCreate() proceed with seeding possibly incomplete — the same already-tolerated state the existing catch(Exception) branch produces today — rather than blocking indefinitely. This does NOT change the seedRequiredSources() ordering guarantee in the class doc (Architecture Contract §2) — seeding still runs synchronously, still before anything else in onCreate() proceeds; it only stops that work from being able to run unbounded. Deliberately did NOT touch SignalGateCallScreeningService's existing withTimeout(3_500) decision budget to make the arithmetic fit under Android's 5000ms deadline (2000 + 3500 = 5500ms on paper) — narrowing that is a separate, undecided product tradeoff (less decision time pushes more real calls into SECURITY_FAILURE) and is flagged, not silently resolved, in the new class doc.
+Files touched: android/app/src/main/java/com/signalgate/pulse/MainApplication.kt.
+Contract consulted: yes — Architecture Contract §2 (startup ordering) re-read before editing; ordering guarantee unchanged, only given a ceiling.
+Validation: scripts/check-architecture-drift.sh run against the modified tree — clean, 0 violations (runBlocking stays in the one file Rule 5 allows it). No local Gradle/compile available in this environment (no Android SDK configured here) — mandatory CI (Pulse Consumer CI, Instrumented Tests, Compose Metrics, Dependency/CVE Scan) is still the authority before this is trusted. Commit hash: [fill in after push]. CI run IDs: [fill in once CI completes].
+Status: Ready for commit/push. Do not mark closed until mandatory CI passes.
+Follow-up needed: (1) confirm CI green on this commit; (2) DATABASE_INIT_BUDGET_MS=2000ms is a placeholder, not a validated value — Task 2.1 (real-device Telecom cold-start measurement, still open, owner-only) should tune or replace it; (3) the 3.5s decision-budget-vs-2000ms-setup-budget arithmetic gap is an open product decision, not yet made.
+Signature: Claude (Sonnet) — 2026-10-28
+--- End of ledger entry ---
+
 2026-10-26 — Add StartupTimingTest to mandatory instrumented CI gate and close the Phase 0.8 gap
 Who: Repository automation / architecture governance.
 What: Confirmed the live instrumented workflow runs the full `connectedPulseDebugAndroidTest` suite, which includes `StartupTimingTest.kt`, and recorded the Phase 0.8 closure in the project ledger. This resolves the previous gap where startup-timing coverage was present in source but not explicitly acknowledged as part of the mandatory branch gate.
