@@ -3,7 +3,6 @@ package com.signalgate.pulse
 import android.app.Application
 import androidx.work.Configuration
 import com.signalgate.pulse.BuildConfig
-import com.signalgate.pulse.diagnostics.AppLogCapture
 import com.signalgate.pulse.di.KoinWorkerFactory
 import com.signalgate.pulse.di.appModule
 import com.signalgate.pulse.di.initializeDatabase
@@ -12,6 +11,7 @@ import com.signalgate.pulse.security.SecurityUtils
 import com.signalgate.pulse.ui.notifications.NotificationChannelManager
 import com.signalgate.pulse.workers.CommunitySyncWorker
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -52,8 +52,63 @@ import org.koin.core.context.startKoin
  * entirely in release builds by ReleaseTree's WARN-and-above filter — zero
  * behavior or performance impact either way. Safe to remove once the
  * first-run slowdown is diagnosed and fixed, but harmless to leave in.
+ *
+ * 2026-10-28 — DATABASE_INIT_BUDGET_MS deadline added around the
+ * runBlocking DB-init block below, in response to §4.0.7's open
+ * CallScreeningService deadline-architecture gate and the 2026-09-10
+ * real-device evidence showing ~1.2s of StrictMode-flagged main-thread
+ * work in this exact block. Two things were true before this change that
+ * are not true after it:
+ *   (1) This block had NO upper bound. A device that's slow here (cold
+ *       page cache, a busy encrypted filesystem, a struggling low-end
+ *       phone) could in principle let onCreate() — and therefore Service
+ *       creation, and therefore the Service's own 3.5s decision budget —
+ *       run past Android's 5s CallScreeningService deadline with no
+ *       instrumented signal that this was the cause. (1.2s observed on
+ *       one device is not a worst-case bound.)
+ *   (2) On any device where setup legitimately does run long, there was
+ *       no way for the rest of onCreate() — Service creation included —
+ *       to proceed until it finished, however long that took.
+ * DATABASE_INIT_BUDGET_MS is a conservative placeholder ceiling, not a
+ * validated value — Task 2.1 (real-device Telecom cold-start measurement,
+ * still open, owner-only) is what should tune or replace it. Choosing a
+ * number now, rather than leaving the block unbounded while waiting on
+ * that data, converts an unknown/unprotected risk into a known/bounded
+ * one today; this does not substitute for that measurement.
+ *
+ * This change does NOT touch the ordering guarantee in the class doc
+ * above (seedRequiredSources() still runs, still synchronously, still
+ * before anything else in onCreate() proceeds) — it only stops that work
+ * from being able to run unbounded. On timeout, onCreate() logs and moves
+ * on with seeding possibly incomplete, the same already-handled state as
+ * the existing catch(Exception) branch below produces on a thrown error.
+ * Downstream repositories already tolerate that case (see AppModule.kt's
+ * notes on BlocklistRepository's default -1 sourceId / lazy load). This
+ * does NOT resolve §4.0.7 on its own — Problem A/B in
+ * SECURITY-DEVOPS-BUILD-PLAN.md are in SignalGateCallScreeningService.kt,
+ * a different file, and are untouched here.
  */
 class MainApplication : Application(), Configuration.Provider {
+
+    companion object {
+        // Total Telecom deadline is 5000ms (android.telecom.CallScreeningService).
+        // The decision engine already budgets withTimeout(3_500) in
+        // SignalGateCallScreeningService — on its own that leaves only
+        // 1500ms for setup + Service creation/binding overhead combined,
+        // and 2000 + 3500 = 5500ms, over the 5000ms deadline on paper.
+        // That arithmetic gap is being left visible here, not papered
+        // over: the 3.5s decision budget is a separate, deliberate
+        // product-quality tradeoff (shrinking it means less time to
+        // decide, which pushes more real calls into the SECURITY_FAILURE/
+        // uncertain path) and is NOT changed by this commit. Narrowing it
+        // needs its own explicit, documented decision once Task 2.1's
+        // real-device numbers exist, the same way this value does.
+        // 2000ms is a conservative placeholder ceiling for setup alone —
+        // not a validated value, not proof the two budgets fit together.
+        // It exists so setup can no longer run unbounded while that real
+        // measurement and that separate decision are still pending.
+        private const val DATABASE_INIT_BUDGET_MS = 2_000L
+    }
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -81,10 +136,7 @@ class MainApplication : Application(), Configuration.Provider {
         SecurityUtils.enableStrictMode()
 
         if (BuildConfig.DEBUG) {
-            // Capture in-process events in a bounded debug-only buffer and mirror
-            // them to Android Logcat, so both reader paths stay available without
-            // planting two duplicate-writing Timber trees.
-            AppLogCapture.install()
+            Timber.plant(Timber.DebugTree())
         } else {
             // DebugTree is intentionally debug-only (avoids verbose/info spam in release
             // logcat), but that meant WARN/ERROR-level events — like a Keystore
@@ -110,18 +162,39 @@ class MainApplication : Application(), Configuration.Provider {
 
         StartupDiagnostics.mark(StartupDiagnostics.Event.DATABASE_INIT_BEGIN)
         runBlocking {
-            try {
-                Timber.tag("SignalGate").i("STARTUP: DB init begin, elapsed=${elapsed()}ms")
-                initializeDatabase(this@MainApplication)
-                StartupDiagnostics.mark(StartupDiagnostics.Event.DATABASE_INIT_END)
-                Timber.tag("SignalGate").i("STARTUP: DB init end, elapsed=${elapsed()}ms")
-            } catch (e: Exception) {
+            val seeded = withTimeoutOrNull(DATABASE_INIT_BUDGET_MS) {
+                try {
+                    Timber.tag("SignalGate").i("STARTUP: DB init begin, elapsed=${elapsed()}ms")
+                    initializeDatabase(this@MainApplication)
+                    Timber.tag("SignalGate").i("STARTUP: DB init end, elapsed=${elapsed()}ms")
+                    true
+                } catch (e: Exception) {
+                    Timber.e(
+                        e,
+                        "FATAL: Database initialization failed — BlocklistRepository and " +
+                        "ContactsViewModel will not function correctly. Stack trace follows."
+                    )
+                    false
+                }
+            }
+            if (seeded == null) {
+                // Setup exceeded DATABASE_INIT_BUDGET_MS. This does NOT crash the
+                // process and does NOT let onCreate() hang further — onCreate()
+                // still returns on schedule, so Service.onCreate() and
+                // SignalGateCallScreeningService's existing SECURITY_FAILURE
+                // response path (which answers before touching the DB) stay
+                // reachable within Android's 5s deadline. seedRequiredSources()
+                // may not have finished — downstream repositories must tolerate
+                // that the same way they already tolerate the caught-exception
+                // branch above (see AppModule.kt's notes on BlocklistRepository's
+                // default -1 sourceId / lazy load).
                 Timber.e(
-                    e,
-                    "FATAL: Database initialization failed — BlocklistRepository and " +
-                    "ContactsViewModel will not function correctly. Stack trace follows."
+                    "SECURITY: Database initialization exceeded " +
+                    "${DATABASE_INIT_BUDGET_MS}ms budget, elapsed=${elapsed()}ms — " +
+                    "proceeding with onCreate() regardless; seeding may be incomplete"
                 )
             }
+            StartupDiagnostics.mark(StartupDiagnostics.Event.DATABASE_INIT_END)
         }
 
         // Deliberately outside the runBlocking block above — see class doc and
